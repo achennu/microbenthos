@@ -1,7 +1,9 @@
 import logging
+
 logger = logging.getLogger(__name__)
 
 import inspect
+import importlib
 from microbenthos.domain import SedimentDBLDomain
 
 
@@ -13,7 +15,7 @@ class Entity(object):
     according to the simulation clock.
     """
 
-    def __init__(self, domain_cls=SedimentDBLDomain):
+    def __init__(self, domain_cls = SedimentDBLDomain):
 
         assert inspect.isclass(domain_cls), 'domain_cls should be a class! Got {}'.format(
             type(domain_cls)
@@ -85,3 +87,62 @@ class Entity(object):
         :param float clocktime: The simulation time (units depends on the solver setup)
         """
         logger.debug('Updating {} for clocktime {}'.format(self, clocktime))
+
+    @classmethod
+    def from_dict(cls, cdict):
+        """
+        Create the entity instance from a supplied dictionary of parameters.
+
+        Args:
+            cdict: This dictionary must contain a key `cls` which contains the import path to the
+            class (example: `"microbenthos.irradiance.Irradiance"`, and a key `init_params` whose value
+            will be passed to the constructor of the class. The rest of the dictionary (except `cls`) will be
+            passed to :meth:`.post_init` to allow subclasses to finish setup.
+
+        Returns:
+            New instance of the entity
+
+        Raises:
+              KeyError: If the `cls` key is missing
+              ValueError: If the cls is not a valid module path
+              TypeError: If the class cannot be imported
+        """
+        try:
+            cls_path = cdict.pop('cls')
+        except KeyError:
+            raise KeyError('Config dict missing required key "cls"!')
+
+
+        logger.debug('Setting up entity from cls: {}'.format(cls_path))
+        try:
+            cls_modname, cls_name = cls_path.rsplit('.', 1)
+        except ValueError:
+            raise ValueError('Path {} could not be split into module & class'.format(cls_path))
+
+        try:
+            logger.debug('Importing {}'.format(cls_modname))
+            cls_module = importlib.import_module(cls_modname)
+            cls = getattr(cls_module, cls_name)
+            logger.debug('Using class: {}'.format(cls))
+        except (ImportError, AttributeError):
+            raise TypeError('Class {} in {} could not be found!'.format( cls_modname, cls_name))
+
+        init_params = cdict.get('init_params', {})
+        logger.debug('Init params: {}'.format(init_params))
+        inst = cls(**init_params)
+
+        inst.post_init(**cdict)
+        logger.info('Created entity: {}'.format(inst))
+        return inst
+
+    def post_init(self, **kwargs):
+        """
+        Hook to customize initialization of entity after construction by :meth:`.from_dict`. This must be overriden by subclasses, to be useful.
+
+        Args:
+            **kwargs:
+
+        Returns:
+            None
+        """
+        logger.debug('Empty post_init on {}'.format(self))
