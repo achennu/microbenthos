@@ -1,0 +1,150 @@
+
+entity_schema: &entity_schema
+    cls: &cls_schema
+        type: importpath
+        required: true
+
+    init_params:
+        type: dict
+
+chemicals: &chemical_schema
+    cls:
+        <<: *cls_schema
+        allowed: [microbenthos.chemicals.Chemical]
+
+    create:
+        schema:
+            hasOld:
+                type: boolean
+                default: false
+
+            value:
+                type: physical_unit
+                like_unit: mol/l
+                default: !unit 0.0 mol/l
+
+            name:
+                type: string
+
+    constrain:
+        type: list
+        schema:
+            items:
+                - type: string
+                  allowed: ['top', 'bottom']
+                - type: physical_unit
+                  like_unit: mol/l
+
+
+irradiance: &irradiance_schema
+    cls:
+        <<: *cls_schema
+        allowed: [microbenthos.irradiance.Irradiance]
+
+    init_params:
+        schema:
+            hours_total:
+                type: float
+                min: 5
+                max: 48
+            day_fraction:
+                type: float
+                min: 0.1
+                max: 0.9
+    channels:
+        type: list
+        schema:
+            type: dict
+            schema:
+                name:
+                    type: string
+                    min: 2
+                    required: true
+
+                k0:
+                    type: physical_unit
+                    like_unit: 1/m
+
+                k_mods:
+                    type: list
+                    schema:
+                        items:
+                            - type: string
+                            - type: [physical_unit, float]
+
+microbes: &microbes_schema
+    <<: *entity_schema
+    init_params:
+        type: dict
+        schema:
+            name:
+                type: string
+                min: 2
+
+    processes:
+        type: dict
+        keyschema:
+            type: string
+        schema:
+            Qmax:
+                type: physical_unit
+                like_unit: mol/g/h
+
+            responses:
+                type: dict
+
+
+
+
+
+model_schema:
+
+    environment:
+        type: dict
+
+        keyschema:
+            type: string
+
+        schema:
+            irradiance:
+                type: dict
+                schema:
+                    <<: *irradiance_schema
+
+            chemicals:
+                type: dict
+                keyschema:
+                    type: string
+
+                valueschema:
+                    schema:
+                        <<: *chemical_schema
+
+            processes:
+                type: dict
+                keyschema:
+                    type: string
+
+                valueschema:
+                    oneof:
+                        - schema:
+                                cls:
+                                    <<: *cls_schema
+                                init_params:
+                                    type: dict
+
+
+
+
+
+
+    microbes:
+        type: dict
+        keyschema:
+            type: string
+
+
+
+
+
+

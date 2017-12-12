@@ -1,0 +1,79 @@
+
+environment:
+
+    chemicals:
+
+        oxygen:
+            cls: microbenthos.chemicals.Chemical
+            create:
+                hasOld: true
+                value: !unit 0.0 mol/l
+                name: oxy
+
+            constrain:
+                - [top, !unit 0.2e-3 mol/l]
+                - [bottom, !unit 0 mol/l]
+
+        h2s:
+            cls: microbenthos.chemicals.Chemical
+            create:
+                hasOld: true
+                value: !unit 0.0 mol/l
+                name: h2s
+
+            constrain:
+                - [top, !unit 0.0 mol/l]
+                - [bottom, !unit 1e-3 mol/l]
+
+
+    irradiance:
+        cls: microbenthos.irradiance.Irradiance
+        init_params:
+            hours_total: 25.3
+            day_fraction: 0.3
+
+        channels:
+            - name: par
+              k0: !unit 15.3 1/cm
+              k_mods:
+                - [cyano, 6523]
+                - [cyano, 65253]
+                - [cyano, !unit 125 g/mm**3]
+
+    processes:
+
+        abiotic_h2s_oxidation:
+            cls: microbenthos.processes.AbioticSulfideOxidation
+            init_params:
+                vars: ['oxygen', 'h2s']
+                params:
+                    k: !unit '70 1/((10**-3)*mol/l)**2/h'
+
+        another_process:
+            cls: abc.def
+
+
+microbes:
+    cyano:
+        cls: microbenthos.microbes.MicrobialGroup
+        init_params:
+            name: cyano
+
+    processes:
+        oxyPS:
+            Qmax: !unit "0.00841 mol/g/h"
+            responses:
+                oxygen:
+                    - 'inhibition'
+                    - Khalf: !unit "0.7e-3 mol/l"
+                      Kmax: !unit "0.8e-3 mol/l"
+                h2s:
+                    - 'inhibition'
+                    - Khalf: !unit "0.3e-3 mol/l"
+                      Kmax: !unit "0.35e-3 mol/l"
+
+                par:
+                    - optimum
+                    - Ks: 1
+                      Ki: 10
+
