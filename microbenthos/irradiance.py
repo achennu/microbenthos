@@ -16,13 +16,15 @@ class Irradiance(Entity):
         Entity to implement irradiance through the sediment column
 
         Args:
-            hours_total (int): Number of hours in the day
+            hours_total (int, float): Number of hours in the day
             day_fraction (float): Fraction of daylength which is illuminated
         """
         super(Irradiance, self).__init__()
         self.channels = self.features
 
         self.hours_total = PhysicalField(hours_total, 'h')
+        if not (4 < self.hours_total.value < 48):
+            raise ValueError('Hours total {} should be between (4, 48)'.format(self.hours_total))
         day_fraction = float(day_fraction)
         if not (0 < day_fraction < 1):
             raise ValueError("Day fraction should be between 0 and 1")
@@ -50,6 +52,7 @@ class Irradiance(Entity):
         """
         When a domain is added, the attenuation channels can be setup
 
+        See :meth:`.create_channel` for information on the `channels` argument.
         Returns:
         """
         self.check_domain()

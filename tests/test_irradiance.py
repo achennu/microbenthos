@@ -54,6 +54,13 @@ class TestIrradiance:
         I = Irradiance(hours_total=H)
         assert I.hours_total.value == H
 
+        # Limits for hours_total is (4, 48)
+        with pytest.raises(ValueError):
+            I = Irradiance(hours_total=3.99)
+
+        with pytest.raises(ValueError):
+            I = Irradiance(hours_total=48.01)
+
     @pytest.mark.xfail(reason='Not implemented')
     def test_setup(self):
         # check that setting domain:
