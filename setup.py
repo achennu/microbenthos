@@ -14,7 +14,7 @@ requirements = [
     'fipy>=3',
     'scipy',
     'logutils',
-
+    'sympy',
 ]
 
 test_requirements = [
