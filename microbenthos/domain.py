@@ -73,6 +73,9 @@ class SedimentDBLDomain(object):
             self.cell_size.value, self.sediment_length.value, self.DBL_length.value
             )
 
+    def __getitem__(self, item):
+        return self.VARS[item]
+
     def create_mesh(self):
         """
         Create the mesh for the domain

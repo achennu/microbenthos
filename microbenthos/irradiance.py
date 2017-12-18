@@ -2,25 +2,30 @@
 from __future__ import division
 
 import logging
+
 logger = logging.getLogger(__name__)
-from .base.entity import Entity
+from microbenthos.entity import DomainEntity
 from scipy.stats import cosine
 from fipy.tools import numerix
 from fipy import PhysicalField
 
 
-class Irradiance(Entity):
+class Irradiance(DomainEntity):
 
-    def __init__(self, hours_total = 24, day_fraction=0.5):
+    def __init__(self, hours_total = 24, day_fraction=0.5, **kwargs):
         """
         Entity to implement irradiance through the sediment column
 
         Args:
             hours_total (int, float): Number of hours in the day
             day_fraction (float): Fraction of daylength which is illuminated
+            **kwargs: passed to superclass
         """
-        super(Irradiance, self).__init__()
-        self.channels = self.features
+        self.logger = kwargs.get('logger') or logging.getLogger(__name__)
+        self.logger.debug('Init in Irradiance')
+        kwargs['logger'] = self.logger
+        super(Irradiance, self).__init__(**kwargs)
+        self.channels = {}
 
         self.hours_total = PhysicalField(hours_total, 'h')
         if not (4 < self.hours_total.value < 48):
