@@ -1,21 +1,40 @@
 import pytest
-from microbenthos.base import Entity
-from microbenthos.domain import SedimentDBLDomain, PhysicalField
+from fipy import PhysicalField
+
+from microbenthos import Entity, SedimentDBLDomain, DomainEntity
 
 
 class TestEntity:
-
     def test_init(self):
         e = Entity()
         assert e
-        assert not e.features
 
-    def test_add_domain(self):
+    def test_update_time(self):
+        # update to clock time
         e = Entity()
+        with pytest.raises(TypeError):
+            e.update_time()
+        e.update_time(2)
+        e.update_time(3.5)
+        e.update_time(PhysicalField('35 s'))
+
+    @pytest.mark.xfail(reason='not implemented')
+    def test_from_params(self):
+        raise NotImplementedError('For Entity.from_params()')
+
+    @pytest.mark.xfail(reason='not implemented')
+    def test_from_dict(self):
+        raise NotImplementedError('For Entity.from_dict()')
+
+
+class TestDomainEntity:
+    def test_add_domain(self):
+        e = DomainEntity()
         D = SedimentDBLDomain()
 
-        with pytest.raises(TypeError):
-            e.domain = object()
+        # with pytest.raises(TypeError):
+        #     e.domain = tuple()
+        # This no longer raises a TypeError, but just issues a log warning
 
         e.domain = D
 
@@ -27,23 +46,6 @@ class TestEntity:
     def test_setup(self):
         # should be not implemented
 
-        e = Entity()
+        e = DomainEntity()
         with pytest.raises(NotImplementedError):
             e.setup()
-
-    def test_update_time(self):
-        # update to clock time
-        e = Entity()
-        with pytest.raises(TypeError):
-            e.update_time()
-        e.update_time(2)
-        e.update_time(3.5)
-        e.update_time(PhysicalField('35 s'))
-
-
-
-
-
-
-
-

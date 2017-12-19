@@ -1,18 +1,16 @@
-
 from __future__ import division
 
 import logging
 
-logger = logging.getLogger(__name__)
-from microbenthos.entity import DomainEntity
-from scipy.stats import cosine
-from fipy.tools import numerix
 from fipy import PhysicalField
+from fipy.tools import numerix
+from scipy.stats import cosine
+
+from microbenthos import DomainEntity
 
 
 class Irradiance(DomainEntity):
-
-    def __init__(self, hours_total = 24, day_fraction=0.5, **kwargs):
+    def __init__(self, hours_total = 24, day_fraction = 0.5, **kwargs):
         """
         Entity to implement irradiance through the sediment column
 
@@ -42,18 +40,18 @@ class Irradiance(DomainEntity):
         C = 1.0 / numerix.sqrt(2 * numerix.pi)
         # to scale the cosine distribution from 0 to 1 (at zenith)
         self._profile = cosine(
-            loc=self.clocktime_zenith, scale=C**2 * self.hours_day)
+            loc=self.clocktime_zenith, scale=C ** 2 * self.hours_day)
         # This profile with loc=zenith means that the day starts at "midnight" and zenith occurs
         # in the center of the daylength
 
-        logger.debug('Created Irradiance: {}'.format(self))
+        self.logger.debug('Created Irradiance: {}'.format(self))
 
     def __repr__(self):
         # return '{}(total={},day={:.1f},zenith={:.1f)'.format(self.name, self.hours_total,
         #                                                  self.hours_day, self.clocktime_zenith)
         return 'Irradiance(total={},{})'.format(self.hours_total, '+'.join(self.channels))
 
-    def setup(self, channels=None):
+    def setup(self, channels = None):
         """
         When a domain is added, the attenuation channels can be setup
 
@@ -73,7 +71,7 @@ class Irradiance(DomainEntity):
                 channel.domain = self.domain
             channel.setup()
 
-    def create_channel(self, name, k0=0, k_mods=None):
+    def create_channel(self, name, k0 = 0, k_mods = None):
         """
         Add a channel of irradiance, such as PAR or NIR
 
@@ -123,16 +121,15 @@ class Irradiance(DomainEntity):
                         self._profile.pdf(clocktime_)
 
         self.surface_irrad.value = surface_value
-        logger.debug('Updated for time {} surface irradiance: {}'.format(clocktime,
-                                                                      self.surface_irrad))
+        self.logger.debug('Updated for time {} surface irradiance: {}'.format(clocktime,
+                                                                              self.surface_irrad))
 
         for channel in self.channels.itervalues():
             channel.update_intensities(self.surface_irrad)
 
 
-class IrradianceChannel(Entity):
-
-    def __init__(self, name, k0=PhysicalField(0, '1/cm'), k_mods=None):
+class IrradianceChannel(DomainEntity):
+    def __init__(self, name, k0 = PhysicalField(0, '1/cm'), k_mods = None, **kwargs):
         """
         An irradiance channel
 
@@ -145,7 +142,11 @@ class IrradianceChannel(Entity):
 
         Returns:
         """
-        super(IrradianceChannel, self).__init__()
+        self.logger = kwargs.get('logger') or logging.getLogger(__name__)
+        self.logger.debug('Init in Irradiance')
+        kwargs['logger'] = self.logger
+        super(IrradianceChannel, self).__init__(**kwargs)
+
         self.name = name
         self.intensities = None
 
@@ -157,12 +158,12 @@ class IrradianceChannel(Entity):
         self.k_var = None
         self.k_mods = k_mods or []
         self._mods_added = {}
-        logger.debug('created irradiance channel {}'.format(self))
+        self.logger.debug('created irradiance channel {}'.format(self))
 
     def __repr__(self):
         return '{}:{!r}'.format(self.name, self.k_var)
 
-    def setup(self, k_mods=None):
+    def setup(self, k_mods = None):
         """
         Define attenuations when domain is available
         Returns:
@@ -192,7 +193,7 @@ class IrradianceChannel(Entity):
         """
         if self.k_name not in self.domain.VARS:
             k_var = self.domain.create_var(self.k_name, value=self.k0.value,
-                                            unit=self.k0.unit)
+                                           unit=self.k0.unit)
             k_var[:self.domain.idx_surface] = 0
             self.k_var = k_var
 
@@ -223,7 +224,7 @@ class IrradianceChannel(Entity):
 
         self.k_var += atten_source
         self._mods_added[var] = atten_source
-        logger.info('Added attenuation source from {!r} and coeff={}'.format(var, coeff))
+        self.logger.info('Added attenuation source from {!r} and coeff={}'.format(var, coeff))
 
     @property
     def attenuation_profile(self):
@@ -246,13 +247,7 @@ class IrradianceChannel(Entity):
         Returns:
             The light profile
         """
-        logger.debug('Updating intensities for surface value: {}'.format(surface_level))
+        self.logger.debug('Updating intensities for surface value: {}'.format(surface_level))
         intensities = self.attenuation_profile * surface_level
         self.intensities.value = intensities
         return intensities
-
-
-
-
-
-

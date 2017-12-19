@@ -1,8 +1,9 @@
-from microbenthos.irradiance import Irradiance, IrradianceChannel
 import pytest
 
-class TestIrradianceChannel:
+from microbenthos.irradiance import Irradiance, IrradianceChannel
 
+
+class TestIrradianceChannel:
     def test_init_empty(self):
         with pytest.raises(TypeError):
             ch = IrradianceChannel()
@@ -26,7 +27,8 @@ class TestIrradianceChannel:
 
     @pytest.mark.xfail(reason='Not implemented')
     def test_k_mods(self):
-        # Test that k_mods can be given in the call to __init__ as well as the call to setup(), and they are both combined
+        # Test that k_mods can be given in the call to __init__ as well as the call to setup(),
+        # and they are both combined
         raise NotImplementedError
 
     @pytest.mark.xfail(reason='Not implemented')
@@ -41,7 +43,6 @@ class TestIrradianceChannel:
 
 
 class TestIrradiance:
-
     def test_init_empty(self):
         I = Irradiance()
         assert I.hours_total.value == 24
@@ -79,4 +80,3 @@ class TestIrradiance:
         # test that updating time changes the surface_irrad value
         # test for inputs float, PhysicalField and Variable
         raise NotImplementedError
-
