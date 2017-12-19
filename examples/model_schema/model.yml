@@ -4,26 +4,36 @@ environment:
     chemicals:
 
         oxy:
-            cls: Chemical
-            create:
-                hasOld: true
-                value: !unit 0.0 mol/l
+            cls: Variable
+            init_params:
                 name: oxy
+                create:
+                    hasOld: true
+                    value: !unit 0.0 mol/l
 
-            constrain:
-                - [top, !unit 0.2e-3 mol/l]
-                - [bottom, !unit 0 mol/l]
+                constraints:
+                    top: !unit 0.2e-3 mol/l
+                    bottom: !unit 0 mol/l
 
         h2s:
-            cls: Chemical
-            create:
-                hasOld: true
-                value: !unit 0.0 mol/l
+            cls: Variable
+            init_params:
                 name: h2s
+                create:
+                    hasOld: true
+                    value: !unit 0.0 mol/l
 
-            constrain:
-                - [top, !unit 0.0 mol/l]
-                - [bottom, !unit 1e-3 mol/l]
+                constraints:
+                    top: !unit 0.0 mol/l
+                    bottom: !unit 1e-3 mol/l
+
+        n20:
+            cls: Variable
+            init_params:
+                name: N20
+                create:
+                    value: 30
+
 
 
     irradiance:

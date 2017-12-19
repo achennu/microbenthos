@@ -7,5 +7,5 @@ __version__ = '0.1.0'
 # TODO: refactor logging so that config doesn't occur at import level
 
 from .domain import SedimentDBLDomain
-from .entity import Entity, DomainEntity
+from .entity import Entity, DomainEntity, Variable
 from .process import Process, ExprProcess

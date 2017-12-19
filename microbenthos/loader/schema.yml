@@ -9,33 +9,46 @@ entity_schema: &entity_schema
     init_params:
         type: dict
 
-chemicals: &chemical_schema
+variables: &var_schema
     cls:
         <<: *cls_schema
-        allowed: [microbenthos.chemicals.Chemical, Chemical]
+        allowed: [microbenthos.Variable, Variable]
 
-    create:
+    init_params:
+        type: dict
         schema:
-            hasOld:
-                type: boolean
-                default: false
-
-            value:
-                type: physical_unit
-                like_unit: mol/l
-                default: !unit 0.0 mol/l
 
             name:
-                type: string
+                type: symbolable
+                min: 2
+                required: true
 
-    constrain:
-        type: list
-        schema:
-            items:
-                - type: string
-                  allowed: ['top', 'bottom']
-                - type: physical_unit
-                  like_unit: mol/l
+            create:
+                type: dict
+                schema:
+                    value:
+                        type: [float, integer, physical_unit]
+                        default: 0.0
+
+                    unit:
+                        type: unit_name
+
+                    hasOld:
+                        type: boolean
+                        default: false
+
+                    vtype:
+                        type: string
+                        allowed: ['cell', 'basic']
+                        default: cell
+
+            constraints:
+                type: dict
+                keyschema:
+                    type: string
+                    allowed: [top, bottom]
+                valueschema:
+                    type: [float, integer, physical_unit]
 
 
 irradiance: &irradiance_schema
@@ -119,12 +132,12 @@ processbase: &procbase
                     varnames:
                         type: list
                         schema:
-                            type: sympifyable
+                            type: symbolable
 
                     params:
                         type: dict
                         keyschema:
-                            type: sympifyable
+                            type: symbolable
 
 process: &process_schema
     <<: *procbase
@@ -151,7 +164,7 @@ model_schema:
                 variables:
                     type: list
                     schema:
-                        type: sympifyable
+                        type: symbolable
 
                 expr:
                     type: sympifyable
@@ -159,9 +172,6 @@ model_schema:
 
     environment:
         type: dict
-
-        keyschema:
-            type: string
 
         schema:
             irradiance:
@@ -172,11 +182,10 @@ model_schema:
             chemicals:
                 type: dict
                 keyschema:
-                    type: string
+                    type: symbolable
 
                 valueschema:
-                    schema:
-                        <<: *chemical_schema
+                    schema: *var_schema
 
             processes:
                 <<: *process_schema

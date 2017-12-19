@@ -65,7 +65,7 @@ def pytest_generate_tests(metafunc):
         return
     idlist = []
     argvalues = []
-    print("Scenarios: {}".format(metafunc.cls.scenarios))
+    # print("Scenarios: {}".format(metafunc.cls.scenarios))
     for scenario, params in metafunc.cls.scenarios:
         idlist.append(scenario)
         argnames = ['case', 'params']

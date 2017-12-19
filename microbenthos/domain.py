@@ -121,15 +121,15 @@ class SedimentDBLDomain(object):
             kwargs['name'] = str(vname)
 
         if kwargs.get('value') is None:
-            logger.warning('Cannot set {} to None. Setting to zero instead!'.format(vname))
-            kwargs['value'] = 0
+            logger.debug('Cannot set {} to None. Setting to zero instead!'.format(vname))
+            kwargs['value'] = 0.0
 
         if vtype == 'cell':
             var = CellVariable(mesh=self.mesh, **kwargs)
         elif vtype == 'basic':
             var = Variable(**kwargs)
 
-        logger.debug('Created variable {}: {}'.format(vname, repr(var)))
+        logger.debug('Created variable {}: {} ({})'.format(vname, repr(var), var.shape))
         self.VARS[vname] = var
         return var
 
@@ -179,8 +179,8 @@ class SedimentDBLDomain(object):
 
 
         self.sediment_porosity = float(porosity)
-        P[:self.DBL_Ncells] = 1.0
-        P[self.DBL_Ncells:] = self.sediment_porosity
+        P[:self.idx_surface] = 1.0
+        P[self.idx_surface:] = self.sediment_porosity
         logger.info('Set sediment porosity to {} and DBL porosity to 1.0'.format(
             self.sediment_porosity))
         return P

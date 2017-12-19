@@ -2,11 +2,13 @@ import importlib
 import inspect
 import logging
 
+from fipy import PhysicalField
+from fipy.tools import numerix
+
 from microbenthos.domain import SedimentDBLDomain
 
 
 class Entity(object):
-
     def __init__(self, logger = None):
 
         if not logger:
@@ -15,9 +17,8 @@ class Entity(object):
         else:
             self.logger = logger
 
-
     @classmethod
-    def from_params(cls_, cls, init_params, post_params=None):
+    def from_params(cls_, cls, init_params, post_params = None):
         """
         Create entity instance from supplied CLS path and init parameters
 
@@ -193,4 +194,220 @@ class DomainEntity(Entity):
         raise NotImplementedError('Setup of {}'.format(self.__class__.__name__))
 
 
+class Variable(DomainEntity):
+    """
+    A helper class to represent a variable for the model domain, which can create the variable,
+    apply boundary conditions.
+    """
 
+    def __init__(self, name, create,
+                 constraints = None,
+                 **kwargs):
+        """
+        Configure the creation of a variable and its boundary conditions
+
+        Args:
+            name (str): The name of the variable
+            create (dict): parameters for variable creation (see :meth:`.create`)
+            constraints (dict): Mapping of `location` to value of boundary condition
+            through :meth:`.constrain`.
+            **kwargs:
+        """
+        self.logger = kwargs.get('logger') or logging.getLogger(__name__)
+        kwargs['logger'] = self.logger
+        super(Variable, self).__init__(**kwargs)
+
+        self.logger.debug('Init in DomainVariable for {!r}'.format(name))
+        self.name = name
+        self.var = None
+
+        self.create_params = create
+
+        self.check_create(**self.create_params)
+
+        self.constraints = constraints or dict()
+        self.check_constraints(self.constraints)
+
+    def __repr__(self):
+        return 'Var({})'.format(self.name)
+
+    @staticmethod
+    def check_create(**params):
+
+        from fipy import PhysicalField
+        try:
+            p = PhysicalField(1, params['unit'])
+        except:
+            raise ValueError('{!r} is not a valid unit!'.format(params['unit']))
+
+        vtype = params['vtype']
+        if vtype not in ('cell', 'basic'):
+            raise ValueError('Variable type not known {!r} in ("cell", "basic")'.format(vtype))
+
+    @staticmethod
+    def check_constraints(constraints):
+        """
+        Check that constraints is a mapping of location to value of boundary conditions.
+        Recognized location values are: `"top", "bottom"`.
+
+        Raises:
+            TypeError if `constraints` is not a mapping
+            ValueError if `loc` is not valid
+            ValueError if `value` is not single-valued
+
+        """
+        logger = logging.getLogger(__name__)
+
+        locs = ('top', 'bottom', 'dbl', 'sediment')
+        try:
+            for loc, val in dict(constraints).items():
+                pass
+        except (ValueError, TypeError):
+            logger.error('Constraints not a mapping of pairs: {}'.format(constraints))
+            raise ValueError('Constraints should be mapping of (location, value) pairs!')
+
+        for loc, val in dict(constraints).items():
+            if loc not in locs:
+                raise ValueError('Constraint loc={!r} unknown. Should be in {}'.format(
+                    loc, locs
+                    ))
+            try:
+                if isinstance(val, PhysicalField):
+                    v = float(val.value)
+                else:
+                    v = float(val)
+            except:
+                raise ValueError('Constraint should be single-valued, not {!r}'.format(val))
+
+    def setup(self):
+        """
+        Once a domain is available, create the variable with the requested parameters and apply
+        any constraints.
+
+        Returns:
+            Instance of the variable created
+
+        """
+
+        self.check_domain()
+
+        self.create(**self.create_params)
+
+        for loc, value in dict(self.constraints).items():
+            self.constrain(loc, value)
+
+    def create(self, value, unit = None, hasOld = False, vtype = 'cell'):
+        """
+        Create a :class:`~fipy.Variable` on the domain.
+
+
+        A `vtype` of `"cell"` is intended to creates variables with one dimension equal to
+        the domain size. So if the input to this is:
+            * a single number, then the number is broadcast to an array the shape of the domain.
+            * a :class:`~fipy.PhysicalField` of a single value or of an array the size of the
+            domain, then a variable of the domain size is created. The unit of the
+            `PhysicalField` is used, and any supplied `unit` keyword is ignored.
+            * a :class:`~fipy.PhysicalField` of shape not matching the domain size,
+            then a variable would be created that is not representable on the domain. Currently,
+            this raises a `ValueError`.
+
+        A `vtype` of `"basic"` is intended to create variables that can be used as dependencies,
+        and are not bound to the domain. So, the shape of the variable is the same as the input
+        `value`. Again, `unit` is overriden if `value` is a `PhysicalField`.
+
+        Args:
+            value (int, float, array, PhysicalField): the value for the array
+            unit (str): physical units string for the variable. Is overriden if `value` is a
+            `PhysicalField`.
+            hasOld (bool): Whether the variable of `vtype = "cell"` keeps the old values,
+            and must be manually updated. (default: False). This setting is ignored for `"basic"`
+            variables.
+            vtype: string indicating type to create. Either "cell" or "basic". (default: "cell")
+
+        Returns:
+            instance of the variable created
+
+        Raises:
+            RuntimeError: if a domain variable with `name` already exists, or no mesh exists on
+            the domain.
+            ValueError: for `"cell"` variables, if value.shape is not 1 or the domain shape
+
+        """
+        self.logger.debug('Creating {} variable {!r} with unit {}'.format(vtype, self.name, unit))
+        kwargs = dict(unit=unit)
+
+        from fipy.tools import numerix, PhysicalField
+        if vtype == "cell":
+            varr = numerix.atleast_1d(value)
+            if varr.ndim != 1:
+                raise ValueError(
+                    'Cell variable dimensions must be 0 or 1, not {}'.format(varr.ndim))
+
+            if varr.shape[0] not in (1, self.domain.domain_Ncells):
+                raise ValueError(
+                    'Cell variable of shape {} cannot be broadcast to domain of shape {}'.format(
+                        varr.shape, self.domain.domain_Ncells))
+
+            kwargs['hasOld'] = bool(hasOld)
+
+        if unit and isinstance(value, PhysicalField):
+            vunit = str(value.unit.name())
+            if vunit != "1":
+                # value has units
+                self.logger.warning('Value for {!r} has units {!r}, which will override '
+                                    'supplied {}'.format(self.name, vunit, unit))
+
+        if isinstance(value, int):
+            value = float(value)
+            # integer type can have comparison issue with physical units
+
+        kwargs['value'] = value
+
+        self.var = self.domain.create_var(vname=self.name,
+                                          vtype=vtype,
+                                          **kwargs)
+        return self.var
+
+    def constrain(self, loc, value):
+        """
+        Constrain the variable at the given location to the given value
+
+        Args:
+            loc (str): One of `("top", "bottom", "dbl", "sediment")
+            value (numeric): a numeric value for the constraint, such as a number of a
+            `PhysicalField`
+
+        Returns:
+            None
+
+        Raises:
+            ValueError for improper values for `loc`
+            ValueError if value is not a 0-dimension array
+            RuntimeError if variable doesn't exist
+
+        """
+
+        if self.var is None:
+            raise RuntimeError('Variable {} does not exist!'.format(self.name))
+
+        mask = numerix.zeros_like(self.var, dtype=bool)
+
+        LOC = {
+            'top': 0,
+            'bottom': -1,
+            'dbl': slice(0, self.domain.idx_surface),
+            'sediment': slice(self.domain.idx_surface, -1)
+            }
+        try:
+            L = LOC[loc]
+            mask[L] = 1
+        except KeyError:
+            raise ValueError('loc={} not in {}'.format(loc, tuple(LOC.keys())))
+
+        if isinstance(value, PhysicalField):
+            value = value.inUnitsOf(self.var.unit)
+        else:
+            value = PhysicalField(value, self.var.unit)
+
+        self.logger.info('Constraining {!r} at {} = {}'.format(self.var, loc, value))
+        self.var.constrain(value, mask)

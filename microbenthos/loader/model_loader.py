@@ -2,7 +2,7 @@ import logging
 import os
 import cerberus
 from fipy import PhysicalField
-from sympy import sympify
+from sympy import sympify, Symbol
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +39,21 @@ class ModelSchemaValidator(cerberus.Validator):
             if value.unit.name() != '1':
                 return True
 
+    def _validate_type_unit_name(self, value):
+        """
+        Checks that the string can be used as units
+        Args:
+            value:
+
+        Returns:
+
+        """
+        try:
+            PhysicalField(1, value)
+            return True
+        except:
+            return False
+
     def _validate_like_unit(self, unit, field, value):
         """
         Test that the given value has compatible units
@@ -71,6 +86,16 @@ class ModelSchemaValidator(cerberus.Validator):
         try:
             e = sympify(value)
             return True
+        except:
+            return False
+
+    def _validate_type_symbolable(self, value):
+        """
+        String that can be run through sympify and only has one variable symbol in it.
+        """
+        try:
+            e = sympify(value)
+            return isinstance(e, Symbol)
         except:
             return False
 
