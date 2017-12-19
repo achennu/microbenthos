@@ -10,16 +10,15 @@ logger.addHandler(ColorizingStreamHandler())
 
 
 model_path = os.path.join(os.path.dirname(__file__), 'model.yml')
-schema_path = os.path.join(os.path.dirname(__file__), 'schema.yml')
+schema_path = os.path.join(os.path.dirname(__file__), 'test_schema.yml')
 
 
-inbuilt_schema = get_model_schema()
-pprint(inbuilt_schema)
-
+# inbuilt_schema = get_model_schema()
+raw_schema = get_model_schema()
+inbuilt_schema = raw_schema['model_schema']
 
 model_dict = from_yaml(model_path) # uses inbuilt schema
 
-
-
 # model_dict = from_yaml(model_path, schema_path)
+
 pprint(model_dict)
