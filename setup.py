@@ -15,6 +15,7 @@ requirements = [
     'scipy',
     'logutils',
     'sympy',
+    'cerberus',
 ]
 
 test_requirements = [

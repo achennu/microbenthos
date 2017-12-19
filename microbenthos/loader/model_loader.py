@@ -2,6 +2,7 @@ import logging
 import os
 import cerberus
 from fipy import PhysicalField
+from sympy import sympify
 
 logger = logging.getLogger(__name__)
 
@@ -11,8 +12,12 @@ class ModelSchemaValidator(cerberus.Validator):
         """
         Validates if the value is a usable import path for an entity class
 
-        Valid example is: pkg1.pkg2.mod1.class
-        A text with no . will be invalid.
+        Valid examples are:
+            * pkg1.pkg2.mod1.class
+            * class_name
+
+        Invalid examples:
+            * .class_name
 
         Args:
             value: A string
@@ -24,7 +29,7 @@ class ModelSchemaValidator(cerberus.Validator):
             a, b = value.rsplit('.', 1)
             return True
         except ValueError:
-            return False
+            return not value.startswith('.')
 
     def _validate_type_physical_unit(self, value):
         """ Enables validation for `unit` schema attribute.
@@ -57,6 +62,18 @@ class ModelSchemaValidator(cerberus.Validator):
             value.inUnitsOf(unit)
         except:
             self._error(field, 'Must be compatible with units {}'.format(unit))
+
+
+    def _validate_type_sympifyable(self, value):
+        """
+        A string that can be run through sympify
+        """
+        try:
+            e = sympify(value)
+            return True
+        except:
+            return False
+
 
 
 from .yaml_loader import yaml
@@ -92,7 +109,7 @@ def get_model_schema():
     """
     INBUILT = os.path.join(os.path.dirname(__file__), 'schema.yml')
     with open(INBUILT) as fp:
-        model_schema = yaml.load(fp)['model_schema']
+        model_schema = yaml.load(fp)#['model_schema']
 
     return model_schema
 

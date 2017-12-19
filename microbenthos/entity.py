@@ -17,14 +17,14 @@ class Entity(object):
 
 
     @classmethod
-    def from_params(cls, cls_path, init_params, post_params=None):
+    def from_params(cls_, cls, init_params, post_params=None):
         """
         Create entity instance from supplied CLS path and init parameters
 
         CLS is a string such as `Irradiance` or `microbenthos.Process` or `sympy.Lambda`
 
         Args:
-            cls_path (str): The qualified `module.class_name`. If no `module` is in the string,
+            cls (str): The qualified `module.class_name`. If no `module` is in the string,
             then it is assummed to be `"microbenthos"`
 
             init_params (dict): Dictionary of params to supply to the class __init__
@@ -36,14 +36,14 @@ class Entity(object):
 
         """
         logger = logging.getLogger(__name__)
-        logger.debug('Setting up entity from cls_path: {}'.format(cls_path))
+        logger.debug('Setting up entity from cls: {}'.format(cls))
         try:
-            cls_modname, cls_name = cls_path.rsplit('.', 1)
+            cls_modname, cls_name = cls.rsplit('.', 1)
         except ValueError:
-            # raise ValueError('Path {} could not be split into module & class'.format(cls_path))
+            # raise ValueError('Path {} could not be split into module & class'.format(cls))
             # this is then just a class name to import from microbenthos
             cls_modname = 'microbenthos'
-            cls_name = cls_path
+            cls_name = cls
 
         try:
             logger.debug('Importing {}'.format(cls_modname))
@@ -94,7 +94,7 @@ class Entity(object):
         init_params = cdict.get('init_params', {})
         post_params = cdict.get('post_params', {})
 
-        return cls.from_params(cls_path=cls_path, init_params=init_params, post_params=post_params)
+        return cls.from_params(cls=cls_path, init_params=init_params, post_params=post_params)
 
     def post_init(self, **kwargs):
         """
@@ -108,6 +108,14 @@ class Entity(object):
             None
         """
         self.logger.debug('Empty post_init on {}'.format(self))
+
+    def update_time(self, clocktime):
+        """
+        Method which should update the entity features for the simulation clocktime
+
+        :param float clocktime: The simulation time (units depends on the solver setup)
+        """
+        self.logger.debug('Updating {} for clocktime {}'.format(self, clocktime))
 
 
 class DomainEntity(Entity):
@@ -183,14 +191,6 @@ class DomainEntity(Entity):
         """
         self.logger.debug('Setup: {}'.format(self))
         raise NotImplementedError('Setup of {}'.format(self.__class__.__name__))
-
-    def update_time(self, clocktime):
-        """
-        Method which should update the entity features for the simulation clocktime
-
-        :param float clocktime: The simulation time (units depends on the solver setup)
-        """
-        self.logger.debug('Updating {} for clocktime {}'.format(self, clocktime))
 
 
 

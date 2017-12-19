@@ -1,8 +1,10 @@
+cls: &cls_schema
+    required: true
 
 entity_schema: &entity_schema
-    cls: &cls_schema
+    cls:
         type: importpath
-        required: true
+        <<: *cls_schema
 
     init_params:
         type: dict
@@ -10,7 +12,7 @@ entity_schema: &entity_schema
 chemicals: &chemical_schema
     cls:
         <<: *cls_schema
-        allowed: [microbenthos.chemicals.Chemical]
+        allowed: [microbenthos.chemicals.Chemical, Chemical]
 
     create:
         schema:
@@ -39,7 +41,7 @@ chemicals: &chemical_schema
 irradiance: &irradiance_schema
     cls:
         <<: *cls_schema
-        allowed: [microbenthos.irradiance.Irradiance]
+        allowed: [microbenthos.irradiance.Irradiance, Irradiance]
 
     init_params:
         schema:
@@ -73,7 +75,10 @@ irradiance: &irradiance_schema
                             - type: [physical_unit, float]
 
 microbes: &microbes_schema
-    <<: *entity_schema
+    cls:
+        <<: *cls_schema
+        allowed: [microbenthos.microbes.MicrobialGroup, MicrobialGroup]
+
     init_params:
         type: dict
         schema:
@@ -93,11 +98,64 @@ microbes: &microbes_schema
             responses:
                 type: dict
 
+processbase: &procbase
+    type: dict
+    keyschema:
+        type: sympifyable
+    valueschema: &procbase_value
+        schema: &procbase_valueschema
+            cls:
+                <<: *cls_schema
+                allowed: [ExprProcess, microbenthos.process.ExprProcess]
 
+            init_params: &procbase_init
+                type: dict
+
+                schema: &procbase_initschema
+                    formula:
+                        type: sympifyable
+                        required: true
+
+                    varnames:
+                        type: list
+                        schema:
+                            type: sympifyable
+
+                    params:
+                        type: dict
+                        keyschema:
+                            type: sympifyable
+
+process: &process_schema
+    <<: *procbase
+    valueschema:
+        <<: *procbase_value
+        schema:
+            <<: *procbase_valueschema
+            init_params:
+                <<: *procbase_init
+                schema:
+                    <<: *procbase_initschema
+                    responses:  *procbase
 
 
 
 model_schema:
+
+    formulae:
+        type: dict
+        keyschema:
+            type: sympifyable
+        valueschema:
+            schema:
+                variables:
+                    type: list
+                    schema:
+                        type: sympifyable
+
+                expr:
+                    type: sympifyable
+
 
     environment:
         type: dict
@@ -121,18 +179,7 @@ model_schema:
                         <<: *chemical_schema
 
             processes:
-                type: dict
-                keyschema:
-                    type: string
-
-                valueschema:
-                    oneof:
-                        - schema:
-                                cls:
-                                    <<: *cls_schema
-                                init_params:
-                                    type: dict
-
+                <<: *process_schema
 
 
 

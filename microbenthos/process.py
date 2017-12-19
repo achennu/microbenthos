@@ -1,10 +1,10 @@
 import logging
-from collections import Mapping, Sequence, OrderedDict
+from collections import Mapping, OrderedDict
 
 import operator
 from fipy.tools import numerix
-from microbenthos.base import Entity
-from sympy import sympify, symbols, lambdify, Symbol, SympifyError, Expr
+from microbenthos import Entity
+from sympy import sympify, symbols, lambdify, Symbol, SympifyError
 from abc import ABCMeta, abstractmethod
 
 
@@ -96,14 +96,12 @@ class ExprProcess(Process):
         self._formula = formula
 
         expr = self.parse_formula(formula)
-        assert isinstance(expr, Expr)
         self.expr = expr
-        # self.expr_core, self.expr_rest = self.split_core_expr(self.expr, self.args)
 
         responses = responses or {}
         self.check_names(responses)
         for k, v in responses.iteritems():
-            self.add_response(k, **v)
+            self.add_response_from(k, **v)
 
         argsyms = [sympify(_) for _ in self.argnames]
         self.expr_func = self._lambdify(self.expr, argsyms)
@@ -111,9 +109,22 @@ class ExprProcess(Process):
     def __repr__(self):
         return 'Expr({},{})'.format(self.expr, self.vars)
 
-    def check_names(self, p):
+    def check_names(self, names):
+        """
+        Checks that the items of the list are sympifyable
+
+        Args:
+            names: List of strings
+
+        Returns:
+            None
+
+        Raises:
+            ValueError if any improper names are found
+
+        """
         improper = []
-        for n in p:
+        for n in names:
             try:
                 n_ = sympify(n)
             except:
@@ -169,32 +180,34 @@ class ExprProcess(Process):
 
         return expr
 
-    # def split_core_expr(self, expr, args):
-    #     """
-    #     Splits the given expression into a 'core' expr of its parameters and variables,
-    #     and the rest of the subexpressions.
-    #
-    #     Args:
-    #         expr: expr to split
-    #
-    #     Returns:
-    #         Tuple of (core_expr, subexprs)
-    #     """
-    #     self.logger.debug('Splitting expr {} in terms of {}'.format(expr, args))
-    #     rest, core_expr = expr.as_independent(*args)
-    #     self.logger.debug('Core expr: {} & remaining: {}'.format(core_expr, rest))
-    #     return core_expr, rest
+    def add_response(self, name, process):
+        """
+        Add a response function to this process
 
-    def add_response(self, name, **params):
-        self.logger.debug('Adding response: {}:: {}'.format(name, params))
+        Args:
+            name: Name to refer to the object
+            process: The instance of the Process
 
-        response = self.from_dict(params)
+        Returns:
+            None
+
+        """
+
+        self.check_names([name])
 
         if name in self.responses:
             self.logger.warning('Process {!r} already exists. Over-writing with {}'.format(name,
-                                                                                           response))
-        self.responses[name] = response
-        self.logger.info('Added response {!r}: {}'.format(name, response))
+                                                                                           process))
+
+        self.responses[name] = process
+        self.logger.info('Added response {!r}: {}'.format(name, process))
+
+    def add_response_from(self, name, **params):
+        self.logger.debug('Adding response: {}:: {}'.format(name, params))
+
+        response = self.from_params(**params)
+
+        self.add_response(name, response)
 
     def _lambdify(self, expr, args):
         """
@@ -232,53 +245,6 @@ class ExprProcess(Process):
         self.logger.debug('Created exprfunc: {} with args: {}'.format(exprfunc, args))
 
         return exprfunc
-
-    # def get_source_term_for_var(self, varname, coeff = None):
-    #     """
-    #     Create a source term for solving domain computations
-    #
-    #     Args:
-    #         varname: The name of the primary variable of the equation
-    #         coeff: Any coefficient to be multiplied with the term
-    #
-    #     Returns:
-    #         A Term or :class:`ImplicitSourceTerm`
-    #
-    #     """
-    #     self.check_domain()
-    #
-    #     var_ = symbols(varname, seq=True)
-    #     assert len(var_) == 1, 'Only one var should be supplied for source term'
-    #     var = var_[0]
-    #
-    #     # collect variables from the domain
-    #     tvars = tuple([self.domain[v.name] for v in self.exprfunc_vars])
-    #     tparams = tuple(self.params[p] for p in self.exprfunc_params)
-    #     targs = tvars + tparams
-    #
-    #     try:
-    #         self.logger.debug('Creating term from args: {}'.format([(repr(_), type(_)) for _
-    #                                                                 in targs]))
-    #         term = self.exprfunc(*targs)
-    #         self.logger.debug('Term created: {}'.format(repr(term)))
-    #     except:
-    #         self.logger.error('Term could not be created', exc_info=True)
-    #         raise
-    #
-    #     if coeff is not None:
-    #         term *= coeff
-    #         self.logger.debug('Term with coeff: {}'.format(repr(term)))
-    #
-    #     other_vars = set(self.vars).difference({var})
-    #
-    #     if other_vars:
-    #         # there are other variables in the expression, so it must be an implicit source term
-    #         self.logger.debug(
-    #             'Rendering as implicit source due to dependence on {}'.format(other_vars))
-    #         return ImplicitSourceTerm(coeff=term, var=self.domain[var.name])
-    #
-    #     else:
-    #         return term
 
     def evaluate(self, D, P = None, full=True):
 
