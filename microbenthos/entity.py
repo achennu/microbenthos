@@ -52,7 +52,7 @@ class Entity(object):
             CLS = getattr(cls_module, cls_name)
             logger.debug('Using class: {}'.format(CLS))
         except (ImportError, AttributeError):
-            raise TypeError('Class {} in {} could not be found!'.format(cls_modname, cls_name))
+            raise TypeError('Class {} in {} could not be found!'.format(cls_name, cls_modname))
 
         logger.debug('Init params: {}'.format(init_params))
         inst = CLS(**init_params)
@@ -169,6 +169,7 @@ class DomainEntity(Entity):
 
         self._domain = domain
         self.logger.info('Added to domain: {}'.format(self))
+        self.on_domain_set()
 
     def set_domain(self, domain):
         self.domain = domain
@@ -181,6 +182,14 @@ class DomainEntity(Entity):
     @property
     def has_domain(self):
         return isinstance(self.domain, self.domain_cls)
+
+    def on_domain_set(self):
+        """
+        Hook for when a domain is set
+
+        To be used by sub-classes to setup sub-entities
+
+        """
 
     def setup(self):
         """
@@ -235,14 +244,17 @@ class Variable(DomainEntity):
     def check_create(**params):
 
         from fipy import PhysicalField
-        try:
-            p = PhysicalField(1, params['unit'])
-        except:
-            raise ValueError('{!r} is not a valid unit!'.format(params['unit']))
+        unit = params.get('unit')
+        if unit:
+            try:
+                p = PhysicalField(1, params['unit'])
+            except:
+                raise ValueError('{!r} is not a valid unit!'.format(params['unit']))
 
-        vtype = params['vtype']
-        if vtype not in ('cell', 'basic'):
-            raise ValueError('Variable type not known {!r} in ("cell", "basic")'.format(vtype))
+        vtype = params.get('vtype')
+        if vtype:
+            if vtype not in ('cell', 'basic'):
+                raise ValueError('Variable type not known {!r} in ("cell", "basic")'.format(vtype))
 
     @staticmethod
     def check_constraints(constraints):

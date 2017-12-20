@@ -61,7 +61,6 @@ environment:
     processes:
 
         abiotic_h2s_oxidation:
-            cls: ExprProcess
             init_params:
                 formula: porosity * k * oxy**2 * h2s
                 varnames: ['oxy', 'h2s', 'porosity']
@@ -71,43 +70,60 @@ environment:
 
 microbes:
     cyano:
-        cls: MicrobialGroup
         init_params:
             name: cyano
+            features:
+                biomass:
+                    init_params:
+                        name: biomass
+                        create:
+                            value: !unit 0.0 g/cm**3
 
-    processes:
-        cls: ExprProcess
+                        constraints:
+                            dbl: !unit 0 g/cm**3
 
-    init_params:
-        formula: Qmax * biomass
-        varnames:
-            - biomass
-        params:
-            Qmax: !unit "0.00841 mol/g/h"
+                BChla:
+                    init_params:
+                        name: BChla
+                        create:
+                            value: !unit 0.0 g/cm**3
 
-        responses:
-            optimum(par):
-                cls: ExprProcess
-                init_params:
-                    formula: optimum_response(par, Ks, Ki)
-                    varnames:
-                        - par
-                    params:
-                        Ks: 1
-                        Ki: 10
+            processes:
+                oxyPS:
+                    init_params:
+                        formula: Qmax * biomass
+                        varnames:
+                            - biomass
+                        params:
+                            Qmax: !unit "0.00841 mol/g/h"
 
-            optimum(oxy):
-                cls: ExprProcess
-                init_params:
-                    formula: optimum_response(oxy, Ks, Ki)
-                    varnames:
-                        - oxy
-                    params:
-                        Ks: !unit "0.3e-3 mol/l"
-                        Ki: !unit "0.35e-3 mol/l"
+                        responses:
+                            optimum(par):
+                                cls: ExprProcess
+                                init_params:
+                                    formula: optimum_response(par, Ks, Ki)
+                                    varnames:
+                                        - par
+                                    params:
+                                        Ks: 1
+                                        Ki: 10
+
+                            optimum(oxy):
+                                cls: ExprProcess
+                                init_params:
+                                    formula: inhibition_response(oxy, Kmax, Khalf)
+                                    varnames:
+                                        - oxy
+                                    params:
+                                        Kmax: !unit "0.8e-3 mol/l"
+                                        Khalf: !unit "0.7e-3 mol/l"
 
 formulae:
     optimum_response:
         variables: [x, Ks, Ki]
         expr: x/(x + Ks)/(1 + x/Ki)
 
+
+    inhibition_response:
+        variables: [x, Kmax, Khalf]
+        expr: (Kmax - x) / (2*Kmax - Khalf - x) * (x < Kmax)

@@ -13,6 +13,7 @@ variables: &var_schema
     cls:
         <<: *cls_schema
         allowed: [microbenthos.Variable, Variable]
+        default: Variable
 
     init_params:
         type: dict
@@ -25,6 +26,7 @@ variables: &var_schema
 
             create:
                 type: dict
+                required: true
                 schema:
                     value:
                         type: [float, integer, physical_unit]
@@ -46,7 +48,7 @@ variables: &var_schema
                 type: dict
                 keyschema:
                     type: string
-                    allowed: [top, bottom]
+                    allowed: [top, bottom, dbl, sediment]
                 valueschema:
                     type: [float, integer, physical_unit]
 
@@ -55,6 +57,7 @@ irradiance: &irradiance_schema
     cls:
         <<: *cls_schema
         allowed: [microbenthos.irradiance.Irradiance, Irradiance]
+        default: Irradiance
 
     init_params:
         schema:
@@ -87,29 +90,6 @@ irradiance: &irradiance_schema
                             - type: string
                             - type: [physical_unit, float]
 
-microbes: &microbes_schema
-    cls:
-        <<: *cls_schema
-        allowed: [microbenthos.microbes.MicrobialGroup, MicrobialGroup]
-
-    init_params:
-        type: dict
-        schema:
-            name:
-                type: string
-                min: 2
-
-    processes:
-        type: dict
-        keyschema:
-            type: string
-        schema:
-            Qmax:
-                type: physical_unit
-                like_unit: mol/g/h
-
-            responses:
-                type: dict
 
 processbase: &procbase
     type: dict
@@ -120,6 +100,7 @@ processbase: &procbase
             cls:
                 <<: *cls_schema
                 allowed: [ExprProcess, microbenthos.process.ExprProcess]
+                default: ExprProcess
 
             init_params: &procbase_init
                 type: dict
@@ -152,15 +133,49 @@ process: &process_schema
                     responses:  *procbase
 
 
+microbes: &microbes_schema
+    schema:
+        cls:
+            <<: *cls_schema
+            allowed: [microbenthos.microbes.MicrobialGroup, MicrobialGroup]
+            default: MicrobialGroup
+
+        init_params:
+            type: dict
+            schema:
+                name:
+                    type: symbolable
+                    min: 2
+                    required: true
+
+                features:
+                    type: dict
+                    required: true
+                    dependencies: [features.biomass]
+                    keyschema:
+                        type: symbolable
+                        min: 2
+
+
+                    valueschema:
+                         schema: *var_schema
+
+                processes: *process_schema
+
+
+
+### MAIN MODEL SCHEMA HERE ###
 
 model_schema:
 
     domain:
         type: dict
+        required: true
         schema:
             cls:
                 <<: *cls_schema
                 allowed: [microbenthos.SedimentDBLDomain, SedimentDBLDomain]
+                default: SedimentDBLDomain
 
             init_params:
                 type: dict
@@ -202,16 +217,18 @@ model_schema:
             schema:
                 variables:
                     type: list
+                    required: true
                     schema:
                         type: symbolable
 
                 expr:
+                    required: true
                     type: sympifyable
 
 
     environment:
         type: dict
-
+        dependencies: [^domain]
         schema:
             irradiance:
                 type: dict
@@ -229,14 +246,16 @@ model_schema:
             processes:
                 <<: *process_schema
 
-
-
-
-
     microbes:
         type: dict
+        dependencies: [^domain]
         keyschema:
             type: string
+            min: 2
+
+        valueschema: *microbes_schema
+
+
 
 
 
