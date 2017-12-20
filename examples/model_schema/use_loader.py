@@ -16,12 +16,13 @@ schema_path = os.path.join(os.path.dirname(__file__), 'test_schema.yml')
 # inbuilt_schema = get_model_schema()
 raw_schema = get_model_schema()
 inbuilt_schema = raw_schema['model_schema']
-pprint(inbuilt_schema)
+pprint(inbuilt_schema['microbes'])
 
 with open(model_path) as fp:
     mdict = yaml.load(fp)
 
-pprint(mdict['environment']['chemicals'])
+pprint(mdict['microbes']['cyano'].items())
+print(type(mdict['microbes']))
 
 model_dict = from_yaml(model_path) # uses inbuilt schema
 

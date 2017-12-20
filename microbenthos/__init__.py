@@ -9,3 +9,4 @@ __version__ = '0.1.0'
 from .domain import SedimentDBLDomain
 from .entity import Entity, DomainEntity, Variable
 from .process import Process, ExprProcess
+from .microbes import MicrobialGroup
