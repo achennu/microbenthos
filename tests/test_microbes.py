@@ -1,6 +1,6 @@
 import pytest
-
-from microbenthos import MicrobialGroup
+import copy
+from microbenthos import MicrobialGroup, SedimentDBLDomain
 
 VARdict = dict(
     cls='Variable',
@@ -8,6 +8,8 @@ VARdict = dict(
         name='biomass',
         create=dict(value=35)
         ))
+VARdict2 = copy.deepcopy(VARdict)
+VARdict2['init_params']['name'] = 'abcd'
 
 PROCdict = dict(
     cls='ExprProcess',
@@ -61,3 +63,37 @@ class TestMicrobialGroup:
         else:
             with pytest.raises(err):
                 m = MicrobialGroup('bugs', features=F, processes=processes)
+
+    @pytest.mark.parametrize(
+        'features, processes,err',
+        [
+            (
+                dict(biomass=VARdict.copy(),
+                     another=VARdict.copy()),
+                None,
+                RuntimeError),
+            (
+                dict(biomass=VARdict.copy(),
+                     another=VARdict2.copy()),
+                None,
+                None)
+            ],
+        ids=['varname_repeat',
+             'varname_unique',
+             ]
+        )
+    def test_setup(self, features, processes, err):
+
+        domain = SedimentDBLDomain()
+
+        m = MicrobialGroup('bugs', features=features, processes=processes)
+        m.set_domain(domain)
+
+        if err is None:
+            m.setup()
+            for feat in m.features.values():
+                assert feat.name in domain.VARS
+
+        else:
+            with pytest.raises(err):
+                m.setup()

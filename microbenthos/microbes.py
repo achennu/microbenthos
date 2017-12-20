@@ -41,7 +41,7 @@ class MicrobialGroup(DomainEntity):
             raise RuntimeError('{} needs feature "biomass"'.format(self))
 
     def __repr__(self):
-        return 'Microbes({})'.format(self.name)
+        return 'Microbes({}):Procs({})'.format(self.name, ','.join(self.processes.keys()))
 
     def add_feature_from(self, name, **params):
         """
@@ -56,7 +56,7 @@ class MicrobialGroup(DomainEntity):
         Returns:
             None
         """
-        self.logger.debug('Dispatch init of feature {!r}'.format(name))
+        self.logger.debug('Dispatch init of feature {!r}: {}'.format(name, params))
         instance = self.from_dict(params)
         assert isinstance(instance, Variable), '{} not an instance of Variable'
 
@@ -77,7 +77,7 @@ class MicrobialGroup(DomainEntity):
         Returns:
             None
         """
-        self.logger.debug('Dispatch init of process {!r}'.format(name))
+        self.logger.debug('Dispatch init of process {!r}'.format(name, params))
         instance = self.from_params(**params)
         assert isinstance(instance, Process), '{} not an instance of Process'
 
@@ -92,3 +92,18 @@ class MicrobialGroup(DomainEntity):
             self.logger.warning('Essential feature "biomass" of {} missing!'.format(self))
         return ret
 
+    def on_domain_set(self):
+
+        for obj in self.features.values():
+            self.logger.debug('Setting domain for {}'.format(obj))
+            obj.domain = self.domain
+
+    def setup(self):
+        """
+        If the domain is available, then setup all the features and processes.
+        """
+        self.logger.debug('Setup of {}'.format(self))
+        if self.check_domain():
+            for feat in self.features.values():
+                self.logger.debug('Setting up {}'.format(feat))
+                feat.setup()

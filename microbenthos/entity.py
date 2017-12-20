@@ -169,6 +169,7 @@ class DomainEntity(Entity):
 
         self._domain = domain
         self.logger.info('Added to domain: {}'.format(self))
+        self.on_domain_set()
 
     def set_domain(self, domain):
         self.domain = domain
@@ -181,6 +182,14 @@ class DomainEntity(Entity):
     @property
     def has_domain(self):
         return isinstance(self.domain, self.domain_cls)
+
+    def on_domain_set(self):
+        """
+        Hook for when a domain is set
+
+        To be used by sub-classes to setup sub-entities
+
+        """
 
     def setup(self):
         """
