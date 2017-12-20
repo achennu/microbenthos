@@ -47,7 +47,7 @@ class Entity(object):
             cls_name = cls
 
         try:
-            logger.debug('Importing {}'.format(cls_modname))
+            # logger.debug('Importing {}'.format(cls_modname))
             cls_module = importlib.import_module(cls_modname)
             CLS = getattr(cls_module, cls_name)
             logger.debug('Using class: {}'.format(CLS))
@@ -63,7 +63,7 @@ class Entity(object):
             logger.debug("Calling post_init for instance: {}".format(post_params))
             inst.post_init(**post_params)
 
-        logger.info('Created entity: {}'.format(inst))
+        logger.debug('Created entity: {}'.format(inst))
         return inst
 
     @classmethod
@@ -168,7 +168,7 @@ class DomainEntity(Entity):
         # raise TypeError('Wrong domain type received!')
 
         self._domain = domain
-        self.logger.info('Added to domain: {}'.format(self))
+        self.logger.debug('Added to domain: {}'.format(self))
         self.on_domain_set()
 
     def set_domain(self, domain):
@@ -305,6 +305,18 @@ class Variable(DomainEntity):
 
         self.create(**self.create_params)
 
+        self._LOCs = {
+            'top': [0],
+            'bottom': [-1],
+            'dbl': slice(0, self.domain.idx_surface),
+            'sediment': slice(self.domain.idx_surface, None)
+            }
+
+        invalid_pairs = [('top', 'dbl'), ('bottom', 'sediment')]
+        for pair in invalid_pairs:
+            if all(p in self.constraints for p in pair):
+                self.logger.warning('Constraints specified with invalid pair: {}'.format(pair))
+
         for loc, value in dict(self.constraints).items():
             self.constrain(loc, value)
 
@@ -398,20 +410,16 @@ class Variable(DomainEntity):
             RuntimeError if variable doesn't exist
 
         """
-
         if self.var is None:
             raise RuntimeError('Variable {} does not exist!'.format(self.name))
 
-        mask = numerix.zeros_like(self.var, dtype=bool)
+        self.logger.debug("Setting constraint for {!r}: {} = {}".format(self.var, loc, value))
+        mask = numerix.zeros(self.var.shape, dtype=bool)
 
-        LOC = {
-            'top': 0,
-            'bottom': -1,
-            'dbl': slice(0, self.domain.idx_surface),
-            'sediment': slice(self.domain.idx_surface, -1)
-            }
+
         try:
-            L = LOC[loc]
+            L = self._LOCs[loc]
+            self.logger.debug('Constraint mask loc: {}'.format(L))
             mask[L] = 1
         except KeyError:
             raise ValueError('loc={} not in {}'.format(loc, tuple(LOC.keys())))
@@ -421,5 +429,7 @@ class Variable(DomainEntity):
         else:
             value = PhysicalField(value, self.var.unit)
 
-        self.logger.info('Constraining {!r} at {} = {}'.format(self.var, loc, value))
+        self.logger.info('Constraining {!r}({}) at {} = {}'.format(self.var, type(self.var), loc, value))
         self.var.constrain(value, mask)
+        self.logger.debug(self.var.constraints)
+        self.logger.debug(self.var())

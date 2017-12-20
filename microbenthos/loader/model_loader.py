@@ -111,7 +111,7 @@ def from_yaml(fpath, from_schema=None):
 
     INBUILT = os.path.join(os.path.dirname(__file__), 'schema.yml')
     from_schema = from_schema or INBUILT
-    logger.info('Using schema: {}'.format(from_schema))
+    logger.debug('Using schema: {}'.format(from_schema))
     with open(from_schema) as fp:
         model_schema = yaml.load(fp)['model_schema']
 
@@ -125,6 +125,7 @@ def from_yaml(fpath, from_schema=None):
 
         raise ValueError('Model definition improper!')
     else:
+        logger.info('Model definition successfully loaded: {}'.format(valid_model.keys()))
         return valid_model
 
 

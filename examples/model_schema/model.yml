@@ -2,7 +2,7 @@ domain:
     cls: SedimentDBLDomain
     init_params:
         cell_size: !unit 100 mum
-        sediment_length: !unit mm
+        sediment_length: !unit 10 mm
         dbl_length: !unit 1 mm
         porosity: 0.6
 

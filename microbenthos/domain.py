@@ -123,12 +123,13 @@ class SedimentDBLDomain(object):
             self.logger.debug('Cannot set {} to None. Setting to zero instead!'.format(vname))
             kwargs['value'] = 0.0
 
+        self.logger.debug('domain var params: {}'.format(kwargs))
         if vtype == 'cell':
             var = CellVariable(mesh=self.mesh, **kwargs)
         elif vtype == 'basic':
             var = Variable(**kwargs)
 
-        self.logger.debug('Created variable {}: {} ({})'.format(vname, repr(var), var.shape))
+        self.logger.debug('Created variable {}: {} shape: {} unit: {}'.format(vname, repr(var), var.shape, var.unit))
         self.VARS[vname] = var
         return var
 

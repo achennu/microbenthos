@@ -137,16 +137,27 @@ class TestVariable:
         assert (v.var == PhysicalField(3.0, 'mol/l')).all()
 
 
-    def test_constrain(self):
+    @pytest.mark.parametrize(
+        'constraints',
+        [
+            [('top', PhysicalField('0.2e-3 mol/l'))],
+            [('bottom', PhysicalField('0.2e-3 mol/l'))],
+            [('dbl', PhysicalField('0.2e-3 mol/l'))],
+            [('sediment', PhysicalField('0.4e-3 mol/l'))],
+            [('top', PhysicalField('0.2e-3 mol/l')), ('bottom', PhysicalField(0, 'mol/l'))],
+            [('dbl', PhysicalField('0.4e-3 mol/l')), ('bottom', PhysicalField(0.8e-3, 'mol/l'))],
+            [('sediment', PhysicalField('0.4e-3 mol/l')), ('top', PhysicalField(0.8e-3, 'mol/l'))],
+            # TODO: Figure out a pragmatic policy for these invalid pairs
+            # [('dbl', PhysicalField('0.4e-3 mol/l')), ('top', PhysicalField(0.8e-3, 'mol/l'))],
+            # [('sediment', PhysicalField('0.4e-3 mol/l')), ('bottom', PhysicalField(0.8e-3,'mol/l'))],
+            ],
+        )
+    def test_constrain(self, constraints):
         # test that boundary conditions get applied
         create = dict(value=3, unit='mol/l', vtype='cell')
         name = 'var'
-        constraints = dict(
-            top=PhysicalField(0.2e-3, 'mol/l'),
-            bottom=PhysicalField(0.2e-3, 'mol/l'),
-            dbl = PhysicalField(0.1e-3, 'mol/l'),
-            sediment = PhysicalField(0.3e-4, 'mol/l')
-            )
+
+        constraints = dict(constraints)
 
         v = Variable(name=name, create=create, constraints=constraints)
 
@@ -157,6 +168,14 @@ class TestVariable:
         assert v.var is not None
         assert v.var.name == v.name
         assert len(v.var.constraints) == len(constraints)
+        if 'top' in constraints:
+            assert v.var[0] == constraints['top']
+        if 'bottom' in constraints:
+            assert v.var[-1] == constraints['bottom']
+        if 'dbl' in constraints:
+            assert (v.var[:domain.idx_surface] == constraints['dbl']).all()
+        if 'sediment' in constraints:
+            assert (v.var[domain.idx_surface:] == constraints['sediment']).all()
 
     @pytest.mark.parametrize(
         'varunit, conunit',

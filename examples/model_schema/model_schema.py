@@ -1,29 +1,13 @@
-from pprint import pprint
+import microbenthos
+microbenthos.setup_console_logging(level=10)
 
-import yaml
-from microbenthos.loader.model_loader import ModelSchemaValidator
+import os
+model_path = os.path.join(os.path.dirname(__file__), 'model.yml')
 
-with open('schema.yml') as fp:
-    schema = yaml.load(fp)['model_schema']
+from microbenthos.loader import from_yaml
+model_dict = from_yaml(model_path)
 
-print('Schema is:')
-pprint(schema)
+from microbenthos.model import MicroBenthosModel
 
-
-V = ModelSchemaValidator(schema)
-
-print(V)
-
-with open('model.yml') as fp:
-    document = yaml.load(fp)
-
-print('Document is')
-pprint(document)
-print(type(document['entities']))
-
-print('Validated: {}'.format(V.validate(document)))
-print('Errors: {}'.format(V.errors))
-
-pprint(V.document)
-
+model = MicroBenthosModel(model_dict)
 
