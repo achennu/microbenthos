@@ -4,8 +4,6 @@ Module that defines the microbial mat domain and related environmental parameter
 
 import logging
 
-logger = logging.getLogger(__name__)
-
 from fipy import PhysicalField, CellVariable, Variable
 from fipy.meshes.uniformGrid1D import UniformGrid1D
 
@@ -35,6 +33,7 @@ class SedimentDBLDomain(object):
             porosity: The porosity value for the sediment column
 
         """
+        self.logger = logging.getLogger(__name__)
         self.VARS = {}
         self.mesh = None
         self.sediment_Ncells = self.DBL_Ncells = None
@@ -81,13 +80,13 @@ class SedimentDBLDomain(object):
         Create the mesh for the domain
         """
 
-        logger.info('Creating UniformGrid1D with {} sediment and {} DBL cells of {}'.format(
+        self.logger.info('Creating UniformGrid1D with {} sediment and {} DBL cells of {}'.format(
             self.sediment_Ncells, self.DBL_Ncells, self.cell_size
             ))
         self.mesh = UniformGrid1D(dx=self.cell_size.numericValue,
                                   nx=self.domain_Ncells,
                                   )
-        logger.debug('Created domain mesh: {}'.format(self.mesh))
+        self.logger.debug('Created domain mesh: {}'.format(self.mesh))
         self.distances = Variable(value=self.mesh.scaledCellDistances[:-1], unit='m')
         Z = self.mesh.x()
         Z = Z - Z[self.idx_surface]
@@ -109,19 +108,19 @@ class SedimentDBLDomain(object):
             The created variable
         """
 
-        logger.info('Creating {} variable {!r}'.format(vtype, vname))
+        self.logger.info('Creating {} variable {!r}'.format(vtype, vname))
         if not self.mesh:
             raise RuntimeError('Cannot create cell variable without mesh!')
 
         if vname in self.VARS:
-            # logger.warning('Variable {} already exists. Over-writing with new'.format(vname))
+            # self.logger.warning('Variable {} already exists. Over-writing with new'.format(vname))
             raise RuntimeError('Variable {} already exists!'.format(vname))
 
         if kwargs.get('name') is None:
             kwargs['name'] = str(vname)
 
         if kwargs.get('value') is None:
-            logger.debug('Cannot set {} to None. Setting to zero instead!'.format(vname))
+            self.logger.debug('Cannot set {} to None. Setting to zero instead!'.format(vname))
             kwargs['value'] = 0.0
 
         if vtype == 'cell':
@@ -129,7 +128,7 @@ class SedimentDBLDomain(object):
         elif vtype == 'basic':
             var = Variable(**kwargs)
 
-        logger.debug('Created variable {}: {} ({})'.format(vname, repr(var), var.shape))
+        self.logger.debug('Created variable {}: {} ({})'.format(vname, repr(var), var.shape))
         self.VARS[vname] = var
         return var
 
@@ -181,6 +180,6 @@ class SedimentDBLDomain(object):
         self.sediment_porosity = float(porosity)
         P[:self.idx_surface] = 1.0
         P[self.idx_surface:] = self.sediment_porosity
-        logger.info('Set sediment porosity to {} and DBL porosity to 1.0'.format(
+        self.logger.info('Set sediment porosity to {} and DBL porosity to 1.0'.format(
             self.sediment_porosity))
         return P

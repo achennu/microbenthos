@@ -155,6 +155,45 @@ process: &process_schema
 
 model_schema:
 
+    domain:
+        type: dict
+        schema:
+            cls:
+                <<: *cls_schema
+                allowed: [microbenthos.SedimentDBLDomain, SedimentDBLDomain]
+
+            init_params:
+                type: dict
+                schema:
+                    cell_size:
+                        type: physical_unit
+                        like_unit: cm
+                        required: true
+                        default: !unit 100mum
+                        min: !unit 1mum
+                        max: !unit 500 mum
+
+                    sediment_length:
+                        type: physical_unit
+                        like_unit: cm
+                        required: true
+                        default: !unit 10mm
+                        min: !unit 1 mm
+
+                    dbl_length:
+                        type: physical_unit
+                        like_unit: cm
+                        required: true
+                        default: !unit 1mm
+                        min: !unit 0mm
+
+                    porosity:
+                        type: float
+                        min: 0.1
+                        max: 0.9
+                        default: 0.6
+
+
     formulae:
         type: dict
         keyschema:
