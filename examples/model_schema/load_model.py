@@ -1,5 +1,5 @@
 import microbenthos
-microbenthos.setup_console_logging(level=10)
+microbenthos.setup_console_logging(level=20)
 
 import os
 model_path = os.path.join(os.path.dirname(__file__), 'model.yml')

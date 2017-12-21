@@ -60,7 +60,7 @@ class Irradiance(DomainEntity):
         """
         self.check_domain()
 
-        self.surface_irrad = self.domain.create_var('irrad_surface', vtype='basic')
+        self.surface_irrad = self.domain.create_var('irrad_surface', value=0.0)
 
         if channels:
             for chname, chinfo in channels.iteritems():

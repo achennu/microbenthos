@@ -9,45 +9,35 @@ domain:
 
 environment:
 
-    chemicals:
+    oxy:
+        cls: Variable
+        init_params:
+            name: oxy
+            create:
+                hasOld: true
+                value: !unit 0.0 mol/l
 
-        oxy:
-            cls: Variable
-            init_params:
-                name: oxy
-                create:
-                    hasOld: true
-                    value: !unit 0.0 mol/l
+            constraints:
+                top: !unit 0.2e-3 mol/l
+                bottom: !unit 0 mol/l
 
-                constraints:
-                    top: !unit 0.2e-3 mol/l
-                    bottom: !unit 0 mol/l
+    h2s:
+        cls: Variable
+        init_params:
+            name: h2s
+            create:
+                hasOld: true
+                value: !unit 0.0 mol/l
 
-        h2s:
-            cls: Variable
-            init_params:
-                name: h2s
-                create:
-                    hasOld: true
-                    value: !unit 0.0 mol/l
-
-                constraints:
-                    top: !unit 0.0 mol/l
-                    bottom: !unit 1e-3 mol/l
-
-        n20:
-            cls: Variable
-            init_params:
-                name: N20
-                create:
-                    value: 30
-
+            constraints:
+                top: !unit 0.0 mol/l
+                bottom: !unit 1e-3 mol/l
 
 
     irradiance:
         cls: Irradiance
         init_params:
-            hours_total: 25.3
+            hours_total: 24
             day_fraction: 0.3
 
         channels:
@@ -58,14 +48,24 @@ environment:
                 - [cyano, 65253]
                 - [cyano, !unit 125 g/mm**3]
 
-    processes:
 
-        abiotic_h2s_oxidation:
-            init_params:
-                formula: porosity * k * oxy**2 * h2s
-                varnames: ['oxy', 'h2s', 'porosity']
-                params:
-                    k: !unit '70 1/((10**-3)*mol/l)**2/h'
+    abiotic_h2s_oxidation:
+        cls: ExprProcess
+        init_params:
+            formula: porosity * k * oxy**2 * h2s
+            varnames: ['oxy', 'h2s', 'porosity']
+            params:
+                k: !unit '70 1/((10**-3)*mol/l)**2/h'
+            responses:
+                optimum(par):
+                    cls: ExprProcess
+                    init_params:
+                        formula: optimum_response(par, Ks, Ki)
+                        varnames:
+                            - par
+                        params:
+                            Ks: 1
+                            Ki: 10
 
 
 microbes:
@@ -127,3 +127,7 @@ formulae:
     inhibition_response:
         variables: [x, Kmax, Khalf]
         expr: (Kmax - x) / (2*Kmax - Khalf - x) * (x < Kmax)
+
+    saturation_response:
+        variables: [x, Ks]
+        expr: x / (Ks + x)

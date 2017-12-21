@@ -8,6 +8,7 @@ __version__ = '0.1.0'
 
 from .domain import SedimentDBLDomain
 from .entity import Entity, DomainEntity, Variable
+from .irradiance import Irradiance
 from .process import Process, ExprProcess
 from .microbes import MicrobialGroup
 from .loader import from_yaml

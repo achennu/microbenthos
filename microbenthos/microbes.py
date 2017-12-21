@@ -40,8 +40,10 @@ class MicrobialGroup(DomainEntity):
             self.logger.error('{} initialized but no biomass feature found!'.format(self))
             raise RuntimeError('{} needs feature "biomass"'.format(self))
 
+        self.logger.debug('Initialized {}'.format(self))
+
     def __repr__(self):
-        return 'Microbes({}):Procs({})'.format(self.name, ','.join(self.processes.keys()))
+        return '{}:Feat({}):Procs({})'.format(self.name, ','.join(self.features.keys()), ','.join(self.processes.keys()))
 
     def add_feature_from(self, name, **params):
         """
@@ -62,6 +64,8 @@ class MicrobialGroup(DomainEntity):
 
         if name in self.features:
             self.logger.warning('Overwriting feature {!r} with {}'.format(name, instance))
+
+        self.logger.debug('{} added feature {}: {}'.format(self, name, instance))
         self.features[name] = instance
 
     def add_process_from(self, name, **params):
@@ -83,6 +87,8 @@ class MicrobialGroup(DomainEntity):
 
         if name in self.processes:
             self.logger.warning('Overwriting process {!r} with {}'.format(name, instance))
+
+        self.logger.debug('{} added process {}: {}'.format(self, name, instance))
         self.processes[name] = instance
 
     @property

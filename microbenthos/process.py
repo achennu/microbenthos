@@ -3,12 +3,12 @@ from collections import Mapping, OrderedDict
 
 import operator
 from fipy.tools import numerix
-from microbenthos import Entity
+from microbenthos import DomainEntity
 from sympy import sympify, symbols, lambdify, Symbol, SympifyError
 from abc import ABCMeta, abstractmethod
 
 
-class Process(Entity):
+class Process(DomainEntity):
     """
     Class to represent a process occurring in the benthic domain.
     """
@@ -107,7 +107,7 @@ class ExprProcess(Process):
         self.expr_func = self._lambdify(self.expr, argsyms)
 
     def __repr__(self):
-        return 'Expr({},{})'.format(self.expr, self.vars)
+        return 'Expr({},{}):Resp({})'.format(self.expr, self.vars, ','.join(self.responses.keys()))
 
     def check_names(self, names):
         """
@@ -172,7 +172,7 @@ class ExprProcess(Process):
         self.logger.debug('Sympy namespace: {}'.format(self._sympy_ns))
         try:
             expr = sympify(formula, locals=self._sympy_ns)
-            self.logger.info('Created expression: {}'.format(expr))
+            self.logger.debug('Created expression: {}'.format(expr))
 
         except (SympifyError, SyntaxError):
             self.logger.error('Sympify failed on {}'.format(formula), exc_info=True)
@@ -200,7 +200,7 @@ class ExprProcess(Process):
                                                                                            process))
 
         self.responses[name] = process
-        self.logger.info('Added response {!r}: {}'.format(name, process))
+        self.logger.debug('Added response {!r}: {}'.format(name, process))
 
     def add_response_from(self, name, **params):
         self.logger.debug('Adding response: {}:: {}'.format(name, params))
@@ -246,16 +246,17 @@ class ExprProcess(Process):
 
         return exprfunc
 
-    def evaluate(self, D, P = None, full=True):
+    def evaluate(self, domain = None, params = None, full=True):
         # TODO: Write good docstring here with examples
-        if P is None:
-            P = {}
+
+        if not domain:
+            domain = self.domain
+        if not params:
+            params = self.params
 
         # collect the arguments
-        varargs = [D[_] for _ in self.varnames]
-        if not P:
-            P = self.params
-        pargs = [P[_] for _ in self.params]
+        varargs = [domain[_] for _ in self.varnames]
+        pargs = [params[_] for _ in self.params]
         args = varargs + pargs
         # follow the same order of the params ordered dict
 
@@ -267,7 +268,7 @@ class ExprProcess(Process):
             # evaluate the subprocesses
             for resp_name, response in self.responses.items():
                 self.logger.debug('Evaluating response {}'.format(resp_name))
-                resp_evals.append(response.evaluate(D, P.get(resp_name, None)))
+                resp_evals.append(response.evaluate(domain, params.get(resp_name, None)))
 
         if resp_evals:
             return evaled * reduce(operator.mul, resp_evals)

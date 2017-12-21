@@ -81,9 +81,9 @@ oxy = Variable(np.linspace(0, 0.01, 1000), name='oxygen', unit='mol/l')
 par = Variable(np.linspace(0, 100, len(oxy)), name='par')
 biomass = Variable(np.linspace(1, 0, len(oxy)), name='biomass', unit='g/cm**3' )
 
-e = oxyPS.evaluate(D=dict(par=par, oxy=oxy, biomass=biomass))
-epar = oxyPS.responses['optimum(par)'].evaluate(D=dict(par=par, oxy=oxy, biomass=biomass))
-eoxy = oxyPS.responses['optimum(oxy)'].evaluate(D=dict(par=par, oxy=oxy, biomass=biomass))
+e = oxyPS.evaluate(domain=dict(par=par, oxy=oxy, biomass=biomass))
+epar = oxyPS.responses['optimum(par)'].evaluate(domain=dict(par=par, oxy=oxy, biomass=biomass))
+eoxy = oxyPS.responses['optimum(oxy)'].evaluate(domain=dict(par=par, oxy=oxy, biomass=biomass))
 
 print('optimum(par) = {!r}'.format(epar))
 print('optimum(oxy) = {!r}'.format(eoxy))

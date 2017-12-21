@@ -199,8 +199,8 @@ class DomainEntity(Entity):
 
         To be overridden by subclasses
         """
-        self.logger.debug('Setup: {}'.format(self))
-        raise NotImplementedError('Setup of {}'.format(self.__class__.__name__))
+        self.logger.debug('Setup empty: {}'.format(self))
+        # raise NotImplementedError('Setup of {}'.format(self.__class__.__name__))
 
 
 class Variable(DomainEntity):
@@ -245,8 +245,7 @@ class Variable(DomainEntity):
 
         name = params.get('name')
         if name:
-            raise ValueError('Create params should not contain name. Will be set from init '
-                             'name.')
+            raise ValueError('Create params should not contain name. Will be set from init name.')
 
         from fipy import PhysicalField
         unit = params.get('unit')

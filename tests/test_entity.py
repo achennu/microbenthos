@@ -45,11 +45,10 @@ class TestDomainEntity:
             e.domain = D
 
     def test_setup(self):
-        # should be not implemented
-
+        # should be not implemented, but raises no error
         e = DomainEntity()
-        with pytest.raises(NotImplementedError):
-            e.setup()
+        e.setup()
+        assert True
 
 
 class TestVariable:

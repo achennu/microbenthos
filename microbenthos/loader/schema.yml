@@ -39,11 +39,6 @@ variables: &var_schema
                         type: boolean
                         default: false
 
-                    vtype:
-                        type: string
-                        allowed: ['cell', 'basic']
-                        default: cell
-
             constraints:
                 type: dict
                 keyschema:
@@ -124,7 +119,7 @@ process: &process_schema
     <<: *procbase
     valueschema:
         <<: *procbase_value
-        schema:
+        schema: &process_valueschema
             <<: *procbase_valueschema
             init_params:
                 <<: *procbase_init
@@ -229,22 +224,16 @@ model_schema:
     environment:
         type: dict
         dependencies: [^domain]
-        schema:
-            irradiance:
-                type: dict
-                schema:
-                    <<: *irradiance_schema
+        keyschema:
+            type: symbolable
+            min: 2
 
-            chemicals:
-                type: dict
-                keyschema:
-                    type: symbolable
+        valueschema:
+            anyof:
+                - schema: *process_valueschema
+                - schema: *var_schema
+                - schema: *irradiance_schema
 
-                valueschema:
-                    schema: *var_schema
-
-            processes:
-                <<: *process_schema
 
     microbes:
         type: dict
