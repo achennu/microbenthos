@@ -6,6 +6,7 @@ import logging
 
 from fipy import PhysicalField, CellVariable, Variable
 from fipy.meshes.uniformGrid1D import UniformGrid1D
+from fipy.tools import numerix
 
 
 class SedimentDBLDomain(object):
@@ -92,45 +93,73 @@ class SedimentDBLDomain(object):
         Z = Z - Z[self.idx_surface]
         self.depths_um = Z * 1e6 # in micrometers, with 0 at surface
 
-    def create_var(self, vname, vtype = 'cell', **kwargs):
+    def create_var(self, name, **kwargs):
         """
-        Create a variable on the domain.
+        Create a variable on the domain as a :class:`CellVariable`.
 
-         If the vtype is `'cell'` then the :class:`CellVariable` is created on the mesh. If vtype is
-         `'basic'`, then a normal :class:`Variable` is created.
+        If a `value` is not supplied, then it is set to 0.0. Before creating the cell variable,
+        the value is multiplied with an array of ones of the shape of the domain mesh. This
+        ensures that no single-valued options end up creating an improper variable. As a result,
+        several types for `value` are valid.
 
         Args:
-            vname (str): The name identifier for the variable
-            vtype (str): Whether to create a `'cell'` or a `'basic'` variable
+            name (str): The name identifier for the variable
+            value (int, float, array, PhysicalField): value to set on the variable
+            unit (str): The physical units for the variable
+            hasOld (bool): Whether the variable maintains the older values, useful during
+            numerical computations.
             **kwargs: passed to the call to :class:`CellVariable`
 
         Returns:
             The created variable
+
+        Raises:
+            ValueError: If `name` is not a string with len > 0
+            ValueError: If value has a shape incompatible with the mesh
+            RuntimeError: If domain variable with same name already exists
         """
 
-        self.logger.info('Creating {} variable {!r}'.format(vtype, vname))
+        self.logger.info('Creating domain variable {!r}'.format(name))
         if not self.mesh:
             raise RuntimeError('Cannot create cell variable without mesh!')
 
-        if vname in self.VARS:
-            # self.logger.warning('Variable {} already exists. Over-writing with new'.format(vname))
-            raise RuntimeError('Variable {} already exists!'.format(vname))
+        if not name:
+            raise ValueError('Name must have len > 0')
 
-        if kwargs.get('name') is None:
-            kwargs['name'] = str(vname)
+        if name in self.VARS:
+            # self.logger.warning('Variable {} already exists. Over-writing with new'.format(vname))
+            raise RuntimeError('Domain variable {} already exists!'.format(name))
 
         if kwargs.get('value') is None:
-            self.logger.debug('Cannot set {} to None. Setting to zero instead!'.format(vname))
+            self.logger.debug('Cannot set {} to None. Setting to zero instead!'.format(name))
             kwargs['value'] = 0.0
 
-        self.logger.debug('domain var params: {}'.format(kwargs))
-        if vtype == 'cell':
-            var = CellVariable(mesh=self.mesh, **kwargs)
-        elif vtype == 'basic':
-            var = Variable(**kwargs)
+        value = kwargs.pop('value')
 
-        self.logger.debug('Created variable {}: {} shape: {} unit: {}'.format(vname, repr(var), var.shape, var.unit))
-        self.VARS[vname] = var
+        if hasattr(value, 'shape'):
+            if value.shape not in ((), self.mesh.shape):
+                raise ValueError('Value shape {} not compatible for mesh {}'.format(value.shape,
+                                                                                    self.mesh.shape))
+        unit = kwargs.get('unit')
+        if unit and isinstance(value, PhysicalField):
+            vunit = str(value.unit.name())
+            if vunit != "1":
+                # value has units
+                self.logger.warning('{!r} value has units {!r}, which will override '
+                                    'supplied {}'.format(name, vunit, unit))
+
+        try:
+            varr = numerix.ones(self.mesh.shape, dtype='float32')
+            value *= varr
+        except TypeError:
+            raise ValueError('Value {} could not be cast numerically'.format(value))
+
+        self.logger.debug('Creating CellVariable {!r} with: {}'.format(name, kwargs))
+        var = CellVariable(mesh=self.mesh, name=name, value=value, **kwargs)
+
+        self.logger.debug('Created variable {!r}: shape: {} unit: {}'.format(var,
+                                                                               var.shape, var.unit))
+        self.VARS[name] = var
         return var
 
     def var_in_sediment(self, vname):
@@ -175,8 +204,7 @@ class SedimentDBLDomain(object):
 
         P = self.VARS.get('porosity')
         if P is None:
-            P = self.create_var('porosity', vtype='basic', value=[1.0]*self.domain_Ncells)
-
+            P = self.create_var('porosity', value=1.0)
 
         self.sediment_porosity = float(porosity)
         P[:self.idx_surface] = 1.0

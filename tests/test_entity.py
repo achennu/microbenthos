@@ -1,5 +1,6 @@
 import pytest
 from fipy import PhysicalField
+from fipy.tools import numerix
 
 from microbenthos import Entity, SedimentDBLDomain, DomainEntity, Variable
 
@@ -57,22 +58,29 @@ class TestVariable:
             Variable()
 
     @pytest.mark.parametrize(
-        'unit, vtype, err',
-        [('mol', 'cell', None),
-         ('kg/s', 'basic', None),
-         ('junk', 'basic', ValueError),
-         (('kg', 'm'), 'basic', ValueError),
-         ('m/s', 'junk', ValueError),
+        'unit, err',
+        [('mol', None),
+         ('kg/s', None),
+         ('junk', ValueError),
+         (('kg', 'm'), ValueError),
+         ('m/s', None),
          ]
         )
-    def test_create_check(self, unit, vtype, err):
-        D = dict(unit=unit, vtype=vtype)
+    def test_create_check_unit(self, unit, err):
+        D = dict(unit=unit)
 
         if err:
             with pytest.raises(err):
                 Variable.check_create(**D)
         else:
             Variable.check_create(**D)
+
+    def test_create_check_name(self):
+        # supplying name in create params should raise an error
+        with pytest.raises(ValueError):
+            Variable.check_create(name='heh ho')
+
+        Variable.check_create()
 
     @pytest.mark.parametrize(
         'constraints, err',
@@ -101,40 +109,27 @@ class TestVariable:
         else:
             Variable.check_constraints(constraints)
 
-    def test_create_cellvar(self):
-        # check that domain is required
-        # check that it returns the variable
-        # Check that the conditions mentioned in the docstring are tested for inputs
-        create = dict(value=3, unit='mol/l', hasOld=1, vtype='cell')
-        name = 'var'
-        v = Variable(name=name, create=create)
+    @pytest.mark.parametrize(
+        'value, unit, hasOld',
+        [
+            (3, 'mol/l', 0),
+            (3.0, 'mol/l', 0),
+            (3.0, 'mol/l', 1),
+            (2.3, None, 0)
+        ]
+        )
+    def test_create_var(self, value, unit, hasOld):
+        create = dict(value=value, unit=unit, hasOld=hasOld)
+        name = 'myVar'
+        v = Variable(name, create=create)
 
         domain = SedimentDBLDomain()
         v.set_domain(domain)
-
         v.setup()
-        assert v.var is not None
+        assert v.var is domain[name]
         assert v.var.name == v.name
-        assert v.var.shape == (domain.domain_Ncells,)
-        assert (v.var == PhysicalField(3.0, 'mol/l')).all()
-
-
-    def test_create_basicvar(self):
-        # check that domain is required
-        # check that it returns the variable
-        # Check that the conditions mentioned in the docstring are tested for inputs
-        create = dict(value=3, unit='mol/l', hasOld=1, vtype='basic')
-        name = 'var'
-        v = Variable(name=name, create=create)
-
-        domain = SedimentDBLDomain()
-        v.set_domain(domain)
-
-        v.setup()
-        assert v.var is not None
-        assert v.var.name == v.name
-        assert v.var.shape == ()
-        assert (v.var == PhysicalField(3.0, 'mol/l')).all()
+        assert v.var.shape == domain.mesh.shape
+        assert (v.var == PhysicalField(value, unit)).all()
 
 
     @pytest.mark.parametrize(
@@ -151,10 +146,11 @@ class TestVariable:
             # [('dbl', PhysicalField('0.4e-3 mol/l')), ('top', PhysicalField(0.8e-3, 'mol/l'))],
             # [('sediment', PhysicalField('0.4e-3 mol/l')), ('bottom', PhysicalField(0.8e-3,'mol/l'))],
             ],
+        ids=['top', 'bottom', 'dbl', 'sediment', 'top+bottom', 'dbl+bottom', 'sediment+top']
         )
     def test_constrain(self, constraints):
         # test that boundary conditions get applied
-        create = dict(value=3, unit='mol/l', vtype='cell')
+        create = dict(value=3.3, unit='mol/l')
         name = 'var'
 
         constraints = dict(constraints)
@@ -169,9 +165,9 @@ class TestVariable:
         assert v.var.name == v.name
         assert len(v.var.constraints) == len(constraints)
         if 'top' in constraints:
-            assert v.var[0] == constraints['top']
+            numerix.array_equal(v.var[0], constraints['top'])
         if 'bottom' in constraints:
-            assert v.var[-1] == constraints['bottom']
+            numerix.array_equal(v.var[-1], constraints['bottom'])
         if 'dbl' in constraints:
             assert (v.var[:domain.idx_surface] == constraints['dbl']).all()
         if 'sediment' in constraints:
@@ -191,7 +187,7 @@ class TestVariable:
         )
     def test_constrain_with_unit(self, varunit, conunit):
 
-        create = dict(value=3., unit=varunit, vtype='cell')
+        create = dict(value=3., unit=varunit)
         name = 'MyVar'
         conval = PhysicalField(5, conunit)
         constraints = dict(
@@ -215,6 +211,5 @@ class TestVariable:
 
         else:
             v.setup()
-            assert v.var[0]() == conval
-            print(v.var)
-
+            assert numerix.allclose(v.var.numericValue[0], conval.numericValue)
+            assert v.var[0].unit.name() == varunit

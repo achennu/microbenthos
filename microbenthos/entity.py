@@ -60,7 +60,7 @@ class Entity(object):
         post_params = post_params or {}
 
         if hasattr(inst, 'post_init'):
-            logger.debug("Calling post_init for instance: {}".format(post_params))
+            # logger.debug("Calling post_init for instance: {}".format(post_params))
             inst.post_init(**post_params)
 
         logger.debug('Created entity: {}'.format(inst))
@@ -108,7 +108,7 @@ class Entity(object):
         Returns:
             None
         """
-        self.logger.debug('Empty post_init on {}'.format(self))
+        # self.logger.debug('Empty post_init on {}'.format(self))
 
     def update_time(self, clocktime):
         """
@@ -243,6 +243,11 @@ class Variable(DomainEntity):
     @staticmethod
     def check_create(**params):
 
+        name = params.get('name')
+        if name:
+            raise ValueError('Create params should not contain name. Will be set from init '
+                             'name.')
+
         from fipy import PhysicalField
         unit = params.get('unit')
         if unit:
@@ -250,11 +255,6 @@ class Variable(DomainEntity):
                 p = PhysicalField(1, params['unit'])
             except:
                 raise ValueError('{!r} is not a valid unit!'.format(params['unit']))
-
-        vtype = params.get('vtype')
-        if vtype:
-            if vtype not in ('cell', 'basic'):
-                raise ValueError('Variable type not known {!r} in ("cell", "basic")'.format(vtype))
 
     @staticmethod
     def check_constraints(constraints):
@@ -320,33 +320,15 @@ class Variable(DomainEntity):
         for loc, value in dict(self.constraints).items():
             self.constrain(loc, value)
 
-    def create(self, value, unit = None, hasOld = False, vtype = 'cell'):
+    def create(self, value, unit = None, hasOld = False):
         """
         Create a :class:`~fipy.Variable` on the domain.
 
-
-        A `vtype` of `"cell"` is intended to creates variables with one dimension equal to
-        the domain size. So if the input to this is:
-            * a single number, then the number is broadcast to an array the shape of the domain.
-            * a :class:`~fipy.PhysicalField` of a single value or of an array the size of the
-            domain, then a variable of the domain size is created. The unit of the
-            `PhysicalField` is used, and any supplied `unit` keyword is ignored.
-            * a :class:`~fipy.PhysicalField` of shape not matching the domain size,
-            then a variable would be created that is not representable on the domain. Currently,
-            this raises a `ValueError`.
-
-        A `vtype` of `"basic"` is intended to create variables that can be used as dependencies,
-        and are not bound to the domain. So, the shape of the variable is the same as the input
-        `value`. Again, `unit` is overriden if `value` is a `PhysicalField`.
-
         Args:
             value (int, float, array, PhysicalField): the value for the array
-            unit (str): physical units string for the variable. Is overriden if `value` is a
+            unit (str): physical units string for the variable. Is overridden if `value` is a
             `PhysicalField`.
-            hasOld (bool): Whether the variable of `vtype = "cell"` keeps the old values,
-            and must be manually updated. (default: False). This setting is ignored for `"basic"`
-            variables.
-            vtype: string indicating type to create. Either "cell" or "basic". (default: "cell")
+            hasOld (bool): flag to indicate how variable values are updated
 
         Returns:
             instance of the variable created
@@ -354,42 +336,13 @@ class Variable(DomainEntity):
         Raises:
             RuntimeError: if a domain variable with `name` already exists, or no mesh exists on
             the domain.
-            ValueError: for `"cell"` variables, if value.shape is not 1 or the domain shape
+            ValueError: if value.shape is not 1 or the domain shape
 
         """
-        self.logger.debug('Creating {} variable {!r} with unit {}'.format(vtype, self.name, unit))
-        kwargs = dict(unit=unit)
+        self.logger.debug('Creating variable {!r} with unit {}'.format(self.name, unit))
 
-        from fipy.tools import numerix, PhysicalField
-        if vtype == "cell":
-            varr = numerix.atleast_1d(value)
-            if varr.ndim != 1:
-                raise ValueError(
-                    'Cell variable dimensions must be 0 or 1, not {}'.format(varr.ndim))
+        self.var = self.domain.create_var(name=self.name, value=value, unit=unit, hasOld=hasOld)
 
-            if varr.shape[0] not in (1, self.domain.domain_Ncells):
-                raise ValueError(
-                    'Cell variable of shape {} cannot be broadcast to domain of shape {}'.format(
-                        varr.shape, self.domain.domain_Ncells))
-
-            kwargs['hasOld'] = bool(hasOld)
-
-        if unit and isinstance(value, PhysicalField):
-            vunit = str(value.unit.name())
-            if vunit != "1":
-                # value has units
-                self.logger.warning('Value for {!r} has units {!r}, which will override '
-                                    'supplied {}'.format(self.name, vunit, unit))
-
-        if isinstance(value, int):
-            value = float(value)
-            # integer type can have comparison issue with physical units
-
-        kwargs['value'] = value
-
-        self.var = self.domain.create_var(vname=self.name,
-                                          vtype=vtype,
-                                          **kwargs)
         return self.var
 
     def constrain(self, loc, value):
@@ -416,20 +369,17 @@ class Variable(DomainEntity):
         self.logger.debug("Setting constraint for {!r}: {} = {}".format(self.var, loc, value))
         mask = numerix.zeros(self.var.shape, dtype=bool)
 
-
         try:
             L = self._LOCs[loc]
             self.logger.debug('Constraint mask loc: {}'.format(L))
             mask[L] = 1
         except KeyError:
-            raise ValueError('loc={} not in {}'.format(loc, tuple(LOC.keys())))
+            raise ValueError('loc={} not in {}'.format(loc, tuple(self._LOCs.keys())))
 
         if isinstance(value, PhysicalField):
             value = value.inUnitsOf(self.var.unit)
         else:
             value = PhysicalField(value, self.var.unit)
 
-        self.logger.info('Constraining {!r}({}) at {} = {}'.format(self.var, type(self.var), loc, value))
+        self.logger.info('Constraining {!r} at {} = {}'.format(self.var, loc, value))
         self.var.constrain(value, mask)
-        self.logger.debug(self.var.constraints)
-        self.logger.debug(self.var())

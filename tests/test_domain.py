@@ -1,3 +1,4 @@
+import pytest
 from fipy import PhysicalField
 from microbenthos.domain import SedimentDBLDomain
 
@@ -84,3 +85,31 @@ class TestModelDomain:
         Pvar = domain.VARS['porosity']
         newPvar = domain.set_porosity(0.66)
         assert newPvar is Pvar
+
+    @pytest.mark.parametrize(
+        'value, unit, err',
+        [
+            (4, None, None),
+            (4.0, None, None),
+            (3, 'kg', None),
+            ('3.5', 'kg', ValueError),
+            (PhysicalField(3, 'kg'), None, None),
+            (PhysicalField(3, 'kg'), 'g', None)
+        ]
+        )
+    def test_create_var(self, value, unit, err):
+
+        domain = SedimentDBLDomain()
+        if err:
+            with pytest.raises(err):
+                var = domain.create_var(name='myvar', value=value, unit=unit)
+        else:
+            var = domain.create_var(name='myvar', value=value, unit=unit)
+            val = PhysicalField(value, unit)
+            assert var.shape == domain.mesh.shape
+            assert (var == val).all()
+            if isinstance(value, PhysicalField):
+                assert var.unit == value.unit
+                # this overrides any supplied unit in creating cellvariables
+            else:
+                assert var.unit == val.unit
