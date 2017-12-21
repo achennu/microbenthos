@@ -21,7 +21,7 @@ variables: &var_schema
 
             name:
                 type: symbolable
-                min: 2
+                minlength: 2
                 required: true
 
             create:
@@ -70,8 +70,8 @@ irradiance: &irradiance_schema
             type: dict
             schema:
                 name:
-                    type: string
-                    min: 2
+                    type: symbolable
+                    minlength: 2
                     required: true
 
                 k0:
@@ -140,7 +140,7 @@ microbes: &microbes_schema
             schema:
                 name:
                     type: symbolable
-                    min: 2
+                    minlength: 2
                     required: true
 
                 features:
@@ -149,7 +149,7 @@ microbes: &microbes_schema
                     dependencies: [features.biomass]
                     keyschema:
                         type: symbolable
-                        min: 2
+                        minlength: 2
 
 
                     valueschema:
@@ -226,7 +226,7 @@ model_schema:
         dependencies: [^domain]
         keyschema:
             type: symbolable
-            min: 2
+            minlength: 2
 
         valueschema:
             anyof:
@@ -239,8 +239,8 @@ model_schema:
         type: dict
         dependencies: [^domain]
         keyschema:
-            type: string
-            min: 2
+            type: symbolable
+            minlength: 2
 
         valueschema: *microbes_schema
 
