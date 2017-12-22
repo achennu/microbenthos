@@ -71,7 +71,7 @@ class TestMicrobialGroup:
                 dict(biomass=VARdict.copy(),
                      another=VARdict.copy()),
                 None,
-                RuntimeError),
+                None),
             (
                 dict(biomass=VARdict.copy(),
                      another=VARdict2.copy()),
@@ -83,6 +83,8 @@ class TestMicrobialGroup:
              ]
         )
     def test_setup(self, features, processes, err):
+        # Test that for microbes, the feature variables are not stored on the domain
+        # Also multiple features with same variable name will not raise an error
 
         domain = SedimentDBLDomain()
 
@@ -92,7 +94,8 @@ class TestMicrobialGroup:
         if err is None:
             m.setup()
             for feat in m.features.values():
-                assert feat.name in domain.VARS
+                assert feat.name not in domain
+                assert feat.name in m
 
         else:
             with pytest.raises(err):

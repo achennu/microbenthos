@@ -40,13 +40,13 @@ environment:
             hours_total: 24
             day_fraction: 0.3
 
-        channels:
-            - name: par
-              k0: !unit 15.3 1/cm
-              k_mods:
-                - [cyano, 6523]
-                - [cyano, 65253]
-                - [cyano, !unit 125 g/mm**3]
+            channels:
+                - name: par
+                  k0: !unit 15.3 1/cm
+#                  k_mods:
+#                    - [cyano, 6523]
+#                    - [cyano, 65253]
+#                    - [cyano, !unit 125 g/mm**3]
 
 
     abiotic_h2s_oxidation:
@@ -75,18 +75,12 @@ microbes:
             features:
                 biomass:
                     init_params:
-                        name: biomass
+                        name: biomass_cya
                         create:
                             value: !unit 0.0 g/cm**3
 
                         constraints:
                             dbl: !unit 0 g/cm**3
-
-                BChla:
-                    init_params:
-                        name: BChla
-                        create:
-                            value: !unit 0.0 g/cm**3
 
             processes:
                 oxyPS:
@@ -108,7 +102,7 @@ microbes:
                                         Ks: 1
                                         Ki: 10
 
-                            optimum(oxy):
+                            inhibit(oxy):
                                 cls: ExprProcess
                                 init_params:
                                     formula: inhibition_response(oxy, Kmax, Khalf)
@@ -117,6 +111,29 @@ microbes:
                                     params:
                                         Kmax: !unit "0.8e-3 mol/l"
                                         Khalf: !unit "0.7e-3 mol/l"
+
+                            inhibit(h2s):
+                                init_params:
+                                    formula: inhibition_response(h2s, Kmax, Khalf)
+                                    varnames:
+                                        - h2s
+                                    params:
+                                        Kmax: !unit "0.35e-3 mol/l"
+                                        Khalf: !unit "0.3e-3 mol/l"
+
+
+    csb:
+        init_params:
+            name: csb
+            features:
+                biomass:
+                    init_params:
+                        name: biomass
+                        create:
+                            value: !unit 0.0 g/cm**3
+
+                        constraints:
+                            dbl: !unit 0 g/cm**3
 
 formulae:
     optimum_response:

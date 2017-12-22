@@ -10,13 +10,14 @@ from microbenthos import DomainEntity
 
 
 class Irradiance(DomainEntity):
-    def __init__(self, hours_total = 24, day_fraction = 0.5, **kwargs):
+    def __init__(self, hours_total = 24, day_fraction = 0.5, channels = None, **kwargs):
         """
         Entity to implement irradiance through the sediment column
 
         Args:
             hours_total (int, float): Number of hours in the day
             day_fraction (float): Fraction of daylength which is illuminated
+            See :meth:`.create_channel` for information on the `channels` argument.
             **kwargs: passed to superclass
         """
         self.logger = kwargs.get('logger') or logging.getLogger(__name__)
@@ -44,6 +45,10 @@ class Irradiance(DomainEntity):
         # This profile with loc=zenith means that the day starts at "midnight" and zenith occurs
         # in the center of the daylength
 
+        if channels:
+            for chinfo in channels:
+                self.create_channel(**chinfo)
+
         self.logger.debug('Created Irradiance: {}'.format(self))
 
     def __repr__(self):
@@ -51,20 +56,13 @@ class Irradiance(DomainEntity):
         #                                                  self.hours_day, self.clocktime_zenith)
         return 'Irradiance(total={},{})'.format(self.hours_total, '+'.join(self.channels))
 
-    def setup(self, channels = None):
+    def setup(self,):
         """
-        When a domain is added, the attenuation channels can be setup
-
-        See :meth:`.create_channel` for information on the `channels` argument.
-        Returns:
+        When a domain is added, the attenuation for the channels can be setup
         """
         self.check_domain()
 
         self.surface_irrad = self.domain.create_var('irrad_surface', value=0.0)
-
-        if channels:
-            for chname, chinfo in channels.iteritems():
-                self.create_channel(chname, **chinfo)
 
         for channel in self.channels.itervalues():
             if not channel.has_domain:
@@ -191,9 +189,9 @@ class IrradianceChannel(DomainEntity):
         """
         Create the attenuation variable for the channel
         """
-        if self.k_name not in self.domain.VARS:
-            k_var = self.domain.create_var(self.k_name, value=self.k0.value,
-                                           unit=self.k0.unit)
+        assert hasattr(self.k0, 'unit'), 'k0 should have attribute unit'
+        if self.k_name not in self.domain:
+            k_var = self.domain.create_var(self.k_name, value=self.k0)
             k_var[:self.domain.idx_surface] = 0
             self.k_var = k_var
 
@@ -215,7 +213,7 @@ class IrradianceChannel(DomainEntity):
         if var in self._mods_added:
             raise RuntimeError('attenuation source {} already added!')
 
-        atten_source = self.domain.VARS[var] * coeff
+        atten_source = self.domain[var] * coeff
         try:
             atten_source.inUnitsOf('1/m')
         except TypeError:

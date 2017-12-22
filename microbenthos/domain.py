@@ -76,6 +76,9 @@ class SedimentDBLDomain(object):
     def __getitem__(self, item):
         return self.VARS[item]
 
+    def __contains__(self, item):
+        return item in self.VARS
+
     def create_mesh(self):
         """
         Create the mesh for the domain
@@ -93,9 +96,9 @@ class SedimentDBLDomain(object):
         Z = Z - Z[self.idx_surface]
         self.depths_um = Z * 1e6 # in micrometers, with 0 at surface
 
-    def create_var(self, name, **kwargs):
+    def create_var(self, name, store=True, **kwargs):
         """
-        Create a variable on the domain as a :class:`CellVariable`.
+        Create a variable on the mesh as a :class:`CellVariable`.
 
         If a `value` is not supplied, then it is set to 0.0. Before creating the cell variable,
         the value is multiplied with an array of ones of the shape of the domain mesh. This
@@ -116,18 +119,17 @@ class SedimentDBLDomain(object):
         Raises:
             ValueError: If `name` is not a string with len > 0
             ValueError: If value has a shape incompatible with the mesh
-            RuntimeError: If domain variable with same name already exists
+            RuntimeError: If domain variable with same name already exists & `store` = True
         """
 
-        self.logger.info('Creating domain variable {!r}'.format(name))
+        self.logger.info('Creating variable {!r}'.format(name))
         if not self.mesh:
             raise RuntimeError('Cannot create cell variable without mesh!')
 
         if not name:
             raise ValueError('Name must have len > 0')
 
-        if name in self.VARS:
-            # self.logger.warning('Variable {} already exists. Over-writing with new'.format(vname))
+        if name in self.VARS and store:
             raise RuntimeError('Domain variable {} already exists!'.format(name))
 
         if kwargs.get('value') is None:
@@ -159,7 +161,11 @@ class SedimentDBLDomain(object):
 
         self.logger.debug('Created variable {!r}: shape: {} unit: {}'.format(var,
                                                                                var.shape, var.unit))
-        self.VARS[name] = var
+
+        if store:
+            self.VARS[name] = var
+            self.logger.debug('Stored on domain')
+
         return var
 
     def var_in_sediment(self, vname):

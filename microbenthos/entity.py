@@ -319,7 +319,7 @@ class Variable(DomainEntity):
         for loc, value in dict(self.constraints).items():
             self.constrain(loc, value)
 
-    def create(self, value, unit = None, hasOld = False):
+    def create(self, value, unit = None, hasOld = False, **kwargs):
         """
         Create a :class:`~fipy.Variable` on the domain.
 
@@ -340,7 +340,7 @@ class Variable(DomainEntity):
         """
         self.logger.debug('Creating variable {!r} with unit {}'.format(self.name, unit))
 
-        self.var = self.domain.create_var(name=self.name, value=value, unit=unit, hasOld=hasOld)
+        self.var = self.domain.create_var(name=self.name, value=value, unit=unit, hasOld=hasOld, **kwargs)
 
         return self.var
 

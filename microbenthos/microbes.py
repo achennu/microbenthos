@@ -25,6 +25,7 @@ class MicrobialGroup(DomainEntity):
 
         self.name = str(name)
         self._biomass = None
+        self.VARS = {}
         self.features = {}
         self.processes = {}
 
@@ -43,7 +44,17 @@ class MicrobialGroup(DomainEntity):
         self.logger.debug('Initialized {}'.format(self))
 
     def __repr__(self):
-        return '{}:Feat({}):Procs({})'.format(self.name, ','.join(self.features.keys()), ','.join(self.processes.keys()))
+        return '{}:Feat({}):Procs({})'.format(self.name, ','.join(self.features.keys()),
+                                              ','.join(self.processes.keys()))
+
+    def __getitem__(self, item):
+        if item in self.features:
+            return self.VARS[item]
+        else:
+            return self.domain[item]
+
+    def __contains__(self, item):
+        return (item in self.VARS) or (item in self.domain)
 
     def add_feature_from(self, name, **params):
         """
@@ -58,12 +69,20 @@ class MicrobialGroup(DomainEntity):
         Returns:
             None
         """
+        # feature variable should be stored here, not on domain
+        if params['cls'].endswith('Variable'):
+            params['init_params']['create']['store'] = False
+            self.logger.debug('Set variable store = False')
+
         self.logger.debug('Dispatch init of feature {!r}: {}'.format(name, params))
         instance = self.from_dict(params)
-        assert isinstance(instance, Variable), '{} not an instance of Variable'
+
 
         if name in self.features:
             self.logger.warning('Overwriting feature {!r} with {}'.format(name, instance))
+
+        if isinstance(instance, Variable):
+            self.VARS[instance.name] = instance.var
 
         self.logger.debug('{} added feature {}: {}'.format(self, name, instance))
         self.features[name] = instance
@@ -72,7 +91,8 @@ class MicrobialGroup(DomainEntity):
         """
         Add a process to the microbial group.
 
-        This is used to define processes such as biomass growth or metabolism from a definition dictionary.
+        This is used to define processes such as biomass growth or metabolism from a definition
+        dictionary.
 
         Args:
             name (str): name of the process
@@ -99,17 +119,29 @@ class MicrobialGroup(DomainEntity):
         return ret
 
     def on_domain_set(self):
+        """
+        Features, which are handlers for domain variables, receive the domain instances. However
+        processes receive `self` as the domain, so that variable lookup happens first locally on
+        the instance and then passed on to the domain.
+        Returns:
+
+        """
 
         for obj in self.features.values():
             self.logger.debug('Setting domain for {}'.format(obj))
             obj.domain = self.domain
 
+        for obj in self.processes.values():
+            self.logger.debug('Setting self as domain for {}'.format(obj))
+            obj.domain = self
+
     def setup(self):
         """
         If the domain is available, then setup all the features and processes.
+
         """
         self.logger.debug('Setup of {}'.format(self))
         if self.check_domain():
-            for feat in self.features.values():
-                self.logger.debug('Setting up {}'.format(feat))
-                feat.setup()
+            for obj in self.features.values() + self.processes.values():
+                self.logger.debug('Setting up {}'.format(obj))
+                obj.setup()
