@@ -1,12 +1,8 @@
 import importlib
-import inspect
 import logging
 
 from fipy import PhysicalField
 from fipy.tools import numerix
-
-from microbenthos.domain import SedimentDBLDomain
-
 
 class Entity(object):
     def __init__(self, logger = None):
@@ -121,21 +117,15 @@ class Entity(object):
 
 class DomainEntity(Entity):
     """
-    A base class that represents entities in the microbenthic environment. This can be used to
+    A base class that represents entities in the microbenthic env. This can be used to
     subclass microbial groups, chemical reactions, or other parameters. The class provides a
     uniform interface to add the entity to the simulation domain and setup parameters and update
     according to the simulation clock.
     """
 
-    def __init__(self, domain_cls = SedimentDBLDomain, **kwargs):
+    def __init__(self, **kwargs):
 
         super(DomainEntity, self).__init__(**kwargs)
-
-        assert inspect.isclass(domain_cls), 'domain_cls should be a class! Got {}'.format(
-            type(domain_cls)
-            )
-        self.domain_cls = domain_cls
-
         self._domain = None
 
     @property
@@ -162,11 +152,6 @@ class DomainEntity(Entity):
             raise RuntimeError(
                 '{} already has a domain. Cannot set again!'.format(self))
 
-        if not isinstance(domain, self.domain_cls):
-            self.logger.warning('Domain must be an instance of {}, not {}'.format(
-                self.domain_cls.__name__, type(domain)))
-        # raise TypeError('Wrong domain type received!')
-
         self._domain = domain
         self.logger.debug('Added to domain: {}'.format(self))
         self.on_domain_set()
@@ -181,7 +166,7 @@ class DomainEntity(Entity):
 
     @property
     def has_domain(self):
-        return isinstance(self.domain, self.domain_cls)
+        return self.domain is not None
 
     def on_domain_set(self):
         """
@@ -200,7 +185,6 @@ class DomainEntity(Entity):
         To be overridden by subclasses
         """
         self.logger.debug('Setup empty: {}'.format(self))
-        # raise NotImplementedError('Setup of {}'.format(self.__class__.__name__))
 
 
 class Variable(DomainEntity):

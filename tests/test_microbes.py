@@ -97,6 +97,13 @@ class TestMicrobialGroup:
                 assert feat.name not in domain
                 assert feat.name in m
 
+            for fname, fdict in features.items():
+                vname = fdict['init_params']['name']
+                assert vname in m
+                if fname != vname:
+                    assert fname not in m
+                    assert fname in m.features
+
         else:
             with pytest.raises(err):
                 m.setup()

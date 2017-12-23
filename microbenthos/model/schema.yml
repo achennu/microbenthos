@@ -163,6 +163,20 @@ microbes: &microbes_schema
 
                 processes: *process_schema
 
+eqnstoreterm: &eqn_store_schema
+    type: dict
+    schema:
+        name:
+            type: string
+            required: true
+        store:
+            type: string
+            model_store: store
+            required: true
+        coeff:
+            type: [integer, float]
+            default: 1
+
 
 
 ### MAIN MODEL SCHEMA HERE ###
@@ -249,6 +263,41 @@ model_schema:
             minlength: 2
 
         valueschema: *microbes_schema
+
+    equations:
+        type: dict
+        required: true
+
+        keyschema:
+            type: string
+            minlength: 3
+
+        valueschema:
+            schema:
+                var:
+                    required: true
+                    <<: *eqn_store_schema
+
+                transient:
+                    required: true
+                    type: dict
+                    schema:
+                        coeff:
+                            type: [integer, float]
+                            default: 1
+
+                diffusion:
+                     type: dict
+                     schema:
+                        coeff:
+                            schema: *process_valueschema
+
+                sources:
+                    type: list
+                    schema: *eqn_store_schema
+
+
+
 
 
 

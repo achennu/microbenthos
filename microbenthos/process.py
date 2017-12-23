@@ -107,7 +107,7 @@ class ExprProcess(Process):
         self.expr_func = self._lambdify(self.expr, argsyms)
 
     def __repr__(self):
-        return 'Expr({},{}):Resp({})'.format(self.expr, self.vars, ','.join(self.responses.keys()))
+        return 'Proc[{},{}]:Resp[{}]'.format(self.expr, self.vars, ','.join(self.responses.keys()))
 
     def check_names(self, names):
         """
@@ -253,6 +253,8 @@ class ExprProcess(Process):
             domain = self.domain
         if not params:
             params = self.params
+
+        self.logger.debug('Evaluating {!r} on {!r}'.format(self.expr, domain))
 
         # collect the arguments
         varargs = [domain[_] for _ in self.varnames]

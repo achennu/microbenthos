@@ -1,5 +1,5 @@
 
-from microbenthos.loader.yaml_loader import yaml, PhysicalField
+from microbenthos.model.yaml_setup import yaml, PhysicalField
 
 
 def test_load_unit():

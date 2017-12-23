@@ -1,12 +1,18 @@
 import logging
 import os
+
 import cerberus
 from fipy import PhysicalField
 from sympy import sympify, Symbol
+from .yaml_setup import yaml
 
-logger = logging.getLogger(__name__)
 
 class ModelSchemaValidator(cerberus.Validator):
+    logger = logging.getLogger(__name__)
+
+    # def __init__(self, *args, **kwargs):
+    #     # self.logger.propagate = False
+    #     super(ModelSchemaValidator, self).__init__(*args, **kwargs)
 
     def _validate_type_importpath(self, value):
         """
@@ -25,6 +31,7 @@ class ModelSchemaValidator(cerberus.Validator):
         Returns:
             True if valid
         """
+        self.logger.debug('Validating importpath: {}'.format(value))
         try:
             a, b = value.rsplit('.', 1)
             return True
@@ -35,6 +42,7 @@ class ModelSchemaValidator(cerberus.Validator):
         """ Enables validation for `unit` schema attribute.
         :param value: field value.
         """
+        self.logger.debug('Validating physical_unit: {}'.format(value))
         if isinstance(value, PhysicalField):
             if value.unit.name() != '1':
                 return True
@@ -48,6 +56,7 @@ class ModelSchemaValidator(cerberus.Validator):
         Returns:
 
         """
+        self.logger.debug('Validating unit_name: {}'.format(value))
         try:
             PhysicalField(1, value)
             return True
@@ -69,7 +78,7 @@ class ModelSchemaValidator(cerberus.Validator):
         The rule's arguments are validated against this schema:
         {'type': 'string'}
         """
-
+        self.logger.debug('Validating like_unit: {} {} {}'.format(unit, field, value))
         if not isinstance(value, PhysicalField):
             self._error(field, 'Must be a PhysicalField, not {}'.format(type(value)))
 
@@ -78,11 +87,11 @@ class ModelSchemaValidator(cerberus.Validator):
         except:
             self._error(field, 'Must be compatible with units {}'.format(unit))
 
-
     def _validate_type_sympifyable(self, value):
         """
         A string that can be run through sympify
         """
+        self.logger.debug('Validating sympifyable: {}'.format(value))
         try:
             e = sympify(value)
             return True
@@ -93,18 +102,63 @@ class ModelSchemaValidator(cerberus.Validator):
         """
         String that can be run through sympify and only has one variable symbol in it.
         """
+        self.logger.debug('Validating symbolable: {}'.format(value))
         try:
             e = sympify(value)
             return isinstance(e, Symbol)
         except:
             return False
 
+    def _validate_model_store(self, jnk, field, value):
+        """
+        Validate that the value of the field is like_store
+        Args:
+            unit:
+            field:
+            value:
+
+        Returns:
+
+        The rule's arguments are validated against this schema:
+        {'type': 'string'}
+        """
+        self.logger.debug('Validating model_store={} for field {!r}: {!r}'.format(
+            jnk, field, value
+            ))
+        if value in ('env', 'domain'):
+            return
+
+        elif value.startswith('microbes'):
+            mtargets = ('features', 'processes')
+            parts = value.split('.')
+
+            try:
+                if len(parts) == 2:
+                    if (parts[0] == 'microbes') and (parts[-1] not in mtargets):
+                        return
+                    else:
+                        raise ValueError
+
+                elif len(parts) == 3:
+                    if (parts[0] == 'microbes') and (parts[1] not in mtargets) and \
+                            (parts[2] in mtargets):
+                        return
+                    else:
+                        raise ValueError
+
+            except ValueError:
+                self._error(field,
+                            'Microbes store must be of form "microbes.xyz" or "microbes.xyz.F" '
+                            'where F in (processes, fields). Invalid: {}'.format(
+                                value))
+
+        else:
+            self._error(field, 'Store must be "domain", "env" or "microbes" store, '
+                               'not {}'.format(value))
 
 
-from .yaml_loader import yaml
-
-
-def from_yaml(fpath, from_schema=None):
+def from_yaml(fpath, from_schema = None):
+    logger = logging.getLogger(__name__)
     logger.info('Loading model from: {}'.format(fpath))
     with open(fpath) as fp:
         model_dict = yaml.load(fp)
@@ -135,9 +189,6 @@ def get_model_schema():
     """
     INBUILT = os.path.join(os.path.dirname(__file__), 'schema.yml')
     with open(INBUILT) as fp:
-        model_schema = yaml.load(fp)#['model_schema']
+        model_schema = yaml.load(fp)  # ['model_schema']
 
     return model_schema
-
-
-

@@ -11,7 +11,7 @@ from .entity import Entity, DomainEntity, Variable
 from .irradiance import Irradiance
 from .process import Process, ExprProcess
 from .microbes import MicrobialGroup
-from .loader import from_yaml
+from .model import from_yaml, MicroBenthosModel
 
 
 def setup_console_logging(name=None, level=20):
@@ -26,6 +26,7 @@ def setup_console_logging(name=None, level=20):
     fmt = '%(module)s:%(funcName)s:%(levelname)s :: %(message)s'
     fmter = logging.Formatter(fmt=fmt)
     handler.setFormatter(fmter)
+    handler.setLevel(10)
 
     logger.addHandler(handler)
     logger.info('Set up console logging: {} level={}'.format(name, logger.getEffectiveLevel()))

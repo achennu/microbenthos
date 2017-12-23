@@ -56,16 +56,23 @@ environment:
             varnames: ['oxy', 'h2s', 'porosity']
             params:
                 k: !unit '70 1/((10**-3)*mol/l)**2/h'
+
+    aerobic_respiration:
+        cls: ExprProcess
+        init_params:
+            formula: Vmax
+            varnames: []
+            params:
+                Vmax: !unit 1e-3 mol/l/h
             responses:
-                optimum(par):
+                saturate(oxy):
                     cls: ExprProcess
                     init_params:
-                        formula: optimum_response(par, Ks, Ki)
+                        formula: saturation_response(oxy, Km)
                         varnames:
-                            - par
+                            - oxy
                         params:
-                            Ks: 1
-                            Ki: 10
+                            Km: !unit 1e-5 mol/l
 
 
 microbes:
@@ -75,12 +82,15 @@ microbes:
             features:
                 biomass:
                     init_params:
-                        name: biomass_cya
+                        name: biomass
+                        create:
+                            value: !unit 1e-20 g/cm**3
+
+                chla:
+                    init_params:
+                        name: chla
                         create:
                             value: !unit 0.0 g/cm**3
-
-                        constraints:
-                            dbl: !unit 0 g/cm**3
 
             processes:
                 oxyPS:
@@ -121,8 +131,43 @@ microbes:
                                         Kmax: !unit "0.35e-3 mol/l"
                                         Khalf: !unit "0.3e-3 mol/l"
 
+                respire:
+                    init_params:
+                        formula: Qmax * biomass
+                        varnames:
+                            - biomass
+                        params:
+                            Qmax: !unit 0.000199e-6 mol/g/h
 
-    csb:
+                        responses:
+                            saturate(oxy):
+                                init_params:
+                                    formula: saturation_response(oxy, Km)
+                                    varnames:
+                                        - oxy
+                                    params:
+                                        Km: !unit 1e-6 mol/l
+
+                chla_synth:
+                    init_params:
+                        formula: G * biomass
+                        varnames: [biomass]
+                        params:
+                            G: !unit 0.002 1/h
+
+                        responses:
+                            synthesis(chla, biomass, oxy):
+                                init_params:
+                                    formula: (oxy < oxy_thresh) & (chla/biomass < chla_max)
+                                    varnames:
+                                        - chla
+                                        - biomass
+                                        - oxy
+                                    params:
+                                        oxy_thresh: !unit 1e-9 mol/l
+                                        chla_max:  0.003
+
+    csdb:
         init_params:
             name: csb
             features:
@@ -132,8 +177,32 @@ microbes:
                         create:
                             value: !unit 0.0 g/cm**3
 
-                        constraints:
-                            dbl: !unit 0 g/cm**3
+            processes:
+                sulfoxid:
+                    init_params:
+                        formula: biomass * Qmax
+                        varnames:
+                            - biomass
+                        params:
+                            Qmax: !unit 0.3233 mol/g/h
+
+                        responses:
+                            saturate(oxy):
+                                init_params:
+                                    formula: saturation_response(oxy, Km)
+                                    varnames:
+                                        - oxy
+                                    params:
+                                        Km: !unit 1e-6 mol/l
+
+                            saturate(h2s):
+                                init_params:
+                                    formula: saturation_response(h2s, Km)
+                                    varnames:
+                                        - h2s
+                                    params:
+                                        Km: !unit 0.7e-6 mol/l
+
 
 formulae:
     optimum_response:
@@ -146,5 +215,59 @@ formulae:
         expr: (Kmax - x) / (2*Kmax - Khalf - x) * (x < Kmax)
 
     saturation_response:
-        variables: [x, Ks]
-        expr: x / (Ks + x)
+        variables: [x, Km]
+        expr: x / (Km + x)
+
+equations:
+    oxyEqn:
+        var:
+            name: oxy
+            store: domain
+
+        transient:
+            coeff: 1
+
+        diffusion:
+            coeff:
+                cls: ExprProcess
+                init_params:
+                    formula: porosity * D0_oxy
+                    varnames:
+                        - porosity
+                    params:
+                        D0_oxy: !unit 0.05 cm**2/h
+
+        sources:
+            - name: abiotic_h2s_oxidation
+              coeff: -2
+              store: env
+
+            - name: aerobic_respiration
+              coeff: -1
+              store: env
+
+            - name: oxyPS
+              coeff: 1
+              store: microbes.cyano.processes
+
+            - name: respire
+              coeff: -1
+              store: microbes.cyano.processes
+
+            - name: sulfoxid
+              coeff: -1
+              store: microbes.csb.processes
+
+
+    chlaEqn:
+        var:
+            name: chla
+            store: microbes.cyano
+
+        transient:
+            coeff: 1
+
+        sources:
+            - name: chla_synth
+              coeff: 1
+              store: microbes.cyano.processes

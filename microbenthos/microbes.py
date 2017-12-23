@@ -48,13 +48,16 @@ class MicrobialGroup(DomainEntity):
                                               ','.join(self.processes.keys()))
 
     def __getitem__(self, item):
-        if item in self.features:
+        if item in self.VARS:
             return self.VARS[item]
         else:
             return self.domain[item]
 
     def __contains__(self, item):
-        return (item in self.VARS) or (item in self.domain)
+        if item in self.VARS:
+            return True
+        else:
+            return item in self.domain
 
     def add_feature_from(self, name, **params):
         """
@@ -80,9 +83,6 @@ class MicrobialGroup(DomainEntity):
 
         if name in self.features:
             self.logger.warning('Overwriting feature {!r} with {}'.format(name, instance))
-
-        if isinstance(instance, Variable):
-            self.VARS[instance.name] = instance.var
 
         self.logger.debug('{} added feature {}: {}'.format(self, name, instance))
         self.features[name] = instance
@@ -145,3 +145,7 @@ class MicrobialGroup(DomainEntity):
             for obj in self.features.values() + self.processes.values():
                 self.logger.debug('Setting up {}'.format(obj))
                 obj.setup()
+
+                if isinstance(obj, Variable):
+                    self.VARS[obj.name] = obj.var
+                    self.logger.debug('Stored var {!r} into VARS'.format(obj))

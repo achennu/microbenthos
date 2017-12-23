@@ -44,7 +44,7 @@ formulae:
 
 """
 
-from microbenthos.loader.yaml_loader import yaml
+from microbenthos.model.yaml_setup import yaml
 from pprint import pprint
 from microbenthos.exprs import ExprProcess
 from microbenthos.base import Entity
