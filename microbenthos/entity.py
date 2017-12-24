@@ -4,6 +4,9 @@ import logging
 from fipy import PhysicalField
 from fipy.tools import numerix
 
+from .utils.snapshotters import snapshot_var
+
+
 class Entity(object):
     def __init__(self, logger = None):
 
@@ -114,6 +117,18 @@ class Entity(object):
         """
         self.logger.debug('Updating {} for clocktime {}'.format(self, clocktime))
 
+    def snapshot(self):
+        """
+        Returns a snapshot of the entity's state
+
+        Returns:
+            Dictionary with keys: `data`, `metadata, where the value of each `data` entry is
+            either another such dictionary or a numeric array
+        """
+        raise NotImplementedError('Snapshot of entity {}'.format(self))
+
+    __getstate__ = snapshot
+
 
 class DomainEntity(Entity):
     """
@@ -160,9 +175,9 @@ class DomainEntity(Entity):
         self.domain = domain
 
     def check_domain(self):
-        if self.domain is None:
-            raise RuntimeError('Domain required for setup')
-        return self.has_domain
+        if not self.has_domain:
+            raise RuntimeError('Domain required for setup of {}'.format(self))
+        return True
 
     @property
     def has_domain(self):
@@ -324,7 +339,8 @@ class Variable(DomainEntity):
         """
         self.logger.debug('Creating variable {!r} with unit {}'.format(self.name, unit))
 
-        self.var = self.domain.create_var(name=self.name, value=value, unit=unit, hasOld=hasOld, **kwargs)
+        self.var = self.domain.create_var(name=self.name, value=value, unit=unit, hasOld=hasOld,
+                                          **kwargs)
 
         return self.var
 
@@ -366,3 +382,30 @@ class Variable(DomainEntity):
 
         self.logger.info('Constraining {!r} at {} = {}'.format(self.var, loc, value))
         self.var.constrain(value, mask)
+
+    def snapshot(self, base = False):
+        """
+        Returns a snapshot of the variable's state
+
+        Args:
+            base (bool): Convert to base units?
+
+        Returns:
+            Dictionary with keys:
+            * `data`: (numeric array, dict(unit))
+            *`metadata`: dict with variable info: constraints
+        """
+        self.logger.debug('Snapshot: {}'.format(self))
+
+        self.check_domain()
+
+        state = dict()
+
+        state['data'] = snapshot_var(self.var, base=base)
+
+        meta = state['metadata'] = {}
+        for cloc, cval in self.constraints.items():
+            key = 'constraint_{}'.format(cloc)
+            meta[key] = str(cval)
+
+        return state

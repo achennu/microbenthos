@@ -1,12 +1,15 @@
 import logging
+
 from sympy import Lambda, symbols
-from microbenthos import Entity, ExprProcess, Process
+
+from microbenthos import Entity, ExprProcess
 
 
 class MicroBenthosModel(object):
     """
     Class that represents the model, as a container for all the entities in the domain
     """
+
     def __init__(self, definition):
         self.logger = logging.getLogger(__name__)
         self.logger.info('Initializing {}'.format(self.__class__.__name__))
@@ -34,15 +37,13 @@ class MicroBenthosModel(object):
 
             ExprProcess._sympy_ns.update(formulae_ns)
 
-
         # Create the domain
         self.logger.info('Creating the domain')
         domain_def = definition['domain']
         self.logger.debug(domain_def)
         self.domain = Entity.from_dict(domain_def)
 
-
-        # create the microbes
+        # create the environment
         env_def = definition['environment']
         self.logger.info('Creating env: {}'.format(env_def.keys()))
         for name, pdict in env_def.items():
@@ -52,7 +53,7 @@ class MicroBenthosModel(object):
             entity.setup()
             self.env[name] = entity
             self.logger.info('Env entity {} = {}'.format(name, entity))
-
+            assert entity.check_domain()
 
         # create the microbes
         microbes_def = definition.get('microbes')
@@ -66,14 +67,52 @@ class MicroBenthosModel(object):
                 self.microbes[name] = entity
                 self.logger.info('Microbes {} = {}'.format(name, entity))
 
-
-        # self.logger.setLevel(10)
         # create equations
         eqndef = definition.get('equations')
         for eqnname, eqndef in eqndef.items():
             self.create_equation(eqnname, **eqndef)
 
-    def create_equation(self, name, var, transient, sources, diffusion=None,):
+    def snapshot(self, base = False):
+        """
+        Create a snapshot of the model state.
+
+        This method recursively calls the :meth:`snapshot` method of all contained entities,
+        and compiles them into a nested dictionary. The dictionary has the structure of the
+        model, except that that two reserved keys `data` and `metadata` indicate the presence of
+        a numeric array or the metadata for the corresponding entity. This should be useful to
+        parse this for serialization in hierarchical formats (like :mod:`h5py`) or flat formats
+        by de-nesting as required. In the latter case, disambiguation of identically named variables
+        will have to be performed first. Each snapshot, should be possible to plot out
+        graphically as it contains all the metadata associated with it.
+
+        Args:
+            base (bool): Whether the entities should be converted to base units?
+
+        Returns:
+            A dictionary of the model state (domain, env, microbes)
+        """
+        self.logger.debug('Creating model snapshot')
+        state = {}
+        state['domain'] = self.domain.snapshot(base=base)
+
+        env = state['env'] = {}
+        microbes = state['microbes'] = {}
+        for name, obj in self.env.items():
+            self.logger.debug('Snapshotting: {} --> {}'.format(name, obj))
+            ostate = obj.snapshot(base=base)
+            env[name] = ostate
+
+        for name, obj in self.microbes.items():
+            self.logger.debug('Snapshotting: {} --> {}'.format(name, obj))
+            ostate = obj.snapshot(base=base)
+            microbes[name] = ostate
+
+        self.logger.info('Created model snapshot')
+        return state
+
+    __getstate__ = snapshot
+
+    def create_equation(self, name, var, transient, sources, diffusion = None, ):
 
         self.logger.info('Creating equation {!r}'.format(name))
         self.logger.debug('transient: {}'.format(transient))
@@ -142,7 +181,6 @@ class MicroBenthosModel(object):
             self.logger.warning('Found no source for {}.{}'.format(store, name))
             return
 
-
         sterm = sobj.evaluate()
         C = kwargs.get('coeff')
         if C is not None:
@@ -181,7 +219,3 @@ class MicroBenthosModel(object):
         obj = S[name]
         self.logger.debug('Got obj: {!r}'.format(obj))
         return obj
-
-
-
-

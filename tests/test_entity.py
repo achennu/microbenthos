@@ -27,6 +27,11 @@ class TestEntity:
     def test_from_dict(self):
         raise NotImplementedError('For Entity.from_dict()')
 
+    def test_snapshot(self):
+        e = Entity()
+        with pytest.raises(NotImplementedError):
+            e.snapshot()
+
 
 class TestDomainEntity:
     def test_add_domain(self):
@@ -212,3 +217,70 @@ class TestVariable:
             v.setup()
             assert numerix.allclose(v.var.numericValue[0], conval.numericValue)
             assert v.var[0].unit.name() == varunit
+
+    @pytest.mark.parametrize(
+        'value, unit, hasOld',
+        [
+            (3, 'mol/l', 0),
+            (3.0, 'mol/l', 0),
+            (2.3, None, 0)
+            ],
+        ids=('int+unit', 'float+unit', 'float-unit')
+        )
+    @pytest.mark.parametrize(
+        'constraints',
+        [
+            [('top', PhysicalField('0.2e-3 mol/l'))],
+            [('sediment', PhysicalField('0.4e-3 mol/l'))],
+            [('top', PhysicalField('0.2e-3 mol/l')), ('bottom', PhysicalField(0, 'mol/l'))],
+            ],
+        ids=['top', 'sediment', 'top+bottom',]
+        )
+    @pytest.mark.parametrize('base', [False, True])
+    def test_snapshot(self, value, unit, hasOld, constraints, base):
+        create = dict(value=value, unit=unit, hasOld=hasOld)
+        name = 'myVar'
+
+        if unit is None:
+            C = []
+            for cloc, cval in constraints:
+                C.append((cloc, cval.value))
+            constraints = C
+
+        v = Variable(name, create=create, constraints=dict(constraints))
+
+        domain = SedimentDBLDomain()
+        v.set_domain(domain)
+        v.setup()
+
+        state = v.snapshot(base=base)
+        assert 'data' in state
+        d, dm = state['data']
+        assert 'unit' in dm
+        assert isinstance(d, numerix.ndarray)
+        if unit:
+            if base:
+                v__ = v.var.inBaseUnits()
+            else:
+                v__ = v.var.inUnitsOf(unit)
+
+            vunit = v__.unit.name()
+            varr = v__.value
+
+        else:
+            # without units an array is directly returned
+            if base:
+                varr = v.var.inBaseUnits()
+
+            else:
+                varr = v.var.inUnitsOf(v.var.unit)
+
+            vunit = v.var.unit.name()
+
+        assert dm['unit'] == vunit
+        assert (d == varr).all()
+
+
+        assert 'metadata' in state
+        for cloc, cval in constraints:
+            assert 'constraint_{}'.format(cloc) in state['metadata']

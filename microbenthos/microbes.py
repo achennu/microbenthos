@@ -149,3 +149,28 @@ class MicrobialGroup(DomainEntity):
                 if isinstance(obj, Variable):
                     self.VARS[obj.name] = obj.var
                     self.logger.debug('Stored var {!r} into VARS'.format(obj))
+
+    def snapshot(self, base=False):
+        """
+        Returns a snapshot of the object's state
+
+        Returns:
+            Dictionary with keys: `data`, `metadata`, where the value of each `data` entry is
+            either another such dictionary or a numeric array
+        """
+        self.logger.debug('Snapshot: {}'.format(self))
+        self.check_domain()
+
+        state = dict()
+        meta = state['metadata'] = {}
+        meta['name'] = self.name
+
+        features = state['features'] = {}
+        for name, obj in self.features.items():
+            features[name] = obj.snapshot(base=base)
+
+        processes = state['processes'] = {}
+        for name, obj in self.processes.items():
+            processes[name] = obj.snapshot(base=base)
+
+        return state

@@ -48,20 +48,25 @@ environment:
 #                    - [cyano, 65253]
 #                    - [cyano, !unit 125 g/mm**3]
 
+                - name: nir
+                  k0: !unit 11.2 1/cm
 
-    abiotic_h2s_oxidation:
+
+    abio_sulfoxid:
         cls: ExprProcess
         init_params:
             formula: porosity * k * oxy**2 * h2s
             varnames: ['oxy', 'h2s', 'porosity']
             params:
-                k: !unit '70 1/((10**-3)*mol/l)**2/h'
+                k: !unit '70e6 (l/mol)**2/h'
+            expected_unit: 'mol/l/h'
 
-    aerobic_respiration:
+    aero_respire:
         cls: ExprProcess
         init_params:
             formula: Vmax
             varnames: []
+            expected_unit: 'mol/l/h'
             params:
                 Vmax: !unit 1e-3 mol/l/h
             responses:
@@ -152,6 +157,7 @@ microbes:
                     init_params:
                         formula: G * biomass
                         varnames: [biomass]
+                        expected_unit: mug/cm**3/h
                         params:
                             G: !unit 0.002 1/h
 
@@ -167,7 +173,7 @@ microbes:
                                         oxy_thresh: !unit 1e-9 mol/l
                                         chla_max:  0.003
 
-    csdb:
+    csb:
         init_params:
             name: csb
             features:
@@ -218,6 +224,7 @@ formulae:
         variables: [x, Km]
         expr: x / (Km + x)
 
+
 equations:
     oxyEqn:
         var:
@@ -238,11 +245,11 @@ equations:
                         D0_oxy: !unit 0.05 cm**2/h
 
         sources:
-            - name: abiotic_h2s_oxidation
+            - name: abio_sulfoxid
               coeff: -2
               store: env
 
-            - name: aerobic_respiration
+            - name: aero_respire
               coeff: -1
               store: env
 
@@ -271,3 +278,68 @@ equations:
             - name: chla_synth
               coeff: 1
               store: microbes.cyano.processes
+
+
+#viewer:
+#    cls: MicroBenthosViewer
+#    panels:
+#        chem:
+#            axes:
+#                ax1:
+#                    artists:
+#                        oxyline:
+#                            data_source: env.oxy
+#                            style:
+#                                c: b
+#                                ls: --
+#                ax2:
+#                    artists:
+#                        h2sline:
+#                            data_source: env.h2s
+#                            style:
+#                                c: b
+#                                ls: --
+#
+#        microbes:
+#            axes:
+#                ax1:
+#                    xlabel: Biomass
+#                    artists:
+#                        cyano:
+#                            data_source: microbes.cyano.features.biomass
+#                            style:
+#                                c: teal
+#                                label: biomass cyano
+#
+#                        csb:
+#                            data_source: microbes.csb.features.biomass
+#                            style:
+#                                c: ochre
+#                                label: biomass csb
+#
+#                ax2:
+#                    xscale: log
+#                    xlim: (0.01, 100)
+#                    xlabel: PAR or NIR (% of noon)
+#                    artists:
+#                        par:
+#                            data_source: env.irradiance.channels.par
+#                            style:
+#                                c: red
+#                                ls: --
+#                        nir:
+#                            data_source: env.irradiance.channels.nir
+#                            style:
+#                                c: orange
+#                                ls: --
+#
+#
+#
+#        processes:
+#            axes:
+#                ax1:
+#                    xlabel: process rates (normed)
+#                    xlim: 0, 1
+#                    artists:
+#                        cyaOxyPS
+#

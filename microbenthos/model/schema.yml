@@ -89,7 +89,8 @@ irradiance: &irradiance_schema
                             schema:
                                 items:
                                     - type: string
-                                    - type: [physical_unit, float]
+                                    - type: [physical_unit]
+                                      like_unit: cm**2/g
 
 
 processbase: &procbase
@@ -120,6 +121,11 @@ processbase: &procbase
                         type: dict
                         keyschema:
                             type: symbolable
+
+                    expected_unit:
+                        type: unit_name
+                        nullable: true
+
 
 process: &process_schema
     <<: *procbase

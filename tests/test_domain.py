@@ -64,8 +64,8 @@ class TestModelDomain:
         domain = SedimentDBLDomain(cell_size=cell_size, sediment_length=sediment_length,
                                    dbl_length=dbl_length)
 
-        assert Nsed == domain.sediment_Ncells
-        assert Ndbl == domain.DBL_Ncells
+        assert Nsed == domain.sediment_cells
+        assert Ndbl == domain.DBL_cells
         assert domain.sediment_length.value != sediment_length
         assert domain.sediment_length.value == Nsed * cell_size
         assert domain.DBL_length.value != dbl_length
@@ -113,3 +113,26 @@ class TestModelDomain:
                 # this overrides any supplied unit in creating cellvariables
             else:
                 assert var.unit == val.unit
+
+    def test_snapshot(self):
+        domain = SedimentDBLDomain()
+        state = domain.snapshot()
+
+        statekeys = ('metadata', 'depths', 'distances')
+        assert set(statekeys) == set(state)
+
+        metakeys = ('cell_size', 'sediment_length', 'DBL_length', 'sediment_cells', 'DBL_cells', 'sediment_porosity', 'idx_surface', 'total_cells', 'total_length')
+        assert set(state['metadata']) == set(metakeys)
+
+        assert len(state['depths']['data'][0]) == len(domain.mesh.x())
+        assert len(state['distances']['data'][0]) == len(domain.mesh.scaledCellDistances) - 1
+
+        for k in ('depths', 'distances'):
+            # check that the units are that of distances
+            p = PhysicalField(1, state[k]['data'][1]['unit']).inUnitsOf('m')
+            assert p.value > 0
+
+
+
+
+

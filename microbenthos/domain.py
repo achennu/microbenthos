@@ -8,6 +8,8 @@ from fipy import PhysicalField, CellVariable, Variable
 from fipy.meshes.uniformGrid1D import UniformGrid1D
 from fipy.tools import numerix
 
+from .utils.snapshotters import snapshot_var
+
 
 class SedimentDBLDomain(object):
     """
@@ -37,7 +39,7 @@ class SedimentDBLDomain(object):
         self.logger = logging.getLogger(__name__)
         self.VARS = {}
         self.mesh = None
-        self.sediment_Ncells = self.DBL_Ncells = None
+        self.sediment_cells = self.DBL_cells = None
 
         self.cell_size = PhysicalField(cell_size, 'mm')
         self.sediment_length = PhysicalField(sediment_length, 'mm')
@@ -51,22 +53,22 @@ class SedimentDBLDomain(object):
                 self.sediment_length, self.cell_size
                 )
 
-        self.sediment_Ncells = int(self.sediment_length / self.cell_size)
-        self.DBL_Ncells = int(self.DBL_length / self.cell_size)
-        self.domain_Ncells = self.sediment_Ncells + self.DBL_Ncells
+        self.sediment_cells = int(self.sediment_length / self.cell_size)
+        self.DBL_cells = int(self.DBL_length / self.cell_size)
+        self.total_cells = self.sediment_cells + self.DBL_cells
 
-        self.sediment_length = self.sediment_Ncells * self.cell_size
-        self.DBL_length = self.sediment_interface = self.DBL_Ncells * self.cell_size
-        self.domain_length = self.sediment_length + self.DBL_length
+        self.sediment_length = self.sediment_cells * self.cell_size
+        self.DBL_length = self.sediment_interface = self.DBL_cells * self.cell_size
+        self.total_length = self.sediment_length + self.DBL_length
 
-        self.idx_surface = self.DBL_Ncells
+        self.idx_surface = self.DBL_cells
 
         self.create_mesh()
         self.set_porosity(float(porosity))
 
     def __str__(self):
-        return 'Domain(mesh={}, sed={}, DBL={})'.format(self.mesh, self.sediment_Ncells,
-                                                        self.DBL_Ncells)
+        return 'Domain(mesh={}, sed={}, DBL={})'.format(self.mesh, self.sediment_cells,
+                                                        self.DBL_cells)
 
     def __repr__(self):
         return 'SedimentDBLDomain(cell_size={:.2}, sed_length={:.2}, dbl_length={:.2})'.format(
@@ -85,18 +87,20 @@ class SedimentDBLDomain(object):
         """
 
         self.logger.info('Creating UniformGrid1D with {} sediment and {} DBL cells of {}'.format(
-            self.sediment_Ncells, self.DBL_Ncells, self.cell_size
+            self.sediment_cells, self.DBL_cells, self.cell_size
             ))
         self.mesh = UniformGrid1D(dx=self.cell_size.numericValue,
-                                  nx=self.domain_Ncells,
+                                  nx=self.total_cells,
                                   )
         self.logger.debug('Created domain mesh: {}'.format(self.mesh))
-        self.distances = Variable(value=self.mesh.scaledCellDistances[:-1], unit='m')
+        self.distances = Variable(value=self.mesh.scaledCellDistances[:-1], unit='m',
+                                  name='distances')
         Z = self.mesh.x()
         Z = Z - Z[self.idx_surface]
-        self.depths_um = Z * 1e6 # in micrometers, with 0 at surface
+        self.depths = Variable(Z, unit='m', name='depths')
+        # in micrometers, with 0 at surface
 
-    def create_var(self, name, store=True, **kwargs):
+    def create_var(self, name, store = True, **kwargs):
         """
         Create a variable on the mesh as a :class:`CellVariable`.
 
@@ -154,13 +158,14 @@ class SedimentDBLDomain(object):
             varr = numerix.ones(self.mesh.shape, dtype='float32')
             value *= varr
         except TypeError:
+            self.logger.error('Error creating variable', exc_info=True)
             raise ValueError('Value {} could not be cast numerically'.format(value))
 
         self.logger.debug('Creating CellVariable {!r} with: {}'.format(name, kwargs))
         var = CellVariable(mesh=self.mesh, name=name, value=value, **kwargs)
 
         self.logger.debug('Created variable {!r}: shape: {} unit: {}'.format(var,
-                                                                               var.shape, var.unit))
+                                                                             var.shape, var.unit))
 
         if store:
             self.VARS[name] = var
@@ -210,7 +215,7 @@ class SedimentDBLDomain(object):
 
         P = self.VARS.get('porosity')
         if P is None:
-            P = self.create_var('porosity', value=1.0)
+            self.porosity = P = self.create_var('porosity', value=1.0)
 
         self.sediment_porosity = float(porosity)
         P[:self.idx_surface] = 1.0
@@ -218,3 +223,37 @@ class SedimentDBLDomain(object):
         self.logger.info('Set sediment porosity to {} and DBL porosity to 1.0'.format(
             self.sediment_porosity))
         return P
+
+    def snapshot(self, base = False):
+        """
+        Returns a snapshot of the domain's state
+
+        Returns:
+            Dictionary with structure:
+                * `metadata`:
+                    * `cell_size`, `sediment_length`, `sediment_cells`, `dbl_cells`,
+                    `dbl_length`, `total_cells`, `total_length`, `sediment_porosity`, `idx_surface`
+                * `z`: (:attr:`.mesh.x`, `dict(unit=unit)`)
+                * `depths`: (:attr:`.depths`, `dict(unit="mum")`)
+                * `distances`: (:attr:`.distances`, `dict(unit=unit)`)
+
+        """
+        self.logger.debug('Snapshot: {}'.format(self))
+        state = dict()
+        meta = state['metadata'] = {}
+        meta['cell_size'] = str(self.cell_size)
+        meta['sediment_length'] = str(self.sediment_length)
+        meta['DBL_length'] = str(self.DBL_length)
+        meta['sediment_cells'] = self.sediment_cells
+        meta['DBL_cells'] = self.DBL_cells
+        meta['total_cells'] = self.total_cells
+        meta['total_length'] = str(self.total_length)
+        meta['sediment_porosity'] = self.sediment_porosity
+        meta['idx_surface'] = self.idx_surface
+
+        state['depths'] = {'data': snapshot_var(self.depths, base=base)}
+        state['distances'] = {'data': snapshot_var(self.distances, base=base)}
+
+        return state
+
+    __getstate__ = snapshot

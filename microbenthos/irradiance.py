@@ -2,7 +2,7 @@ from __future__ import division
 
 import logging
 
-from fipy import PhysicalField
+from fipy import PhysicalField, Variable
 from fipy.tools import numerix
 from scipy.stats import cosine
 
@@ -27,7 +27,7 @@ class Irradiance(DomainEntity):
         self.channels = {}
 
         self.hours_total = PhysicalField(hours_total, 'h')
-        if not (4 < self.hours_total.value < 48):
+        if not (4 <= self.hours_total.value <= 48):
             raise ValueError('Hours total {} should be between (4, 48)'.format(self.hours_total))
         day_fraction = float(day_fraction)
         if not (0 < day_fraction < 1):
@@ -35,15 +35,17 @@ class Irradiance(DomainEntity):
 
         self.day_fraction = day_fraction
         self.hours_day = day_fraction * self.hours_total
-        self.clocktime_zenith = self.hours_day
-        self.max_level = 100
+        self.zenith_time = self.hours_day
+        self.zenith_level = 100
 
         C = 1.0 / numerix.sqrt(2 * numerix.pi)
         # to scale the cosine distribution from 0 to 1 (at zenith)
         self._profile = cosine(
-            loc=self.clocktime_zenith, scale=C ** 2 * self.hours_day)
+            loc=self.zenith_time, scale=C ** 2 * self.hours_day)
         # This profile with loc=zenith means that the day starts at "midnight" and zenith occurs
         # in the center of the daylength
+
+        self.surface_irrad = None
 
         if channels:
             for chinfo in channels:
@@ -53,7 +55,7 @@ class Irradiance(DomainEntity):
 
     def __repr__(self):
         # return '{}(total={},day={:.1f},zenith={:.1f)'.format(self.name, self.hours_total,
-        #                                                  self.hours_day, self.clocktime_zenith)
+        #                                                  self.hours_day, self.zenith_time)
         return 'Irradiance(total={},{})'.format(self.hours_total, '+'.join(self.channels))
 
     def setup(self,):
@@ -62,7 +64,8 @@ class Irradiance(DomainEntity):
         """
         self.check_domain()
 
-        self.surface_irrad = self.domain.create_var('irrad_surface', value=0.0)
+        if self.surface_irrad is None:
+            self.surface_irrad = Variable(name='irrad_surface', value=0.0, unit=None)
 
         for channel in self.channels.itervalues():
             if not channel.has_domain:
@@ -115,7 +118,7 @@ class Irradiance(DomainEntity):
         # logger.debug('Profile level for clocktime {}: {}'.format(
         #     clocktime, self._profile.pdf(clocktime_)))
 
-        surface_value = self.max_level * self.hours_day.numericValue / 2 * \
+        surface_value = self.zenith_level * self.hours_day.numericValue / 2 * \
                         self._profile.pdf(clocktime_)
 
         self.surface_irrad.value = surface_value
@@ -123,7 +126,43 @@ class Irradiance(DomainEntity):
                                                                               self.surface_irrad))
 
         for channel in self.channels.itervalues():
+            #: TODO: remove explicit calling by using Variable?
             channel.update_intensities(self.surface_irrad)
+
+    def snapshot(self, base=False):
+        """
+        Returns a snapshot of the Irradiance's state
+
+        Args:
+            base (bool): Convert to base units?
+
+        Returns:
+            Dictionary with structure:
+                * `metadata`:
+                    * `hours_total`
+                    * `day_fraction`
+                    * `zenith_time`
+                    * `zenith_level`
+
+                * `channels`:
+                    `channel_name`: snapshot of :class:`IrradianceChannel`
+        """
+        self.logger.debug('Snapshot: {}'.format(self))
+        self.check_domain()
+
+        state = dict()
+
+        meta = state['metadata'] = {}
+        meta['hours_total'] = str(self.hours_total)
+        meta['day_fraction'] = self.day_fraction
+        meta['zenith_time'] = str(self.zenith_time)
+        meta['zenith_level'] = self.zenith_level
+
+        channels = state['channels'] = {}
+        for ch, chobj in self.channels.items():
+            channels[ch] = chobj.snapshot(base=base)
+
+        return state
 
 
 class IrradianceChannel(DomainEntity):
@@ -161,7 +200,7 @@ class IrradianceChannel(DomainEntity):
     def __repr__(self):
         return '{}:{!r}'.format(self.name, self.k_var)
 
-    def setup(self, k_mods = None):
+    def setup(self):
         """
         Define attenuations when domain is available
         Returns:
@@ -173,9 +212,6 @@ class IrradianceChannel(DomainEntity):
             self.intensities = self.domain.create_var(self.name)
 
             self.define_attenuation()
-
-        if k_mods:
-            self.k_mods.extend(k_mods)
 
         for source in self.k_mods:
             var, coeff = source
@@ -191,7 +227,7 @@ class IrradianceChannel(DomainEntity):
         """
         assert hasattr(self.k0, 'unit'), 'k0 should have attribute unit'
         if self.k_name not in self.domain:
-            k_var = self.domain.create_var(self.k_name, value=self.k0)
+            k_var = self.domain.create_var(self.k_name, value=self.k0, store=False)
             k_var[:self.domain.idx_surface] = 0
             self.k_var = k_var
 
@@ -249,3 +285,47 @@ class IrradianceChannel(DomainEntity):
         intensities = self.attenuation_profile * surface_level
         self.intensities.value = intensities
         return intensities
+
+    def snapshot(self, base=False):
+        """
+        Returns a snapshot of the channel's state
+
+        Args:
+            base (bool): Convert to base units?
+
+        Returns:
+            Dictionary with structure:
+            * `attenuation`:
+                * `data`: (:attr:`.k_var`, dict(unit=unit))
+                * `metadata`:
+                    * dict of (`varname`, `coeff`)
+
+            * `intensity`:
+                * `data`: (:attr:`.intensities`, dict(unit=unit))
+                *  `metadata`:
+                    * unit: physical unit
+
+            *`metadata`:
+                * k0 for channel
+        """
+        self.logger.debug('Snapshot: {}'.format(self))
+
+        self.check_domain()
+        from .utils.snapshotters import snapshot_var
+
+        state = dict(
+            metadata = dict()
+            )
+        meta = state['metadata']
+        meta['k0'] = str(self.k0)
+
+        atten = state['attenuation'] = {}
+        ameta = atten['metadata'] = {}
+        for varname, val in self.k_mods:
+            ameta[varname] = str(val)
+        atten['data'] = snapshot_var(self.k_var, base=base)
+
+        inten = state['intensity'] = {}
+        inten['data'] = snapshot_var(self.intensities, base=base)
+
+        return state
