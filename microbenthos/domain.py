@@ -4,8 +4,8 @@ Module that defines the microbial mat domain and related environmental parameter
 
 import logging
 
-from fipy import PhysicalField, CellVariable, Variable
-from fipy.meshes.uniformGrid1D import UniformGrid1D
+from fipy import PhysicalField, CellVariable, Variable, Grid1D
+# from fipy.meshes.uniformGrid1D import UniformGrid1D
 from fipy.tools import numerix
 
 from .utils.snapshotters import snapshot_var
@@ -89,7 +89,7 @@ class SedimentDBLDomain(object):
         self.logger.info('Creating UniformGrid1D with {} sediment and {} DBL cells of {}'.format(
             self.sediment_cells, self.DBL_cells, self.cell_size
             ))
-        self.mesh = UniformGrid1D(dx=self.cell_size.numericValue,
+        self.mesh = Grid1D(dx=self.cell_size.numericValue,
                                   nx=self.total_cells,
                                   )
         self.logger.debug('Created domain mesh: {}'.format(self.mesh))
@@ -166,10 +166,9 @@ class SedimentDBLDomain(object):
 
         self.logger.debug('Created variable {!r}: shape: {} unit: {}'.format(var,
                                                                              var.shape, var.unit))
-
         if store:
             self.VARS[name] = var
-            self.logger.debug('Stored on domain')
+            self.logger.debug('Stored on domain: {!r}'.format(var))
 
         return var
 
@@ -216,10 +215,12 @@ class SedimentDBLDomain(object):
         P = self.VARS.get('porosity')
         if P is None:
             self.porosity = P = self.create_var('porosity', value=1.0)
+            # self.porosity = P = Variable(float(porosity), name='porOsiTy')
+            # self.VARS['porosity'] = P
 
         self.sediment_porosity = float(porosity)
-        P[:self.idx_surface] = 1.0
-        P[self.idx_surface:] = self.sediment_porosity
+        P.value[:self.idx_surface] = 1.0
+        P.value[self.idx_surface:] = self.sediment_porosity
         self.logger.info('Set sediment porosity to {} and DBL porosity to 1.0'.format(
             self.sediment_porosity))
         return P

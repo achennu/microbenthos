@@ -15,11 +15,11 @@ environment:
             name: oxy
             create:
                 hasOld: true
-                value: !unit 0.0 mol/l
+                value: !unit 0.0 mol/m**3
 
             constraints:
-                top: !unit 0.2e-3 mol/l
-                bottom: !unit 0 mol/l
+                top: !unit 0.2 mol/m**3
+                bottom: !unit 0 mol/m**3
 
     h2s:
         cls: Variable
@@ -27,29 +27,44 @@ environment:
             name: h2s
             create:
                 hasOld: true
-                value: !unit 0.0 mol/l
+                value: !unit 0.0 mol/m**3
 
             constraints:
-                top: !unit 0.0 mol/l
-                bottom: !unit 1e-3 mol/l
+                top: !unit 0.0 mol/m**3
+                bottom: !unit 2 mol/m**3
 
-
-    irradiance:
-        cls: Irradiance
+    D0_h2s:
+        cls: Variable
         init_params:
-            hours_total: 24
-            day_fraction: 0.3
+            name: D0_h2s
+            create:
+                value: !unit 8.3333e-10 m**2/s
 
-            channels:
-                - name: par
-                  k0: !unit 15.3 1/cm
-#                  k_mods:
-#                    - [cyano, 6523]
-#                    - [cyano, 65253]
-#                    - [cyano, !unit 125 g/mm**3]
+    D0_oxy:
+        cls: Variable
+        init_params:
+            name: D0_oxy
+            create:
+                value: !unit 1.3888e-9 m**2/s
 
-                - name: nir
-                  k0: !unit 11.2 1/cm
+
+
+#    irradiance:
+#        cls: Irradiance
+#        init_params:
+#            hours_total: 24
+#            day_fraction: 0.3
+#
+#            channels:
+#                - name: par
+#                  k0: !unit 15.3 1/cm
+##                  k_mods:
+##                    - [cyano, 6523]
+##                    - [cyano, 65253]
+##                    - [cyano, !unit 125 g/mm**3]
+#
+#                - name: nir
+#                  k0: !unit 11.2 1/cm
 
 
     abio_sulfoxid:
@@ -58,14 +73,15 @@ environment:
             formula: porosity * k * oxy**2 * h2s
             varnames: ['oxy', 'h2s', 'porosity']
             params:
-                k: !unit '70e6 (l/mol)**2/h'
+                k: !unit '70e6 l**2/mol**2/h'
             expected_unit: 'mol/l/h'
 
     aero_respire:
         cls: ExprProcess
         init_params:
-            formula: Vmax
-            varnames: []
+            formula: Vmax * porosity
+            varnames:
+                - porosity
             expected_unit: 'mol/l/h'
             params:
                 Vmax: !unit 1e-3 mol/l/h
@@ -80,134 +96,134 @@ environment:
                             Km: !unit 1e-5 mol/l
 
 
-microbes:
-    cyano:
-        init_params:
-            name: cyano
-            features:
-                biomass:
-                    init_params:
-                        name: biomass
-                        create:
-                            value: !unit 1e-20 g/cm**3
-
-                chla:
-                    init_params:
-                        name: chla
-                        create:
-                            value: !unit 0.0 g/cm**3
-
-            processes:
-                oxyPS:
-                    init_params:
-                        formula: Qmax * biomass
-                        varnames:
-                            - biomass
-                        params:
-                            Qmax: !unit "0.00841 mol/g/h"
-
-                        responses:
-                            optimum(par):
-                                cls: ExprProcess
-                                init_params:
-                                    formula: optimum_response(par, Ks, Ki)
-                                    varnames:
-                                        - par
-                                    params:
-                                        Ks: 1
-                                        Ki: 10
-
-                            inhibit(oxy):
-                                cls: ExprProcess
-                                init_params:
-                                    formula: inhibition_response(oxy, Kmax, Khalf)
-                                    varnames:
-                                        - oxy
-                                    params:
-                                        Kmax: !unit "0.8e-3 mol/l"
-                                        Khalf: !unit "0.7e-3 mol/l"
-
-                            inhibit(h2s):
-                                init_params:
-                                    formula: inhibition_response(h2s, Kmax, Khalf)
-                                    varnames:
-                                        - h2s
-                                    params:
-                                        Kmax: !unit "0.35e-3 mol/l"
-                                        Khalf: !unit "0.3e-3 mol/l"
-
-                respire:
-                    init_params:
-                        formula: Qmax * biomass
-                        varnames:
-                            - biomass
-                        params:
-                            Qmax: !unit 0.000199e-6 mol/g/h
-
-                        responses:
-                            saturate(oxy):
-                                init_params:
-                                    formula: saturation_response(oxy, Km)
-                                    varnames:
-                                        - oxy
-                                    params:
-                                        Km: !unit 1e-6 mol/l
-
-                chla_synth:
-                    init_params:
-                        formula: G * biomass
-                        varnames: [biomass]
-                        expected_unit: mug/cm**3/h
-                        params:
-                            G: !unit 0.002 1/h
-
-                        responses:
-                            synthesis(chla, biomass, oxy):
-                                init_params:
-                                    formula: (oxy < oxy_thresh) & (chla/biomass < chla_max)
-                                    varnames:
-                                        - chla
-                                        - biomass
-                                        - oxy
-                                    params:
-                                        oxy_thresh: !unit 1e-9 mol/l
-                                        chla_max:  0.003
-
-    csb:
-        init_params:
-            name: csb
-            features:
-                biomass:
-                    init_params:
-                        name: biomass
-                        create:
-                            value: !unit 0.0 g/cm**3
-
-            processes:
-                sulfoxid:
-                    init_params:
-                        formula: biomass * Qmax
-                        varnames:
-                            - biomass
-                        params:
-                            Qmax: !unit 0.3233 mol/g/h
-
-                        responses:
-                            saturate(oxy):
-                                init_params:
-                                    formula: saturation_response(oxy, Km)
-                                    varnames:
-                                        - oxy
-                                    params:
-                                        Km: !unit 1e-6 mol/l
-
-                            saturate(h2s):
-                                init_params:
-                                    formula: saturation_response(h2s, Km)
-                                    varnames:
-                                        - h2s
-                                    params:
-                                        Km: !unit 0.7e-6 mol/l
+#microbes:
+#    cyano:
+#        init_params:
+#            name: cyano
+#            features:
+#                biomass:
+#                    init_params:
+#                        name: biomass
+#                        create:
+#                            value: !unit 1e-20 g/cm**3
+#
+#                chla:
+#                    init_params:
+#                        name: chla
+#                        create:
+#                            value: !unit 0.0 g/cm**3
+#
+#            processes:
+#                oxyPS:
+#                    init_params:
+#                        formula: Qmax * biomass
+#                        varnames:
+#                            - biomass
+#                        params:
+#                            Qmax: !unit "0.00841 mol/g/h"
+#
+#                        responses:
+#                            optimum(par):
+#                                cls: ExprProcess
+#                                init_params:
+#                                    formula: optimum_response(par, Ks, Ki)
+#                                    varnames:
+#                                        - par
+#                                    params:
+#                                        Ks: 1
+#                                        Ki: 10
+#
+#                            inhibit(oxy):
+#                                cls: ExprProcess
+#                                init_params:
+#                                    formula: inhibition_response(oxy, Kmax, Khalf)
+#                                    varnames:
+#                                        - oxy
+#                                    params:
+#                                        Kmax: !unit "0.8e-3 mol/l"
+#                                        Khalf: !unit "0.7e-3 mol/l"
+#
+#                            inhibit(h2s):
+#                                init_params:
+#                                    formula: inhibition_response(h2s, Kmax, Khalf)
+#                                    varnames:
+#                                        - h2s
+#                                    params:
+#                                        Kmax: !unit "0.35e-3 mol/l"
+#                                        Khalf: !unit "0.3e-3 mol/l"
+#
+#                respire:
+#                    init_params:
+#                        formula: Qmax * biomass
+#                        varnames:
+#                            - biomass
+#                        params:
+#                            Qmax: !unit 0.000199e-6 mol/g/h
+#
+#                        responses:
+#                            saturate(oxy):
+#                                init_params:
+#                                    formula: saturation_response(oxy, Km)
+#                                    varnames:
+#                                        - oxy
+#                                    params:
+#                                        Km: !unit 1e-6 mol/l
+#
+#                chla_synth:
+#                    init_params:
+#                        formula: G * biomass
+#                        varnames: [biomass]
+#                        expected_unit: mug/cm**3/h
+#                        params:
+#                            G: !unit 0.002 1/h
+#
+#                        responses:
+#                            synthesis(chla, biomass, oxy):
+#                                init_params:
+#                                    formula: (oxy < oxy_thresh) & (chla/biomass < chla_max)
+#                                    varnames:
+#                                        - chla
+#                                        - biomass
+#                                        - oxy
+#                                    params:
+#                                        oxy_thresh: !unit 1e-9 mol/l
+#                                        chla_max:  0.003
+#
+#    csb:
+#        init_params:
+#            name: csb
+#            features:
+#                biomass:
+#                    init_params:
+#                        name: biomass
+#                        create:
+#                            value: !unit 0.0 g/cm**3
+#
+#            processes:
+#                sulfoxid:
+#                    init_params:
+#                        formula: biomass * Qmax
+#                        varnames:
+#                            - biomass
+#                        params:
+#                            Qmax: !unit 0.3233 mol/g/h
+#
+#                        responses:
+#                            saturate(oxy):
+#                                init_params:
+#                                    formula: saturation_response(oxy, Km)
+#                                    varnames:
+#                                        - oxy
+#                                    params:
+#                                        Km: !unit 1e-6 mol/l
+#
+#                            saturate(h2s):
+#                                init_params:
+#                                    formula: saturation_response(h2s, Km)
+#                                    varnames:
+#                                        - h2s
+#                                    params:
+#                                        Km: !unit 0.7e-6 mol/l
 
 
 formulae:
@@ -232,7 +248,7 @@ equations:
             store: domain
 
         transient:
-            coeff: 1
+            coeff: 1.0
 
         diffusion:
             coeff:
@@ -241,43 +257,69 @@ equations:
                     formula: porosity * D0_oxy
                     varnames:
                         - porosity
-                    params:
-                        D0_oxy: !unit 0.05 cm**2/h
+                        - D0_oxy
+#                    params:
+#                        D0_oxy: !unit 0.05 cm**2/h
 
         sources:
             - name: abio_sulfoxid
-              coeff: -2
+              coeff: -2.0
               store: env
 
             - name: aero_respire
-              coeff: -1
+              coeff: -1.0
               store: env
 
-            - name: oxyPS
-              coeff: 1
-              store: microbes.cyano.processes
+#            - name: oxyPS
+#              coeff: 1
+#              store: microbes.cyano.processes
+#
+#            - name: respire
+#              coeff: -1
+#              store: microbes.cyano.processes
+#
+#            - name: sulfoxid
+#              coeff: -1
+#              store: microbes.csb.processes
 
-            - name: respire
-              coeff: -1
-              store: microbes.cyano.processes
-
-            - name: sulfoxid
-              coeff: -1
-              store: microbes.csb.processes
-
-
-    chlaEqn:
+    h2sEqn:
         var:
-            name: chla
-            store: microbes.cyano
+            name: h2s
+            store: domain
 
         transient:
-            coeff: 1
+            coeff: 1.0
+
+        diffusion:
+            coeff:
+                cls: ExprProcess
+                init_params:
+                    formula: porosity * D0_h2s
+                    varnames:
+                        - porosity
+                        - D0_h2s
+#                    params:
+#                        D0_h2s: !unit 0.03 cm**2/h
 
         sources:
-            - name: chla_synth
-              coeff: 1
-              store: microbes.cyano.processes
+            - name: abio_sulfoxid
+              coeff: -1.0
+              store: env
+
+
+
+#    chlaEqn:
+#        var:
+#            name: chla
+#            store: microbes.cyano
+#
+#        transient:
+#            coeff: 1
+#
+#        sources:
+#            - name: chla_synth
+#              coeff: 1
+#              store: microbes.cyano.processes
 
 
 #viewer:

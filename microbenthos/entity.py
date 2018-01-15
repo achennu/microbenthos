@@ -306,6 +306,8 @@ class Variable(DomainEntity):
         self._LOCs = {
             'top': [0],
             'bottom': [-1],
+            # 'top': self.domain.mesh.facesLeft,
+            # 'bottom': self.domain.mesh.facesRight,
             'dbl': slice(0, self.domain.idx_surface),
             'sediment': slice(self.domain.idx_surface, None)
             }
@@ -371,6 +373,9 @@ class Variable(DomainEntity):
         try:
             L = self._LOCs[loc]
             self.logger.debug('Constraint mask loc: {}'.format(L))
+            # if loc in ('top', 'bottom'):
+            #     mask = L.copy()
+            # else:
             mask[L] = 1
         except KeyError:
             raise ValueError('loc={} not in {}'.format(loc, tuple(self._LOCs.keys())))

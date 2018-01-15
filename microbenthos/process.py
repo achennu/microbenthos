@@ -3,6 +3,7 @@ import operator
 from abc import ABCMeta, abstractmethod
 from collections import Mapping, OrderedDict
 
+from fipy import PhysicalField
 from fipy.tools import numerix
 from sympy import sympify, symbols, lambdify, Symbol, SympifyError
 
@@ -278,6 +279,7 @@ class ExprProcess(Process):
         # collect the arguments
         varargs = [domain[_] for _ in self.varnames]
         pargs = [params[_] for _ in self.params]
+        pargs = [_.inBaseUnits() if isinstance(_, PhysicalField) else _ for _ in pargs]
         args = varargs + pargs
         # follow the same order of the params ordered dict
 

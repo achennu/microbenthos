@@ -9,6 +9,8 @@ from .yaml_setup import yaml
 
 class ModelSchemaValidator(cerberus.Validator):
     logger = logging.getLogger(__name__)
+    logger.addHandler(logging.NullHandler())
+    logger.propagate = False
 
     # def __init__(self, *args, **kwargs):
     #     # self.logger.propagate = False

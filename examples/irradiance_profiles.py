@@ -11,7 +11,8 @@ from matplotlib import pyplot as plt
 
 
 domain = SedimentDBLDomain()
-DEPTHS = domain.depths.inUnitsOf('mum').value
+
+DEPTHS = domain.depths.numericValue / 1e-6
 
 Irrad = Irradiance()
 print('Created {}'.format(Irrad))
@@ -81,7 +82,7 @@ plt.xlabel('Attenuation')
 plt.legend()
 
 
-# CLOCKTIME.value = Irrad.zenith_time
+# CLOCKTIME.value = Irrad.clocktime_zenith
 Irrad.update_time(Irrad.zenith_time)
 
 

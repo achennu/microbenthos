@@ -4,8 +4,8 @@ logger.setLevel(10)
 from logutils.colorize import ColorizingStreamHandler
 logger.addHandler(ColorizingStreamHandler())
 
-from microbenthos.utils import yaml
-from microbenthos.base import Entity
+from microbenthos.entity import Entity
+import yaml
 from pprint import pprint
 
 YAML_TEXT = """

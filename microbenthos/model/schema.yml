@@ -300,6 +300,7 @@ model_schema:
 
                 sources:
                     type: list
+                    nullable: true
                     schema: *eqn_store_schema
 
 
