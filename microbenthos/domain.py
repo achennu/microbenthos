@@ -64,6 +64,12 @@ class SedimentDBLDomain(object):
         self.idx_surface = self.DBL_cells
 
         self.create_mesh()
+
+        mask = numerix.ones(self.total_cells, dtype='uint8')
+        mask[:self.idx_surface] = 0
+        self.sediment_mask = self.create_var(name='sed_mask', value=1)
+        self.sediment_mask.value = mask
+
         self.set_porosity(float(porosity))
 
     def __str__(self):
@@ -71,7 +77,7 @@ class SedimentDBLDomain(object):
                                                         self.DBL_cells)
 
     def __repr__(self):
-        return 'SedimentDBLDomain(cell_size={:.2}, sed_length={:.2}, dbl_length={:.2})'.format(
+        return 'SedimentDBLDomain(cell_size={:.3}, sed_length={:.2}, dbl_length={:.2})'.format(
             self.cell_size.value, self.sediment_length.value, self.DBL_length.value
             )
 
@@ -111,6 +117,7 @@ class SedimentDBLDomain(object):
 
         Args:
             name (str): The name identifier for the variable
+            store (bool): If True, then the created variable is stored in :attr:`.VARS`
             value (int, float, array, PhysicalField): value to set on the variable
             unit (str): The physical units for the variable
             hasOld (bool): Whether the variable maintains the older values, useful during
@@ -155,7 +162,7 @@ class SedimentDBLDomain(object):
                                     'supplied {}'.format(name, vunit, unit))
 
         try:
-            varr = numerix.ones(self.mesh.shape, dtype='float32')
+            varr = numerix.ones(self.mesh.shape)
             value *= varr
         except TypeError:
             self.logger.error('Error creating variable', exc_info=True)

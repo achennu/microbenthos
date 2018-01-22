@@ -30,6 +30,7 @@ class TestModelDomain:
         assert domain.cell_size == cell_size
         assert domain.sediment_length == sediment_length
         assert domain.DBL_length == dbl_length
+        assert 'sed_mask' in domain
 
     def test_init_float(self):
         # interpreted as millimeters
@@ -131,8 +132,3 @@ class TestModelDomain:
             # check that the units are that of distances
             p = PhysicalField(1, state[k]['data'][1]['unit']).inUnitsOf('m')
             assert p.value > 0
-
-
-
-
-
