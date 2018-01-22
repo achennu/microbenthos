@@ -116,6 +116,9 @@ class MicrobialGroup(DomainEntity):
         ret = self.features.get('biomass')
         if ret is None:
             self.logger.warning('Essential feature "biomass" of {} missing!'.format(self))
+        else:
+             if ret.var is not None:
+                 ret = ret.var
         return ret
 
     def on_domain_set(self):

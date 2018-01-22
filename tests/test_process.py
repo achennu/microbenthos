@@ -109,7 +109,8 @@ class TestExprInputs:
             statekeys = ('metadata', 'data', 'responses')
             assert set(statekeys) == set(state)
 
-            metakeys = ('formula', 'varnames', 'dependent_vars', 'expected_unit') + tuple(
+            metakeys = ('formula', 'varnames', 'dependent_vars', 'expected_unit', 'param_names') + \
+                       tuple(
                 proc.params.keys())
             assert set(metakeys) == set(state['metadata'])
 

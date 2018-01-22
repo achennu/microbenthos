@@ -279,7 +279,8 @@ class ExprProcess(Process):
         # collect the arguments
         varargs = [domain[_] for _ in self.varnames]
         pargs = [params[_] for _ in self.params]
-        pargs = [_.inBaseUnits() if isinstance(_, PhysicalField) else _ for _ in pargs]
+        # pargs = [_.inBaseUnits() if isinstance(_, PhysicalField) else _ for _ in pargs]
+
         args = varargs + pargs
         # follow the same order of the params ordered dict
 
@@ -330,6 +331,7 @@ class ExprProcess(Process):
         meta['varnames'] = self.varnames
         meta['dependent_vars'] = tuple(self.dependent_vars())
         meta['expected_unit'] = self.expected_unit
+        meta['param_names'] = tuple(self.params.keys())
 
         for p, pval in self.params.items():
             meta[p] = str(pval)
@@ -338,6 +340,7 @@ class ExprProcess(Process):
 
         if hasattr(evaled, 'unit'):
             state['data'] = snapshot_var(evaled, base=base, to_unit=self.expected_unit)
+
         else:
             state['data'] = snapshot_var(evaled, base=base)
 
