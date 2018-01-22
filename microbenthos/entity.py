@@ -191,7 +191,7 @@ class DomainEntity(Entity):
 
         """
 
-    def setup(self):
+    def setup(self, **kwargs):
         """
         Method to set up the mat entity once a domain is available
 
@@ -200,6 +200,15 @@ class DomainEntity(Entity):
         To be overridden by subclasses
         """
         self.logger.debug('Setup empty: {}'.format(self))
+
+    @property
+    def is_setup(self):
+        """
+        A flag to indicate if an entity still needs setting up
+
+        Must be overriden by subclasses to be useful
+        """
+        return True
 
 
 class Variable(DomainEntity):
@@ -289,7 +298,7 @@ class Variable(DomainEntity):
             except:
                 raise ValueError('Constraint should be single-valued, not {!r}'.format(val))
 
-    def setup(self):
+    def setup(self, **kwargs):
         """
         Once a domain is available, create the variable with the requested parameters and apply
         any constraints.

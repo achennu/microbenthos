@@ -138,7 +138,7 @@ class MicrobialGroup(DomainEntity):
             self.logger.debug('Setting self as domain for {}'.format(obj))
             obj.domain = self
 
-    def setup(self):
+    def setup(self, **kwargs):
         """
         If the domain is available, then setup all the features and processes.
 

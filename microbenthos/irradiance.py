@@ -58,11 +58,12 @@ class Irradiance(DomainEntity):
         #                                                  self.hours_day, self.zenith_time)
         return 'Irradiance(total={},{})'.format(self.hours_total, '+'.join(self.channels))
 
-    def setup(self,):
+    def setup(self, **kwargs):
         """
         When a domain is added, the attenuation for the channels can be setup
         """
         self.check_domain()
+        model = kwargs.get('model')
 
         if self.surface_irrad is None:
             self.surface_irrad = Variable(name='irrad_surface', value=0.0, unit=None)
@@ -70,9 +71,13 @@ class Irradiance(DomainEntity):
         for channel in self.channels.itervalues():
             if not channel.has_domain:
                 channel.domain = self.domain
-            channel.setup()
+            channel.setup(model=model)
 
-    def create_channel(self, name, k0 = 0, k_mods = None):
+    @property
+    def is_setup(self):
+        return all([c.is_setup for c in self.channels.values()])
+
+    def create_channel(self, name, k0 = 0, k_mods = None, model=None):
         """
         Add a channel of irradiance, such as PAR or NIR
 
@@ -94,7 +99,7 @@ class Irradiance(DomainEntity):
 
         if self.has_domain:
             channel.domain = self.domain
-            channel.setup()
+            channel.setup(model=model)
 
         return channel
 
@@ -200,13 +205,18 @@ class IrradianceChannel(DomainEntity):
     def __repr__(self):
         return '{}:{!r}'.format(self.name, self.k_var)
 
-    def setup(self):
+    def setup(self, **kwargs):
         """
         Define attenuations when domain is available
+
+        Args:
+            model (object): The model object to perform object lookups on if necessary. This
+            object should have a callable :meth:`get_object(path)`
         Returns:
 
         """
         self.check_domain()
+        model = kwargs.get('model')
 
         if self.intensities is None:
             self.intensities = self.domain.create_var(self.name)
@@ -215,7 +225,7 @@ class IrradianceChannel(DomainEntity):
 
         for source in self.k_mods:
             var, coeff = source
-            self.add_attenuation_source(var=var, coeff=coeff)
+            self.add_attenuation_source(var=var, coeff=coeff, model=model)
 
     @property
     def k_name(self):
@@ -231,16 +241,20 @@ class IrradianceChannel(DomainEntity):
             k_var[:self.domain.idx_surface] = 0
             self.k_var = k_var
 
-    def add_attenuation_source(self, var, coeff):
+    def add_attenuation_source(self, var, coeff, model=None):
         """
         Add an extra source of attenuation to this channel, for example through biomass that
         attenuates light intensity
 
         The term `var * coeff` should have dimensions of 1/length
 
+        `var` should be a string like "csb_biomass" in which case it is looked up from the
+        domain, else it can be a model reference such as "microbes.cyano.biomass".
+
         Args:
-            var (str): The domain variable for the source
+            var (str): The name for the variable as attenuation source
             coeff: The coefficient to multiply with
+            model (object): The model object to perform object lookups on if necessary.
 
         Returns:
 
@@ -249,7 +263,20 @@ class IrradianceChannel(DomainEntity):
         if var in self._mods_added:
             raise RuntimeError('attenuation source {} already added!')
 
-        atten_source = self.domain[var] * coeff
+        if '.' in var:
+            # this is a model object like: microbes.cyano.biomass
+            if model is None:
+                self.logger.warning("Attenuation source {} needs model, but is None".format(var))
+                return
+            else:
+                try:
+                    atten_source = model.get_object(var) * coeff
+                except ValueError:
+                    self.logger.error('Could not find attenuation source: {!r}'.format(var))
+                    return
+        else:
+            atten_source = self.domain[var] * coeff
+
         try:
             atten_source.inUnitsOf('1/m')
         except TypeError:
@@ -258,7 +285,16 @@ class IrradianceChannel(DomainEntity):
 
         self.k_var += atten_source
         self._mods_added[var] = atten_source
-        self.logger.info('Added attenuation source from {!r} and coeff={}'.format(var, coeff))
+        self.logger.info('Added attenuation source {!r} and coeff={}'.format(var, coeff))
+
+    @property
+    def is_setup(self):
+        pending = set([k[0] for k in self.k_mods]).difference(set(self._mods_added))
+        if pending:
+            self.logger.warning('Attenuation sources for {!r} still pending: {}'.format(
+                self,
+                pending))
+        return not bool(len(pending))
 
     @property
     def attenuation_profile(self):
@@ -269,6 +305,9 @@ class IrradianceChannel(DomainEntity):
         allowing this to be multiplied by a surface value to get the irradiance profile.
 
         """
+        if not self.is_setup:
+            self.logger.warning('Attenuation definition may be incomplete!')
+
         return numerix.cumprod(numerix.exp(-1 * self.k_var * self.domain.distances))
 
     def update_intensities(self, surface_level):
