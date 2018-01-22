@@ -304,10 +304,8 @@ class Variable(DomainEntity):
         self.create(**self.create_params)
 
         self._LOCs = {
-            'top': [0],
-            'bottom': [-1],
-            # 'top': self.domain.mesh.facesLeft,
-            # 'bottom': self.domain.mesh.facesRight,
+            'top': self.domain.mesh.facesLeft,
+            'bottom': self.domain.mesh.facesRight,
             'dbl': slice(0, self.domain.idx_surface),
             'sediment': slice(self.domain.idx_surface, None)
             }
@@ -368,17 +366,19 @@ class Variable(DomainEntity):
             raise RuntimeError('Variable {} does not exist!'.format(self.name))
 
         self.logger.debug("Setting constraint for {!r}: {} = {}".format(self.var, loc, value))
-        mask = numerix.zeros(self.var.shape, dtype=bool)
 
-        try:
-            L = self._LOCs[loc]
-            self.logger.debug('Constraint mask loc: {}'.format(L))
-            # if loc in ('top', 'bottom'):
-            #     mask = L.copy()
-            # else:
-            mask[L] = 1
-        except KeyError:
-            raise ValueError('loc={} not in {}'.format(loc, tuple(self._LOCs.keys())))
+        if loc in ('top', 'bottom'):
+            mask = self._LOCs[loc]
+
+        else:
+            mask = numerix.zeros(self.var.shape, dtype=bool)
+
+            try:
+                L = self._LOCs[loc]
+                self.logger.debug('Constraint mask loc: {}'.format(L))
+                mask[L] = 1
+            except KeyError:
+                raise ValueError('loc={} not in {}'.format(loc, tuple(self._LOCs.keys())))
 
         if isinstance(value, PhysicalField):
             value = value.inUnitsOf(self.var.unit)
@@ -386,6 +386,7 @@ class Variable(DomainEntity):
             value = PhysicalField(value, self.var.unit)
 
         self.logger.info('Constraining {!r} at {} = {}'.format(self.var, loc, value))
+
         self.var.constrain(value, mask)
 
     def snapshot(self, base = False):
