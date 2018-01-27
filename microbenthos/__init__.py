@@ -2,7 +2,7 @@
 
 __author__ = """Arjun Chennu"""
 __email__ = 'achennu@mpi-bremen.de'
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
 # TODO: refactor logging so that config doesn't occur at import level
 
