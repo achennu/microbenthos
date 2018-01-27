@@ -10,12 +10,13 @@ with open('HISTORY.rst') as history_file:
     history = history_file.read()
 
 requirements = [
-    'Click>=6.0',
+    'click>=6.0',
     'fipy>=3',
     'scipy',
     'logutils',
     'sympy',
     'cerberus',
+    'PyYaml',
 ]
 
 test_requirements = [
