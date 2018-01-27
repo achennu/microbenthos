@@ -9,6 +9,36 @@ entity_schema: &entity_schema
     init_params:
         type: dict
 
+seed_norm: &seed_normal
+    dependencies:
+        profile: normal
+
+    schema:
+        loc:
+            type: physical_unit
+            like_unit: mm
+    #        required: true
+
+        scale:
+            type: physical_unit
+            like_unit: mm
+    #        min: 0
+
+        coeff:
+            type: [integer, float, physical_unit]
+
+seed_linear: &seed_linear
+    dependencies:
+        profile: linear
+
+    schema:
+
+        start:
+            type: [integer, float, physical_unit]
+
+        stop:
+            type: [integer, float, physical_unit]
+
 variables: &var_schema
     cls:
         <<: *cls_schema
@@ -42,6 +72,50 @@ variables: &var_schema
                     hasOld:
                         type: boolean
                         default: false
+
+            seed:
+                type: dict
+                schema:
+                    profile:
+                        type: string
+                        allowed: [linear, normal]
+                    params:
+#                        allow_unknown: true
+                        type: dict
+                        oneof:
+                            - *seed_normal
+                            - *seed_linear
+
+#                            - dependencies:
+#                                profile: linear
+#
+#                              schema:
+#                                start:
+#                                    type: [integer, float, physical_unit]
+#                                stop:
+#                                    type: [integer, float, physical_unit]
+#
+#                            - dependencies:
+#                                profile: normal
+#
+#                              schema:
+#                                loc:
+#                                    type: physical_unit
+#                                    like_unit: mm
+#                                    required: true
+#
+#                                scale:
+#                                    type: physical_unit
+#                                    like_unit: mm
+#                                    min: 0
+#
+#                                coeff:
+#                                    type: [integer, float, physical_unit]
+
+#                        schema:
+#                            anyof:
+#                              - *seed_norm
+#                              - *seed_linear
 
             constraints:
                 type: dict
@@ -169,12 +243,9 @@ microbes: &microbes_schema
 
                 processes: *process_schema
 
-eqnstoreterm: &eqn_store_schema
+eqn_term: &eqn_term_schema
     type: dict
     schema:
-        name:
-            type: string
-            required: true
         store:
             type: string
             model_store: store
@@ -182,6 +253,8 @@ eqnstoreterm: &eqn_store_schema
         coeff:
             type: [integer, float]
             default: 1
+
+
 
 
 
@@ -272,36 +345,43 @@ model_schema:
 
     equations:
         type: dict
-        required: true
 
         keyschema:
             type: string
             minlength: 3
 
         valueschema:
+            type: dict
             schema:
-                var:
-                    required: true
-                    <<: *eqn_store_schema
-
                 transient:
                     required: true
-                    type: dict
-                    schema:
-                        coeff:
-                            type: [integer, float]
-                            default: 1
+                    type: list
+                    items:
+                        - type: string
+                          model_store: store
+                        - type: [integer, float]
+                          default: 1
+                          forbidden: [0, 0.0]
 
                 diffusion:
-                     type: dict
-                     schema:
-                        coeff:
-                            schema: *process_valueschema
+                    type: list
+                    items:
+                        - type: string
+                          model_store: store
+                        - type: [integer, float]
+                          default: 1
+                          forbidden: [0, 0.0]
 
                 sources:
                     type: list
-                    nullable: true
-                    schema: *eqn_store_schema
+                    schema:
+                        type: list
+                        items:
+                            - type: string
+                              model_store: store
+                            - type: [integer, float]
+                              default: 1
+                              forbidden: [0, 0.0]
 
 
 

@@ -1,5 +1,6 @@
 import logging
 
+from fipy import TransientTerm, ImplicitDiffusionTerm, ImplicitSourceTerm, CellVariable
 from sympy import Lambda, symbols
 
 from microbenthos import Entity, ExprProcess
@@ -10,91 +11,164 @@ class MicroBenthosModel(object):
     Class that represents the model, as a container for all the entities in the domain
     """
 
-    def __init__(self, definition):
+    def __init__(self, domain = None):
         self.logger = logging.getLogger(__name__)
         self.logger.info('Initializing {}'.format(self.__class__.__name__))
 
-        self.logger.debug('Definition: {}'.format(definition.keys()))
-
-        required = set(('domain', 'environment'))
-        keys = set(definition.keys())
-        missing = required.difference(keys)
-        if missing:
-            self.logger.error('Required definition not found: {}'.format(missing))
-
-        self.domain = None
+        self._domain = None
         self.microbes = {}
         self.env = {}
+        self.full_eqn = None
+        self.source_exprs = {}
+        self.equations = {}
+        self.equation_defs = {}
+
+        self.domain = domain
+
+        from fipy import Variable
+        self.clocktime = Variable(0.0, unit='h', name='time')
+
+    def add_formula(self, name, variables, expr):
+        """
+        Add a formula to the model namespace
+
+        Example:
+            name = optimum_response
+            variables = (x, Ks, Ki)
+            expr = x / (x + Ks) / (1 + x/Ki)
+
+        Args:
+            name (str): Name of the formula
+            variables (list): Variables in the formula expression
+            expr (str): The expression to be parsed by sympy
+
+        Returns:
+
+        """
+        self.logger.info('Adding formula {!r}: {}'.format(name, expr))
+
+        func = Lambda(symbols(variables), expr)
+        self.logger.debug('Formula {!r}: {}'.format(name, func))
+        ExprProcess._sympy_ns[name] = func
+
+    @property
+    def domain(self):
+        """
+        The model domain
+        """
+        return self._domain
+
+    @domain.setter
+    def domain(self, domain):
+
+        if domain is None:
+            return
+
+        if self.domain is not None:
+            raise RuntimeError('Model domain has already been set!')
+
+        self._domain = domain
+
+    def create_entity_from(self, defdict):
+        """
+        Create a model entity from dictionary, and set it up with the model and domain.
+
+        Returns:
+            The entity created
+        """
+        self.logger.debug('Creating entity from {}'.format(defdict))
+        entity = Entity.from_dict(defdict)
+        entity.set_domain(self.domain)
+        entity.setup(model=self)
+        assert entity.check_domain()
+        return entity
+
+    def _create_entity_into(self, target, name, defdict):
+        """
+        Create an entity from its definition dictionary and store it into the target dictionary
+
+        Args:
+            target (str): Target dict such as env, microbes
+            name (str): The key for the dictionary
+            defdict (dict): Parameter definition of the entity
+
+        """
+        tdict = getattr(self, target)
+        if name in tdict:
+            self.logger.warning("Entity {!r} exists in {}! Overwriting!".format(name, target))
+        entity = self.create_entity_from(defdict)
+        self.logger.info('Adding {} entity {} = {}'.format(target, name, entity))
+        tdict[name] = entity
+
+    @classmethod
+    def from_definition(cls, definition):
+        """
+        Create a model instance from the definition dictionary
+
+        Returns:
+            instance of :class:`MicrobenthosModel`
+
+        """
+        logger = logging.getLogger(__name__)
+        logger.debug('Creating model from definition: {}'.format(definition.keys()))
+
+        logger.warning('Creating the domain')
+        domain_def = definition['domain']
+        logger.debug(domain_def)
+        domain = Entity.from_dict(domain_def)
+
+        instance = cls(domain=domain)
 
         # Load up the formula namespace
         if 'formulae' in definition:
-            formulae_ns = {}
-            self.logger.info('Creating formulae')
+            logger.warning('Creating formulae')
             for name, fdict in definition['formulae'].items():
-                func = Lambda(symbols(fdict['variables']), fdict['expr'])
-                self.logger.debug('Formula {!r}: {}'.format(name, func))
-                formulae_ns[name] = func
+                instance.add_formula(name, **fdict)
 
-            ExprProcess._sympy_ns.update(formulae_ns)
+        env_def = definition.get('environment')
+        if env_def:
+            logger.warning('Creating environment')
 
-        # Create the domain
-        self.logger.info('Creating the domain')
-        domain_def = definition['domain']
-        self.logger.debug(domain_def)
-        self.domain = Entity.from_dict(domain_def)
+            for name, pdict in env_def.items():
+                instance._create_entity_into('env', name, pdict)
 
-        # create the environment
-        env_def = definition['environment']
-        self.logger.info('Creating env: {}'.format(env_def.keys()))
-        for name, pdict in env_def.items():
-            self.logger.debug('Creating {}'.format(name))
-            entity = Entity.from_dict(pdict)
-            entity.set_domain(self.domain)
-            entity.setup()
-            self.env[name] = entity
-            self.logger.info('Env entity {} = {}'.format(name, entity))
-            assert entity.check_domain()
-
-        # create the microbes
         microbes_def = definition.get('microbes')
         if microbes_def:
-            self.logger.info('Creating microbes: {}'.format(microbes_def.keys()))
+            logger.warning('Creating microbes')
+
             for name, pdict in microbes_def.items():
-                self.logger.debug('Creating {}'.format(name))
-                entity = Entity.from_dict(pdict)
-                entity.set_domain(self.domain)
-                entity.setup()
-                self.microbes[name] = entity
-                self.logger.info('Microbes {} = {}'.format(name, entity))
+                instance._create_entity_into('microbes', name, pdict)
 
-        self.logger.warning("DEBUG: interpolating for oxy & h2s")
-        from fipy.tools import numerix
-        oxy = self.domain['oxy']
-        oxy.value = numerix.linspace(oxy.numericValue[0], oxy.numericValue[-1], len(oxy))
-        h2s = self.domain['h2s']
-        h2s.value = numerix.linspace(h2s.numericValue[0], h2s.numericValue[-1], len(h2s))
-        print('Set oxy: {}'.format(oxy))
-        print('Set h2s: {}'.format(h2s))
+        if not instance.all_entities_setup:
+            instance.entities_setup()
 
-        import matplotlib.pyplot as plt
-        fig, (ax1, ax2) = plt.subplots(figsize=(6, 8), ncols=2, sharey=True)
-        D = self.domain.depths.numericValue
-        ax1.plot(oxy.numericValue, D, label='oxy')
-        ax1.plot(h2s.numericValue, D, label='h2s')
-        ax1.set_ylim(ax1.get_ylim()[::-1])
-
-        # create equations
-        self.equations = {}
         eqndef = definition.get('equations')
-        for eqnname, eqndef in eqndef.items():
-            eqn = self.create_equation(eqnname, ax=ax2, D=D, **eqndef)
-            self.equations[eqnname] = eqn
+        if eqndef:
+            logger.warning('Creating equations')
+            for eqnname, eqndef in eqndef.items():
+                instance.add_equation(eqnname, **eqndef)
 
-        self._create_clock()
+        if instance.equations:
+            instance.create_full_equation()
 
-        ax1.legend(loc=0)
-        ax2.legend(loc=0)
-        plt.show(block=True)
+        logger.info('Model setup done')
+        return instance
+
+    def entities_setup(self):
+        """
+        Check that the model entities are setup fully, if not attempt it.
+        """
+        for entity in self.env.values() + self.microbes.values():
+            if not entity.is_setup:
+                self.logger.info('Setting up dangling entity: {!r}'.format(entity))
+                entity.setup(model=self)
+
+    @property
+    def all_entities_setup(self):
+        """
+        Flag that indicates if all entities have been setup
+        """
+        return all([e.is_setup for e in self.env.values() + self.microbes.values()])
 
     def snapshot(self, base = False):
         """
@@ -131,140 +205,166 @@ class MicroBenthosModel(object):
             ostate = obj.snapshot(base=base)
             microbes[name] = ostate
 
+        state['equations'] = self.equation_defs
+
         self.logger.info('Created model snapshot')
         return state
 
     __getstate__ = snapshot
 
-    def create_equation(self, name, ax, D, var, transient, sources, diffusion = None, ):
+    def add_equation(self, name, transient, sources = None, diffusion = None):
+        """
+        Create a transient equation for the model.
 
-        self.logger.info('Creating equation {!r}'.format(name))
-        self.logger.debug('transient: {}'.format(transient))
-        self.logger.debug('sources: {}'.format(sources))
-        self.logger.debug('diffusion: {}'.format(diffusion))
+        The term definitions are provided as `(model_path, coeff)` pairs to be created for the
+        transient term, diffusion term and source terms.
 
-        from fipy import TransientTerm, ImplicitDiffusionTerm, CellVariable
+        Args:
+            name (str): Identifier for the equation
+            transient (tuple): Single definition for transient term
+            sources (list): A list of definitions for source terms
+            diffusion (tuple): Single definition for diffusion term
 
-        var = self._get_eqn_obj(**var)
+        Returns:
+            an instance of a finalized :class:`ModelEquation`
 
-        if not isinstance(var, CellVariable):
-            raise RuntimeError('Var {!r} is {}, not CellVariable'.format(var, type(var)))
+        """
+        self.logger.debug(
+            'Creating equation for transient={}, diffusion={} and sources={}'.format(transient,
+                                                                                     diffusion,
+                                                                                     sources))
+        if name in self.equations:
+            raise RuntimeError('Equation with name {!r} already exists!'.format(name))
 
-        term_transient = TransientTerm(var=var, coeff=transient.get('coeff', 1.0))
-        self.logger.debug('Transient term: {}'.format(term_transient))
-
+        eqn = ModelEquation(self, *transient)
         if diffusion:
-            C = self._create_diffusion_coeff(**diffusion)
-            self.logger.warning('Diffusion coeff for {!r}: {}'.format(var, C))
-            term_diffusion = ImplicitDiffusionTerm(coeff=C, var=var)
-        else:
-            term_diffusion = None
+            eqn.add_diffusion_term_from(*diffusion)
 
-        self.logger.debug('Diffusion term: {}'.format(term_diffusion))
+        if sources:
+            for source_path, source_coeff in sources:
+                eqn.add_source_term_from(source_path, source_coeff)
 
-        source_terms = []
-        if term_diffusion is not None:
-            source_terms.append(term_diffusion)
+        eqn.finalize()
 
-        sources = sources or []
+        self.logger.info('Adding equation {!r}'.format(name))
+        self.equations[name] = eqn
+        # save definitions for snapshot
+        self.equation_defs[name] = dict(transient=transient, diffusion=diffusion, sources=sources)
 
-        for s in sources:
-            sterm = self._create_source_term(var=var, ax=ax, D=D, **s)
-            if sterm is not None:
-                source_terms.append(sterm)
+    def create_full_equation(self):
+        """
+        Create the full model equation by coupling the individual equations, and collect the
+        source expressions.
 
-        self.logger.debug('Equation with {} source terms'.format(len(source_terms)))
+        Returns: an equation solvable by fipy
+        """
+        if not self.equations:
+            raise RuntimeError('No equations available for model!')
 
-        eqn = term_transient == sum(source_terms)
-        self.logger.info('Final equation: {}'.format(eqn))
-        return eqn
+        self.logger.info('Creating full equation from {}'.format(self.equations.keys()))
 
-    def _create_diffusion_coeff(self, coeff):
-        self.logger.debug('Creating diffusion coeff from {}'.format(type(coeff)))
-        if isinstance(coeff, dict):
-            try:
-                coeff_ = Entity.from_dict(coeff)
-                coeff_.set_domain(self.domain)
-                return coeff_.evaluate()
-            except:
-                self.logger.error('Could not create diffusion coeff from dict', exc_info=True)
-                raise RuntimeError('Error creating diffusion coeff')
+        import operator
 
-        else:
-            raise NotImplementedError('Input of type {} for diffusion coeff'.format(type(coeff)))
+        full_eqn = reduce(operator.and_, [eqn.obj for eqn in self.equations.values()])
+        self.logger.info('Full model equation: {!r}'.format(full_eqn))
 
-    def _create_source_term(self, name, ax, D, store, var, **kwargs):
+        self.full_eqn = full_eqn
 
-        from fipy import ImplicitSourceTerm
+        self.logger.debug('Collecting unique source term expressions')
+        for eqn in self.equations.values():
 
-        self.logger.info('Creating source for {}.{}'.format(store, name))
+            for name, expr in eqn.source_exprs.items():
 
-        try:
-            sobj = self._get_eqn_obj(store, name)
-            if not isinstance(sobj, ExprProcess):
-                raise NotImplementedError('Source term from type {!r}'.format(type(sobj)))
+                if name not in self.source_exprs:
+                    self.source_exprs[name] = expr
 
-        except ValueError:
-            self.logger.warning('Found no source for {}.{}'.format(store, name))
-            return
+                else:
+                    old = self.source_exprs[name]
+                    if old is not expr:
+                        raise RuntimeError(
+                            'Another source with same name {!r} exists from different '
+                            'equation!'.format(
+                                name))
 
-        sterm = sobj.evaluate()
-        C = kwargs.get('coeff')
-        if C is not None:
-            sterm *= C
-        self.logger.debug('Created source term: {!r}'.format(sterm))
+    def _shorten_object_path(self, path):
+        """
+        Shorten a given string of model store path
 
-        dvars = sobj.dependent_vars()
-        ovars = dvars.difference(set([var.name]))
-        if ovars:
-            self.logger.debug('Making implicit because of other vars: {}'.format(ovars))
-            term_source = ImplicitSourceTerm(coeff=sterm, var=var)
-        else:
-            term_source = sterm
+        Converts:
+            * microbes.cyano.processes.oxyPS --> cyano.oxyPS
+            * microbes.csb.features.biomass --> csb.biomass
 
-        self.logger.debug('Created {!r} source: {!r}'.format(name, sterm))
-        self.logger.warning('sterm : {!r} = {}'.format(sterm, sterm()))
-        ax.plot(sterm.numericValue, D, label=name)
-        return term_source
+        Args:
+            path (str): the path to shorten
 
-    def _get_eqn_obj(self, store, name, **kwargs):
+        Returns:
+            The shortened path, or the path as is
+        """
+        parts = path.split('.')
+        if parts[0] == 'microbes':
+            if parts[2] in ('processes', 'features'):
+                return '{}.{}'.format(parts[1], parts[3])
 
-        self.logger.debug('Getting {!r} from {!r}'.format(name, store))
-        parts = store.split('.')
+        return path
+
+    def get_object(self, path):
+        """
+        Get an object stored in the model
+
+        Args:
+            path (str): The stored path for the object in the model
+
+        Returns:
+            The stored object if found
+
+        Raises:
+            ValueError if no object found at given path
+        """
+        self.logger.debug('Getting object {!r}'.format(path))
+        parts = path.split('.')
 
         S = self
         for p in parts:
-            # self.logger.debug('Getting {!r} from {}'.format(p, S))
+            self.logger.debug('Getting {!r} from {}'.format(p, S))
             S_ = getattr(S, p, None)
             if S_ is None:
                 try:
                     S = S[p]
                 except KeyError:
-                    raise ValueError('Unknown store {!r} for {!r}'.format(p, name))
+                    raise ValueError(
+                        'Unknown model path {!r}'.format('.'.join(parts[:parts.index(p)])))
             else:
                 S = S_
 
-        # self.logger.debug('Getting obj {!r} from store {!r}'.format(name, S))
-        obj = S[name]
+        obj = S
         self.logger.debug('Got obj: {!r}'.format(obj))
         return obj
 
     def update_time(self, clocktime):
+        """
+        Convenience function to update the time on all the stored entities
 
+        Args:
+            clocktime: The time of the model simulation clock
+
+        """
         for name, obj in self.env.items():
             obj.update_time(clocktime)
 
-
         for name, obj in self.microbes.items():
-           obj.update_time(clocktime)
+            obj.update_time(clocktime)
 
-    def _update_old(self):
+    def update_vars(self):
+        """
+        Update all stored variables which have an `hasOld` setting. This is used while sweeping
+        for solutions.
+        """
         from microbenthos import Variable
         for name, obj in self.env.items():
             if isinstance(obj, Variable):
                 try:
                     obj.var.updateOld()
-                    self.logger.info("Updated old: {!r}".format(obj.var))
+                    self.logger.debug("Updated old: {!r}".format(obj.var))
                 except AssertionError:
                     pass
         for name, microbe in self.microbes.items():
@@ -272,49 +372,218 @@ class MicroBenthosModel(object):
                 try:
                     if isinstance(feat, Variable):
                         feat.var.updateOld()
-                        self.logger.info("Updated old: {!r}".format(feat.var))
+                        self.logger.debug("Updated old: {!r}".format(feat.var))
                 except AssertionError:
                     pass
 
-    def _create_clock(self):
+
+class ModelEquation(object):
+    """
+    Class that handles the creation of partial differential equations for a transient variable of
+    the model
+    """
+
+    def __init__(self, model, varpath, coeff = 1):
         """
-        Create a temporal clock for the model
+        Initialize the model equation for a given variable
+
+        Args:
+            model (object): an instance of :class:`MicroBenthosModel`
+            varpath (str): Model path of the equation variable
+            coeff (int, float): the coefficient for the transient term
+        """
+        self.logger = logging.getLogger(__name__)
+        self.logger.debug('Initializing ModelEqn for: {!r}'.format(varpath))
+
+        getter = getattr(model, 'get_object', None)
+        if not callable(getter):
+            self.logger.error('Supplied model ({}) has no "get_object" method'.format(type(model)))
+            raise ValueError('Invalid model type supplied: {}'.format(type(model)))
+
+        self.model = model
+
+        var = self.model.get_object(varpath)
+        if not isinstance(var, CellVariable):
+            raise ValueError('Var {!r} is {}, not CellVariable'.format(varpath, type(var)))
+
+        self.varpath = varpath
+        self.var = var
+        self.varname = var.name
+        self.logger.debug('Found variable: {}'.format(self.var))
+
+        self._term_transient = None
+        self._term_diffusion = None
+        self.source_objs = {}
+        self.source_exprs = {}
+        self.source_terms = {}
+
+        self.obj = None
+        self.finalized = False
+
+        term = TransientTerm(var=self.var, coeff=coeff)
+        self.logger.debug('Created transient term with coeff: {}'.format(coeff))
+        self.term_transient = term
+
+    def __repr__(self):
+        return 'TransientEqn({})'.format(self.varname)
+
+    def finalize(self):
+        """
+        Call this to setup the equation object. Once this is called, no more terms can be added.
+
+        Raises:
+            RuntimeError: if no :attr:`term_transient` defined or no RHS terms defined
+        """
+        if self.finalized:
+            self.logger.warning('Equation already finalized')
+            return
+
+        if self.term_transient is None:
+            raise RuntimeError('Cannot finalize equation without transient term!')
+
+        RHS_terms = self.RHS_terms
+        if not RHS_terms:
+            raise RuntimeError('Cannot finalize equation without right-hand side terms')
+
+        self.obj = self.term_transient == sum(self.RHS_terms)
+        self.finalized = True
+        self.logger.info('Final equation: {}'.format(self.obj))
+
+    @property
+    def term_transient(self):
+        """
+        The transient term for the equation
 
         Returns:
+            Instance of :class:`fipy.TransientTerm`
         """
-        from fipy import Variable
-        self.clocktime = Variable(0.0, unit='h', name='clocktime')
-        self.clockstep = Variable(60, unit='s', name='dT')
+        return self._term_transient
 
-    def solve(self, run_time=10):
+    @term_transient.setter
+    def term_transient(self, term):
+        if self.term_transient is not None:
+            raise RuntimeError('Transient term has already been set!')
 
-        import operator
-        from fipy import PhysicalField
+        self._term_transient = term
+        self.logger.info('Transient term set: {}'.format(term))
 
-        coupled_eqn = reduce(operator.and_, self.equations.values())
-        # coupled_eqn = self.equations.values()[0]
-        self.logger.info('Full model equation: {!r}'.format(coupled_eqn))
+    def add_diffusion_term(self, coeff):
+        """
+        Add a linear diffusion term to the equation
 
-        run_time = PhysicalField(float(run_time), 'h')
-        steps = int(run_time/self.clockstep) + 1
+        Args:
+            coeff (int, float, term): Coefficient for diffusion term
 
-        RES_LIM = 1e-10
-        MAX_SWEEPS = 15
+        """
+        if self.finalized:
+            raise RuntimeError('Equation already finalized, cannot add terms')
 
-        self.logger.warning('Starting model simulation in {} steps of {}'.format(steps, self.clockstep))
+        term = ImplicitDiffusionTerm(var=self.var, coeff=coeff)
+        self.logger.debug('Created implicit diffusion term with coeff: {!r}'.format(coeff))
+        self.term_diffusion = term
 
-        for i in range(1, steps):
+    def add_diffusion_term_from(self, path, coeff):
+        """
+        Add diffusion term from the object path
 
-            self._update_old()
+        Args:
+            path (str): Path to model store
+            coeff (int, float): Multiplier coefficient for object
 
-            res = 1
-            nsweeps = 0
-            while (res > RES_LIM) and (nsweeps < MAX_SWEEPS):
-                res = coupled_eqn.sweep(dt=float(self.clockstep.numericValue))
-                nsweeps += 1
-                self.logger.info('Step {} sweeps {}  residual: {:.2g}'.format(i, nsweeps,
-                                                                              float(res)))
+        Returns:
+            Object stored on model store
 
-            self.clocktime.value += self.clockstep
-            self.logger.warning('Clock is now: {}'.format(self.clocktime))
-            self.update_time(self.clocktime)
+        Raises:
+            ValueError if object not found at path
+
+        """
+        self.logger.debug('Adding diffusion term from {!r}'.format(path))
+
+        obj = self.model.get_object(path)
+        expr = obj.evaluate()
+        self.add_diffusion_term(coeff=expr * coeff)
+
+    @property
+    def term_diffusion(self):
+        """
+        The diffusion term for the equation
+
+        Returns:
+            Instance of :class:`fipy.DiffusionTerm`
+        """
+        return self._term_diffusion
+
+    @term_diffusion.setter
+    def term_diffusion(self, term):
+        if self.term_diffusion is not None:
+            raise RuntimeError('Diffusion term has already been set!')
+
+        self._term_diffusion = term
+        self.logger.info('Diffusion term set: {}'.format(term))
+
+    def add_source_term_from(self, path, coeff = 1):
+        """
+        Add a source term from the model path
+
+        Args:
+            path (str): Path to model store
+            coeff (int, float): coeff for source expr object
+
+        Returns:
+            None
+
+        Raises:
+            ValueError if path does not point to an object
+        """
+        if self.finalized:
+            raise RuntimeError('Equation already finalized, cannot add terms')
+
+        self.logger.info('Adding source term from {!r}'.format(path))
+
+        if not isinstance(coeff, (int, float)):
+            raise ValueError('Source coeff should be int or float, not {}'.format(type(coeff)))
+
+        obj = self.model.get_object(path)
+        # this is an ExprProcess instance
+
+        # if not isinstance(obj, ExprProcess):
+        #     raise NotImplementedError('Source term from type: {!r}'.format(type(obj)))
+
+        expr = obj.evaluate()
+        self.logger.debug('Created source expr: {!r}'.format(expr))
+
+        if path in self.source_objs:
+            raise RuntimeError('Source path already exists: {!r}'.foramt(path))
+
+        self.source_objs[path] = obj
+        self.source_exprs[path] = expr
+
+        # check if it should be an implicit source
+
+        dvars = obj.dependent_vars()
+        ovars = dvars.difference({self.varname})
+        is_implicit = bool(ovars)
+        if is_implicit:
+            self.logger.debug('Making implicit because of other vars: {}'.format(ovars))
+            term = ImplicitSourceTerm(coeff=coeff * expr, var=self.var)
+
+        else:
+            term = coeff * expr
+
+        self.source_terms[path] = term
+        self.logger.info('Created source {!r}: {!r}'.format(path, term))
+
+    @property
+    def RHS_terms(self):
+        """
+        The right hand side terms of the equation
+
+        Returns:
+            A list of terms, with the first one being diffusion term
+        """
+        terms = []
+        if self.term_diffusion:
+            terms.append(self.term_diffusion)
+
+        terms.extend(self.source_terms.values())
+        return terms

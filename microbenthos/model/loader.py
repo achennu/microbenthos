@@ -4,6 +4,7 @@ import os
 import cerberus
 from fipy import PhysicalField
 from sympy import sympify, Symbol
+
 from .yaml_setup import yaml
 
 
@@ -113,7 +114,13 @@ class ModelSchemaValidator(cerberus.Validator):
 
     def _validate_model_store(self, jnk, field, value):
         """
-        Validate that the value of the field is like_store
+        Validate that the value of the field is a model store path
+
+        Value should be of type:
+            * domain.oxy
+            * env.oxy.var
+            * microbes.cyano.processes.oxyPS
+
         Args:
             unit:
             field:
@@ -127,43 +134,45 @@ class ModelSchemaValidator(cerberus.Validator):
         self.logger.debug('Validating model_store={} for field {!r}: {!r}'.format(
             jnk, field, value
             ))
-        if value in ('env', 'domain'):
-            return
 
-        elif value.startswith('microbes'):
+        if '.' not in value:
+            self._error(field, 'Model store should be a dotted path, not {}'.format(value))
+
+        parts = value.split('.')
+
+        if not all([len(p) for p in parts]):
+            self._error(field, 'Model store has empty path element: {}'.format(value))
+
+        if parts[0] not in ('env', 'domain', 'microbes'):
+            self._error(field, 'Model store root should be in (env, domain, microbes)')
+
+        if parts[0] in ('domain', 'env'):
+            pass
+
+        elif parts[0] == 'microbes':
             mtargets = ('features', 'processes')
-            parts = value.split('.')
 
-            try:
-                if len(parts) == 2:
-                    if (parts[0] == 'microbes') and (parts[-1] not in mtargets):
-                        return
-                    else:
-                        raise ValueError
+            if len(parts) < 4:
+                self._error(field, 'Microbes model store needs atleast 4 path elements')
 
-                elif len(parts) == 3:
-                    if (parts[0] == 'microbes') and (parts[1] not in mtargets) and \
-                            (parts[2] in mtargets):
-                        return
-                    else:
-                        raise ValueError
-
-            except ValueError:
-                self._error(field,
-                            'Microbes store must be of form "microbes.xyz" or "microbes.xyz.F" '
-                            'where F in (processes, fields). Invalid: {}'.format(
-                                value))
-
-        else:
-            self._error(field, 'Store must be "domain", "env" or "microbes" store, '
-                               'not {}'.format(value))
+            if parts[2] not in mtargets:
+                self._error(field, 'Microbes model store should be of type {}'.format(mtargets))
 
 
 def from_yaml(fpath, from_schema = None):
     logger = logging.getLogger(__name__)
+
     logger.info('Loading model from: {}'.format(fpath))
     with open(fpath) as fp:
         model_dict = yaml.load(fp)
+
+    return from_dict(model_dict, from_schema)
+
+
+def from_dict(model_dict, from_schema = None):
+    logger = logging.getLogger(__name__)
+
+    logger.info('Loading model from: {}'.format(model_dict.keys()))
 
     INBUILT = os.path.join(os.path.dirname(__file__), 'schema.yml')
     from_schema = from_schema or INBUILT
@@ -174,10 +183,13 @@ def from_yaml(fpath, from_schema = None):
     validator = ModelSchemaValidator()
 
     valid_model = validator.validated(model_dict, model_schema)
+
     if not valid_model:
+        logger.propagate = True
         logger.error('Model definition not validated!')
 
         logger.error(validator.errors)
+        # print('Errors: {!r}'.format(validator.errors))
 
         raise ValueError('Model definition improper!')
     else:
