@@ -12,6 +12,8 @@ from matplotlib import pyplot as plt
 
 domain = SedimentDBLDomain()
 
+DEPTHS = domain.depths.numericValue / 1e-6
+
 Irrad = Irradiance()
 print('Created {}'.format(Irrad))
 
@@ -65,28 +67,28 @@ print('NIR: {}'.format(Irrad.channels['nir']))
 
 fig, (ax1, ax2) = plt.subplots(ncols=2, figsize=(8,8), sharey=True)
 plt.axes(ax1)
-plt.plot(bmass.numericValue, domain.depths_um, 'r', label='biomass1')
-plt.plot(bmass2.numericValue, domain.depths_um, 'g', label='biomass1')
+plt.plot(bmass.numericValue, DEPTHS, 'r', label='biomass1')
+plt.plot(bmass2.numericValue, DEPTHS, 'g', label='biomass1')
 plt.ylim(*plt.ylim()[::-1])
 plt.legend()
 plt.ylabel('Depth (um)')
 plt.xlabel('Biomass')
 
 plt.twiny()
-plt.plot(par.attenuation_profile, domain.depths_um, 'k--', label='par_atten')
-plt.plot(nir.attenuation_profile, domain.depths_um, 'k:', label='nir_atten')
+plt.plot(par.attenuation_profile, DEPTHS, 'k--', label='par_atten')
+plt.plot(nir.attenuation_profile, DEPTHS, 'k:', label='nir_atten')
 plt.xscale('log')
 plt.xlabel('Attenuation')
 plt.legend()
 
 
 # CLOCKTIME.value = Irrad.clocktime_zenith
-Irrad.update_time(Irrad.clocktime_zenith)
+Irrad.update_time(Irrad.zenith_time)
 
 
 plt.axes(ax2)
-plt.plot(par.intensities.numericValue, domain.depths_um, 'k--', label='par')
-plt.plot(nir.intensities.numericValue, domain.depths_um, 'k:', label='nir')
+plt.plot(par.intensities.numericValue, DEPTHS, 'k--', label='par')
+plt.plot(nir.intensities.numericValue, DEPTHS, 'k:', label='nir')
 plt.axhline()
 # plt.xscale('log')
 plt.legend()

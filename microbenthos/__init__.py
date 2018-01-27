@@ -11,7 +11,7 @@ from .entity import Entity, DomainEntity, Variable
 from .irradiance import Irradiance
 from .process import Process, ExprProcess
 from .microbes import MicrobialGroup
-from .loader import from_yaml
+from .model import from_yaml, MicroBenthosModel
 
 
 def setup_console_logging(name=None, level=20):

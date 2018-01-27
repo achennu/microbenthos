@@ -1,11 +1,10 @@
 import importlib
-import inspect
 import logging
 
 from fipy import PhysicalField
 from fipy.tools import numerix
 
-from microbenthos.domain import SedimentDBLDomain
+from .utils.snapshotters import snapshot_var
 
 
 class Entity(object):
@@ -118,24 +117,30 @@ class Entity(object):
         """
         self.logger.debug('Updating {} for clocktime {}'.format(self, clocktime))
 
+    def snapshot(self):
+        """
+        Returns a snapshot of the entity's state
+
+        Returns:
+            Dictionary with keys: `data`, `metadata, where the value of each `data` entry is
+            either another such dictionary or a numeric array
+        """
+        raise NotImplementedError('Snapshot of entity {}'.format(self))
+
+    __getstate__ = snapshot
+
 
 class DomainEntity(Entity):
     """
-    A base class that represents entities in the microbenthic environment. This can be used to
+    A base class that represents entities in the microbenthic env. This can be used to
     subclass microbial groups, chemical reactions, or other parameters. The class provides a
     uniform interface to add the entity to the simulation domain and setup parameters and update
     according to the simulation clock.
     """
 
-    def __init__(self, domain_cls = SedimentDBLDomain, **kwargs):
+    def __init__(self, **kwargs):
 
         super(DomainEntity, self).__init__(**kwargs)
-
-        assert inspect.isclass(domain_cls), 'domain_cls should be a class! Got {}'.format(
-            type(domain_cls)
-            )
-        self.domain_cls = domain_cls
-
         self._domain = None
 
     @property
@@ -162,11 +167,6 @@ class DomainEntity(Entity):
             raise RuntimeError(
                 '{} already has a domain. Cannot set again!'.format(self))
 
-        if not isinstance(domain, self.domain_cls):
-            self.logger.warning('Domain must be an instance of {}, not {}'.format(
-                self.domain_cls.__name__, type(domain)))
-        # raise TypeError('Wrong domain type received!')
-
         self._domain = domain
         self.logger.debug('Added to domain: {}'.format(self))
         self.on_domain_set()
@@ -175,13 +175,13 @@ class DomainEntity(Entity):
         self.domain = domain
 
     def check_domain(self):
-        if self.domain is None:
-            raise RuntimeError('Domain required for setup')
-        return self.has_domain
+        if not self.has_domain:
+            raise RuntimeError('Domain required for setup of {}'.format(self))
+        return True
 
     @property
     def has_domain(self):
-        return isinstance(self.domain, self.domain_cls)
+        return self.domain is not None
 
     def on_domain_set(self):
         """
@@ -191,7 +191,7 @@ class DomainEntity(Entity):
 
         """
 
-    def setup(self):
+    def setup(self, **kwargs):
         """
         Method to set up the mat entity once a domain is available
 
@@ -200,7 +200,15 @@ class DomainEntity(Entity):
         To be overridden by subclasses
         """
         self.logger.debug('Setup empty: {}'.format(self))
-        # raise NotImplementedError('Setup of {}'.format(self.__class__.__name__))
+
+    @property
+    def is_setup(self):
+        """
+        A flag to indicate if an entity still needs setting up
+
+        Must be overriden by subclasses to be useful
+        """
+        return True
 
 
 class Variable(DomainEntity):
@@ -211,6 +219,7 @@ class Variable(DomainEntity):
 
     def __init__(self, name, create,
                  constraints = None,
+                 seed = None,
                  **kwargs):
         """
         Configure the creation of a variable and its boundary conditions
@@ -220,6 +229,7 @@ class Variable(DomainEntity):
             create (dict): parameters for variable creation (see :meth:`.create`)
             constraints (dict): Mapping of `location` to value of boundary condition
             through :meth:`.constrain`.
+            seed (dict): parameters to seed initial value of variable
             **kwargs:
         """
         self.logger = kwargs.get('logger') or logging.getLogger(__name__)
@@ -236,6 +246,8 @@ class Variable(DomainEntity):
 
         self.constraints = constraints or dict()
         self.check_constraints(self.constraints)
+
+        self.seed_params = seed or dict()
 
     def __repr__(self):
         return 'Var({})'.format(self.name)
@@ -290,7 +302,7 @@ class Variable(DomainEntity):
             except:
                 raise ValueError('Constraint should be single-valued, not {!r}'.format(val))
 
-    def setup(self):
+    def setup(self, **kwargs):
         """
         Once a domain is available, create the variable with the requested parameters and apply
         any constraints.
@@ -304,9 +316,14 @@ class Variable(DomainEntity):
 
         self.create(**self.create_params)
 
+        if self.seed_params:
+            self.seed(profile=self.seed_params['profile'], **self.seed_params['params'])
+            if self.create_params.get('hasOld'):
+                self.var.updateOld()
+
         self._LOCs = {
-            'top': [0],
-            'bottom': [-1],
+            'top': self.domain.mesh.facesLeft,
+            'bottom': self.domain.mesh.facesRight,
             'dbl': slice(0, self.domain.idx_surface),
             'sediment': slice(self.domain.idx_surface, None)
             }
@@ -319,7 +336,7 @@ class Variable(DomainEntity):
         for loc, value in dict(self.constraints).items():
             self.constrain(loc, value)
 
-    def create(self, value, unit = None, hasOld = False):
+    def create(self, value, unit = None, hasOld = False, **kwargs):
         """
         Create a :class:`~fipy.Variable` on the domain.
 
@@ -340,7 +357,8 @@ class Variable(DomainEntity):
         """
         self.logger.debug('Creating variable {!r} with unit {}'.format(self.name, unit))
 
-        self.var = self.domain.create_var(name=self.name, value=value, unit=unit, hasOld=hasOld)
+        self.var = self.domain.create_var(name=self.name, value=value, unit=unit, hasOld=hasOld,
+                                          **kwargs)
 
         return self.var
 
@@ -366,14 +384,19 @@ class Variable(DomainEntity):
             raise RuntimeError('Variable {} does not exist!'.format(self.name))
 
         self.logger.debug("Setting constraint for {!r}: {} = {}".format(self.var, loc, value))
-        mask = numerix.zeros(self.var.shape, dtype=bool)
 
-        try:
-            L = self._LOCs[loc]
-            self.logger.debug('Constraint mask loc: {}'.format(L))
-            mask[L] = 1
-        except KeyError:
-            raise ValueError('loc={} not in {}'.format(loc, tuple(self._LOCs.keys())))
+        if loc in ('top', 'bottom'):
+            mask = self._LOCs[loc]
+
+        else:
+            mask = numerix.zeros(self.var.shape, dtype=bool)
+
+            try:
+                L = self._LOCs[loc]
+                self.logger.debug('Constraint mask loc: {}'.format(L))
+                mask[L] = 1
+            except KeyError:
+                raise ValueError('loc={} not in {}'.format(loc, tuple(self._LOCs.keys())))
 
         if isinstance(value, PhysicalField):
             value = value.inUnitsOf(self.var.unit)
@@ -381,4 +404,104 @@ class Variable(DomainEntity):
             value = PhysicalField(value, self.var.unit)
 
         self.logger.info('Constraining {!r} at {} = {}'.format(self.var, loc, value))
+
         self.var.constrain(value, mask)
+
+    def seed(self, profile, **kwargs):
+        """
+        Seed the value of the variable based on the profile and parameters
+
+        Args:
+            profile (str): The type of profile to use
+            **kwargs: Parmeters for the profile
+
+        Returns:
+            None
+        """
+        PROFILES = ('linear', 'normal')
+
+        if profile not in PROFILES:
+            raise ValueError('Unknown profile {!r} not in {}'.format(profile, PROFILES))
+
+        if profile == 'normal':
+            from scipy.stats import norm
+            loc = kwargs['loc']
+            scale = kwargs['scale']
+            coeff = kwargs['coeff']
+
+            C = 1.0 / numerix.sqrt(2 * numerix.pi)
+
+            # loc and scale should be in units of the domain mesh
+            if hasattr(loc, 'unit'):
+                loc_ = loc.inUnitsOf(self.domain.depths.unit).value
+            else:
+                loc_ = loc
+
+            if hasattr(scale, 'unit'):
+                scale_ = scale.inUnitsOf(self.domain.depths.unit).value
+            else:
+                scale_ = scale
+
+            if hasattr(coeff, 'unit'):
+                # check if compatible with variable unit
+                try:
+                    c = coeff.inUnitsOf(self.var.unit)
+                except TypeError:
+                    self.logger.error('Coeff {!r} not compatible with variable unit {!r}'.format(coeff, self.var.unit.name()))
+                    raise ValueError('Incompatible unit of coefficient')
+
+            self.logger.info('Seeding with profile normal loc: {} scale: {} coeff: {}'.format(loc_, scale_, coeff))
+
+            normrv = norm(loc=loc_, scale=C**2*scale_)
+            val = coeff * normrv.pdf(self.domain.depths) * C * scale_
+
+            self.var.value = val
+
+        elif profile == 'linear':
+            start = kwargs['start']
+            stop = kwargs['stop']
+            N = self.var.shape[0]
+
+            if hasattr(start, 'unit'):
+                start_ = start.inUnitsOf(self.var.unit).value
+            else:
+                start_ = start
+
+            if hasattr(stop, 'unit'):
+                stop_ = stop.inUnitsOf(self.var.unit).value
+            else:
+                stop_ = stop
+
+            self.logger.info('Seeding with profile linear: start: {} stop: {}'.format(start_, stop_))
+
+            val = numerix.linspace(start_, stop_, N)
+            self.var.value = val
+
+        self.logger.debug('Seeded {!r} with {} profile'.format(self, profile))
+
+    def snapshot(self, base = False):
+        """
+        Returns a snapshot of the variable's state
+
+        Args:
+            base (bool): Convert to base units?
+
+        Returns:
+            Dictionary with keys:
+            * `data`: (numeric array, dict(unit))
+            *`metadata`: dict with variable info: constraints
+        """
+        self.logger.debug('Snapshot: {}'.format(self))
+
+        self.check_domain()
+
+        state = dict()
+
+        state['data'] = snapshot_var(self.var, base=base)
+
+        meta = state['metadata'] = {}
+        for cloc, cval in self.constraints.items():
+            key = 'constraint_{}'.format(cloc)
+            meta[key] = str(cval)
+
+        return state

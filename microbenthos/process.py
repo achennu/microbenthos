@@ -1,11 +1,14 @@
 import logging
+import operator
+from abc import ABCMeta, abstractmethod
 from collections import Mapping, OrderedDict
 
-import operator
+from fipy import PhysicalField
 from fipy.tools import numerix
-from microbenthos import DomainEntity
 from sympy import sympify, symbols, lambdify, Symbol, SympifyError
-from abc import ABCMeta, abstractmethod
+
+from microbenthos import DomainEntity
+from .utils.snapshotters import snapshot_var
 
 
 class Process(DomainEntity):
@@ -30,7 +33,7 @@ class Process(DomainEntity):
         pass
 
     @abstractmethod
-    def evaluate(self, D, P=None, full=True):
+    def evaluate(self, D, P = None, full = True):
         pass
 
 
@@ -44,7 +47,7 @@ class ExprProcess(Process):
     _lambdify_modules = (numerix, 'numpy')
     _sympy_ns = {}
 
-    def __init__(self, formula, varnames, params = None, responses = None,
+    def __init__(self, formula, varnames, params = None, responses = None, expected_unit = None,
                  **kwargs):
         """
         Create a process expressed by the formula, possibly containing subprocesses.
@@ -67,6 +70,7 @@ class ExprProcess(Process):
             symbols in the formula will be replaced during evaluation.
             responses: A mapping of {`name`: `params`} for any subprocesses of this process. The
             `params` must be a dict of the init arguments, for the same class.
+            expected_unit (str): The units the evaluation results should be compatible with
             sympy_ns: A namespace dict for sympification (see: :meth:`sympify` arg `locals`)
             **kwargs: passed to superclass
         """
@@ -103,11 +107,17 @@ class ExprProcess(Process):
         for k, v in responses.iteritems():
             self.add_response_from(k, **v)
 
+        self.expected_unit = expected_unit
+
         argsyms = [sympify(_) for _ in self.argnames]
         self.expr_func = self._lambdify(self.expr, argsyms)
 
+        self._evaled_domain = None
+        self._evaled_params = None
+        self._evaled = None
+
     def __repr__(self):
-        return 'Expr({},{}):Resp({})'.format(self.expr, self.vars, ','.join(self.responses.keys()))
+        return 'Proc[{},{}]:Resp[{}]'.format(self.expr, self.vars, ','.join(self.responses.keys()))
 
     def check_names(self, names):
         """
@@ -209,6 +219,10 @@ class ExprProcess(Process):
 
         self.add_response(name, response)
 
+    def on_domain_set(self):
+        for resp in self.responses.values():
+            resp.set_domain(self.domain)
+
     def _lambdify(self, expr, args):
         """
         Make a lambda function from the expression
@@ -246,17 +260,27 @@ class ExprProcess(Process):
 
         return exprfunc
 
-    def evaluate(self, domain = None, params = None, full=True):
+    def evaluate(self, domain = None, params = None, full = True):
         # TODO: Write good docstring here with examples
 
         if not domain:
+            self.check_domain()
             domain = self.domain
         if not params:
             params = self.params
 
+        if (domain is self._evaled_domain) and (params == self._evaled_params) and (
+                self._evaled is not None):
+            self.logger.debug('Returning cached evaluation in {}'.format(self))
+            return self._evaled
+
+        self.logger.debug('Evaluating {!r} on {!r}'.format(self.expr, domain))
+
         # collect the arguments
         varargs = [domain[_] for _ in self.varnames]
         pargs = [params[_] for _ in self.params]
+        # pargs = [_.inBaseUnits() if isinstance(_, PhysicalField) else _ for _ in pargs]
+
         args = varargs + pargs
         # follow the same order of the params ordered dict
 
@@ -271,6 +295,57 @@ class ExprProcess(Process):
                 resp_evals.append(response.evaluate(domain, params.get(resp_name, None)))
 
         if resp_evals:
-            return evaled * reduce(operator.mul, resp_evals)
+            evaled *= reduce(operator.mul, resp_evals)
+
+        self.logger.debug("Caching evaluate results")
+        self._evaled = evaled
+        self._evaled_domain = domain
+        self._evaled_params = params.copy()
+
+        return evaled
+
+    def snapshot(self, base = False):
+        """
+        Returns a snapshot of the Process's state
+
+        Args:
+            base (bool): Convert to base units?
+
+        Returns:
+            Dictionary with structure:
+                * `metadata`:
+                    * `formula`: str(:attr:`.expr`)
+                    * `varnames`: :attr:`.varnames`
+                    * `params`: (name, val) of :attr:`.params`
+                    * `dependent_vars`: :meth:`.dependent_vars()`
+
+                * `data`: (array of :meth:`.evaluate()`, dict(unit=unit)
+                * `responses`: snapshot of values in  :attr:`.responses`
+        """
+        self.check_domain()
+        self.logger.debug('Snapshot: {}'.format(self))
+
+        state = dict()
+        meta = state['metadata'] = {}
+        meta['formula'] = str(self.expr)
+        meta['varnames'] = self.varnames
+        meta['dependent_vars'] = tuple(self.dependent_vars())
+        meta['expected_unit'] = self.expected_unit
+        meta['param_names'] = tuple(self.params.keys())
+
+        for p, pval in self.params.items():
+            meta[p] = str(pval)
+
+        evaled = self.evaluate()
+
+        if hasattr(evaled, 'unit'):
+            state['data'] = snapshot_var(evaled, base=base, to_unit=self.expected_unit)
+
         else:
-            return evaled
+            state['data'] = snapshot_var(evaled, base=base)
+
+        responses = state['responses'] = {}
+        for resp, respobj in self.responses.items():
+            responses[resp] = respobj.snapshot()
+
+        return state

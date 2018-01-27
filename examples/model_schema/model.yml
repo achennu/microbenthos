@@ -1,9 +1,9 @@
 domain:
     cls: SedimentDBLDomain
     init_params:
-        cell_size: !unit 100 mum
+        cell_size: !unit 50 mum
         sediment_length: !unit 10 mm
-        dbl_length: !unit 1 mm
+        dbl_length: !unit 2 mm
         porosity: 0.6
 
 
@@ -15,11 +15,17 @@ environment:
             name: oxy
             create:
                 hasOld: true
-                value: !unit 0.0 mol/l
+                value: !unit 0.0 mol/m**3
 
             constraints:
-                top: !unit 0.2e-3 mol/l
-                bottom: !unit 0 mol/l
+                top: &oxy_top !unit 1e-12 mol/l
+                bottom: &oxy_bottom !unit 0 mol/l
+
+            seed:
+                profile: linear
+                params:
+                    start: *oxy_top
+                    stop: *oxy_bottom
 
     h2s:
         cls: Variable
@@ -27,45 +33,95 @@ environment:
             name: h2s
             create:
                 hasOld: true
-                value: !unit 0.0 mol/l
+                value: !unit 0.0 mol/m**3
 
             constraints:
-                top: !unit 0.0 mol/l
-                bottom: !unit 1e-3 mol/l
+                top: &h2s_top !unit 0 mol/l
+                bottom: &h2s_bottom !unit 1e-3 mol/l
+
+            seed:
+                profile: linear
+                params:
+                    start: *h2s_top
+                    stop: *h2s_bottom
+
+    D0_h2s:
+        cls: Variable
+        init_params:
+            name: D0_h2s
+            create:
+                value: !unit 8.3333e-10 m**2/s
+
+    D_h2s:
+        cls: ExprProcess
+        init_params:
+            formula: porosity * D0_h2s
+            varnames:
+                - porosity
+                - D0_h2s
+
+    D0_oxy:
+        cls: Variable
+        init_params:
+            name: D0_oxy
+            create:
+                value: !unit 1.3888e-9 m**2/s
+
+    D_oxy:
+        cls: ExprProcess
+        init_params:
+            formula: porosity * D0_oxy
+            varnames:
+                - porosity
+                - D0_oxy
+
+
 
 
     irradiance:
         cls: Irradiance
         init_params:
-            hours_total: 24
-            day_fraction: 0.3
+            hours_total: 5
+            day_fraction: 0.5
 
-        channels:
-            - name: par
-              k0: !unit 15.3 1/cm
-              k_mods:
-                - [cyano, 6523]
-                - [cyano, 65253]
-                - [cyano, !unit 125 g/mm**3]
+            channels:
+                - name: par
+                  k0: !unit 15.3 1/cm
+                  k_mods:
+                    - [microbes.cyano.biomass, !unit 7687.5 cm**2/g]
+
+                - name: nir
+                  k0: !unit 11.2 1/cm
 
 
-    abiotic_h2s_oxidation:
+    abio_sulfoxid:
         cls: ExprProcess
         init_params:
-            formula: porosity * k * oxy**2 * h2s
-            varnames: ['oxy', 'h2s', 'porosity']
+            formula: porosity * k * oxy**2 * h2s * sed_mask
+            varnames: ['oxy', 'h2s', 'porosity', 'sed_mask']
             params:
-                k: !unit '70 1/((10**-3)*mol/l)**2/h'
+                k: !unit '-70e6 l**2/mol**2/h'
+            expected_unit: 'mol/l/h'
+
+    aero_respire:
+        cls: ExprProcess
+        init_params:
+            formula: Vmax * porosity * sed_mask
+            varnames:
+                - porosity
+                - sed_mask
+            expected_unit: 'mol/l/h'
+            params:
+                Vmax: !unit -1e-2 mol/l/h
             responses:
-                optimum(par):
+                saturate(oxy):
                     cls: ExprProcess
                     init_params:
-                        formula: optimum_response(par, Ks, Ki)
+                        formula: saturation_response(oxy, Km)
                         varnames:
-                            - par
+                            - oxy
                         params:
-                            Ks: 1
-                            Ki: 10
+                            Km: !unit 1e-5 mol/l
 
 
 microbes:
@@ -77,25 +133,29 @@ microbes:
                     init_params:
                         name: biomass
                         create:
-                            value: !unit 0.0 g/cm**3
+                            value: !unit 0 mg/cm**3
+                        seed:
+                            profile: normal
+                            params:
+                                loc: !unit 1 mm
+                                scale: !unit 2 mm
+                                coeff: !unit 12 mg/cm**3
 
-                        constraints:
-                            dbl: !unit 0 g/cm**3
-
-                BChla:
+                chla:
                     init_params:
-                        name: BChla
+                        name: chla
                         create:
                             value: !unit 0.0 g/cm**3
 
             processes:
                 oxyPS:
                     init_params:
-                        formula: Qmax * biomass
+                        formula: Qmax * biomass * sed_mask
                         varnames:
                             - biomass
+                            - sed_mask
                         params:
-                            Qmax: !unit "0.00841 mol/g/h"
+                            Qmax: !unit 0.00841 mol/g/h
 
                         responses:
                             optimum(par):
@@ -108,7 +168,7 @@ microbes:
                                         Ks: 1
                                         Ki: 10
 
-                            optimum(oxy):
+                            inhibit(oxy):
                                 cls: ExprProcess
                                 init_params:
                                     formula: inhibition_response(oxy, Kmax, Khalf)
@@ -117,6 +177,127 @@ microbes:
                                     params:
                                         Kmax: !unit "0.8e-3 mol/l"
                                         Khalf: !unit "0.7e-3 mol/l"
+
+                            inhibit(h2s):
+                                init_params:
+                                    formula: inhibition_response(h2s, Kmax, Khalf)
+                                    varnames:
+                                        - h2s
+                                    params:
+                                        Kmax: !unit "0.35e-3 mol/l"
+                                        Khalf: !unit "0.3e-3 mol/l"
+
+                anoxyPS:
+                    init_params:
+                        formula: Qmax * biomass * sed_mask
+                        varnames:
+                            - biomass
+                            - sed_mask
+                        params:
+                            Qmax: !unit -0.0012 mol/g/h
+
+                        responses:
+                            optimum(par):
+                                cls: ExprProcess
+                                init_params:
+                                    formula: optimum_response(par, Ks, Ki)
+                                    varnames:
+                                        - par
+                                    params:
+                                        Ks: 1
+                                        Ki: 10
+
+                            optimum(h2s):
+                                cls: ExprProcess
+                                init_params:
+                                    formula: optimum_response(h2s, Ks, Ki)
+                                    varnames:
+                                        - h2s
+                                    params:
+                                        Ks: !unit 900e-6 mol/l
+                                        Ki: !unit 3e-3 mol/l
+
+                respire:
+                    init_params:
+                        formula: Qmax * biomass * sed_mask
+                        varnames:
+                            - biomass
+                            - sed_mask
+                        params:
+                            Qmax: !unit -0.000199e-6 mol/g/h
+
+                        responses:
+                            saturate(oxy):
+                                init_params:
+                                    formula: saturation_response(oxy, Km)
+                                    varnames:
+                                        - oxy
+                                    params:
+                                        Km: !unit 1e-6 mol/l
+
+#                chla_synth:
+#                    init_params:
+#                        formula: G * biomass
+#                        varnames: [biomass]
+#                        expected_unit: mug/cm**3/h
+#                        params:
+#                            G: !unit 0.002 1/h
+#
+#                        responses:
+#                            synthesis(chla, biomass, oxy):
+#                                init_params:
+#                                    formula: (oxy < oxy_thresh) & (chla/biomass < chla_max)
+#                                    varnames:
+#                                        - chla
+#                                        - biomass
+#                                        - oxy
+#                                    params:
+#                                        oxy_thresh: !unit 1e-9 mol/l
+#                                        chla_max:  0.003
+
+    csb:
+        init_params:
+            name: csb
+            features:
+                biomass:
+                    init_params:
+                        name: biomass
+                        create:
+                            value: !unit 0.0 g/cm**3
+                        seed:
+                            profile: normal
+                            params:
+                                loc: !unit 2 mm
+                                scale: !unit 3 mm
+                                coeff: !unit 6 mg/cm**3
+
+            processes:
+                sulfoxid:
+                    init_params:
+                        formula: biomass * Qmax * sed_mask
+                        varnames:
+                            - biomass
+                            - sed_mask
+                        params:
+                            Qmax: !unit -1 mol/g/h
+
+                        responses:
+                            saturate(oxy):
+                                init_params:
+                                    formula: saturation_response(oxy, Km)
+                                    varnames:
+                                        - oxy
+                                    params:
+                                        Km: !unit 1e-6 mol/l
+
+                            saturate(h2s):
+                                init_params:
+                                    formula: saturation_response(h2s, Km)
+                                    varnames:
+                                        - h2s
+                                    params:
+                                        Km: !unit 0.7e-6 mol/l
+
 
 formulae:
     optimum_response:
@@ -129,5 +310,34 @@ formulae:
         expr: (Kmax - x) / (2*Kmax - Khalf - x) * (x < Kmax)
 
     saturation_response:
-        variables: [x, Ks]
-        expr: x / (Ks + x)
+        variables: [x, Km]
+        expr: x / (Km + x)
+
+
+equations:
+    oxyEqn:
+        transient: [domain.oxy, 1]
+        diffusion: [env.D_oxy, 1]
+
+        sources:
+            - [env.abio_sulfoxid, 2.0]
+
+            - [env.aero_respire, 1]
+
+            - [microbes.cyano.processes.oxyPS, 1]
+
+            - [microbes.cyano.processes.respire, 1]
+
+            - [microbes.csb.processes.sulfoxid, 0.3233]
+
+    h2sEqn:
+        transient: [domain.h2s, 1]
+        diffusion: [env.D_h2s, 1]
+
+        sources:
+            - [env.abio_sulfoxid, 1]
+
+            - [microbes.cyano.processes.anoxyPS, 1]
+
+            - [microbes.csb.processes.sulfoxid, 0.18]
+

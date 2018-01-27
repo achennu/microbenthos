@@ -44,10 +44,10 @@ formulae:
 
 """
 
-from microbenthos.loader.yaml_loader import yaml
+import yaml
 from pprint import pprint
-from microbenthos.exprs import ExprProcess
-from microbenthos.base import Entity
+from microbenthos import ExprProcess, Entity
+
 
 PDICT = yaml.load(PROCESS)
 pprint(PDICT)

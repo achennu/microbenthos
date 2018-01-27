@@ -2,8 +2,12 @@ import pytest
 from sympy import sympify
 import copy
 
-from microbenthos import Process, ExprProcess
+from fipy.tools import numerix
+from microbenthos import Process, ExprProcess, SedimentDBLDomain
 
+@pytest.fixture()
+def domain():
+    return SedimentDBLDomain()
 
 def test_process_base_init():
     with pytest.raises(TypeError):
@@ -11,6 +15,7 @@ def test_process_base_init():
 
 
 class TestExprProcess:
+
     def test_init_empty(self):
         with pytest.raises(TypeError):
             ExprProcess()
@@ -80,26 +85,37 @@ def pytest_generate_tests(metafunc):
 class TestExprInputs:
     scenarios = GOODS.items() + BADS.items()
 
-    def test_creation(self, case, params):
+    def test_creation_and_snapshot(self, case, params, domain):
 
         expected_error = params.pop('expect_err', None)
         if expected_error:
             with pytest.raises(expected_error):
                 proc = ExprProcess(**params)
-                assert proc.expr == sympify(params['formula'])
 
         else:
             proc = ExprProcess(**params)
             assert proc.expr == sympify(params['formula'])
 
+            # create variables on domain
+            varnames = params['varnames']
+            for v in varnames:
+                domain.create_var(v, value=5)
 
-        # if case in BADS:
-        #     with pytest.raises(ValueError):
-        #         proc = ExprProcess(**params)
-        #
-        # elif case in GOODS:
-        #     proc = ExprProcess(**params)
-        #     assert proc.expr == sympify(params['formula'])
+            proc = ExprProcess(**params)
+            proc.set_domain(domain)
+            proc.setup()
+            state = proc.snapshot()
 
+            statekeys = ('metadata', 'data', 'responses')
+            assert set(statekeys) == set(state)
 
-    # def test_expr(self):
+            metakeys = ('formula', 'varnames', 'dependent_vars', 'expected_unit', 'param_names') + \
+                       tuple(
+                proc.params.keys())
+            assert set(metakeys) == set(state['metadata'])
+
+            respkeys = proc.responses.keys()
+            assert set(respkeys) == set(state['responses'])
+
+            assert state['data'][1]['unit'] == proc.evaluate().unit.name()
+            assert numerix.allclose(state['data'][0], proc.evaluate(domain=domain))

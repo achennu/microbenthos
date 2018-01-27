@@ -2,7 +2,7 @@ from __future__ import division
 
 import logging
 
-from fipy import PhysicalField
+from fipy import PhysicalField, Variable
 from fipy.tools import numerix
 from scipy.stats import cosine
 
@@ -10,13 +10,14 @@ from microbenthos import DomainEntity
 
 
 class Irradiance(DomainEntity):
-    def __init__(self, hours_total = 24, day_fraction = 0.5, **kwargs):
+    def __init__(self, hours_total = 24, day_fraction = 0.5, channels = None, **kwargs):
         """
         Entity to implement irradiance through the sediment column
 
         Args:
             hours_total (int, float): Number of hours in the day
             day_fraction (float): Fraction of daylength which is illuminated
+            See :meth:`.create_channel` for information on the `channels` argument.
             **kwargs: passed to superclass
         """
         self.logger = kwargs.get('logger') or logging.getLogger(__name__)
@@ -26,7 +27,7 @@ class Irradiance(DomainEntity):
         self.channels = {}
 
         self.hours_total = PhysicalField(hours_total, 'h')
-        if not (4 < self.hours_total.value < 48):
+        if not (4 <= self.hours_total.value <= 48):
             raise ValueError('Hours total {} should be between (4, 48)'.format(self.hours_total))
         day_fraction = float(day_fraction)
         if not (0 < day_fraction < 1):
@@ -34,44 +35,49 @@ class Irradiance(DomainEntity):
 
         self.day_fraction = day_fraction
         self.hours_day = day_fraction * self.hours_total
-        self.clocktime_zenith = self.hours_day
-        self.max_level = 100
+        self.zenith_time = self.hours_day
+        self.zenith_level = 100
 
         C = 1.0 / numerix.sqrt(2 * numerix.pi)
         # to scale the cosine distribution from 0 to 1 (at zenith)
         self._profile = cosine(
-            loc=self.clocktime_zenith, scale=C ** 2 * self.hours_day)
+            loc=self.zenith_time, scale=C ** 2 * self.hours_day)
         # This profile with loc=zenith means that the day starts at "midnight" and zenith occurs
         # in the center of the daylength
+
+        self.surface_irrad = None
+
+        if channels:
+            for chinfo in channels:
+                self.create_channel(**chinfo)
 
         self.logger.debug('Created Irradiance: {}'.format(self))
 
     def __repr__(self):
         # return '{}(total={},day={:.1f},zenith={:.1f)'.format(self.name, self.hours_total,
-        #                                                  self.hours_day, self.clocktime_zenith)
+        #                                                  self.hours_day, self.zenith_time)
         return 'Irradiance(total={},{})'.format(self.hours_total, '+'.join(self.channels))
 
-    def setup(self, channels = None):
+    def setup(self, **kwargs):
         """
-        When a domain is added, the attenuation channels can be setup
-
-        See :meth:`.create_channel` for information on the `channels` argument.
-        Returns:
+        When a domain is added, the attenuation for the channels can be setup
         """
         self.check_domain()
+        model = kwargs.get('model')
 
-        self.surface_irrad = self.domain.create_var('irrad_surface', value=0.0)
-
-        if channels:
-            for chname, chinfo in channels.iteritems():
-                self.create_channel(chname, **chinfo)
+        if self.surface_irrad is None:
+            self.surface_irrad = Variable(name='irrad_surface', value=0.0, unit=None)
 
         for channel in self.channels.itervalues():
             if not channel.has_domain:
                 channel.domain = self.domain
-            channel.setup()
+            channel.setup(model=model)
 
-    def create_channel(self, name, k0 = 0, k_mods = None):
+    @property
+    def is_setup(self):
+        return all([c.is_setup for c in self.channels.values()])
+
+    def create_channel(self, name, k0 = 0, k_mods = None, model=None):
         """
         Add a channel of irradiance, such as PAR or NIR
 
@@ -93,7 +99,7 @@ class Irradiance(DomainEntity):
 
         if self.has_domain:
             channel.domain = self.domain
-            channel.setup()
+            channel.setup(model=model)
 
         return channel
 
@@ -117,7 +123,7 @@ class Irradiance(DomainEntity):
         # logger.debug('Profile level for clocktime {}: {}'.format(
         #     clocktime, self._profile.pdf(clocktime_)))
 
-        surface_value = self.max_level * self.hours_day.numericValue / 2 * \
+        surface_value = self.zenith_level * self.hours_day.numericValue / 2 * \
                         self._profile.pdf(clocktime_)
 
         self.surface_irrad.value = surface_value
@@ -125,7 +131,43 @@ class Irradiance(DomainEntity):
                                                                               self.surface_irrad))
 
         for channel in self.channels.itervalues():
+            #: TODO: remove explicit calling by using Variable?
             channel.update_intensities(self.surface_irrad)
+
+    def snapshot(self, base=False):
+        """
+        Returns a snapshot of the Irradiance's state
+
+        Args:
+            base (bool): Convert to base units?
+
+        Returns:
+            Dictionary with structure:
+                * `metadata`:
+                    * `hours_total`
+                    * `day_fraction`
+                    * `zenith_time`
+                    * `zenith_level`
+
+                * `channels`:
+                    `channel_name`: snapshot of :class:`IrradianceChannel`
+        """
+        self.logger.debug('Snapshot: {}'.format(self))
+        self.check_domain()
+
+        state = dict()
+
+        meta = state['metadata'] = {}
+        meta['hours_total'] = str(self.hours_total)
+        meta['day_fraction'] = self.day_fraction
+        meta['zenith_time'] = str(self.zenith_time)
+        meta['zenith_level'] = self.zenith_level
+
+        channels = state['channels'] = {}
+        for ch, chobj in self.channels.items():
+            channels[ch] = chobj.snapshot(base=base)
+
+        return state
 
 
 class IrradianceChannel(DomainEntity):
@@ -163,25 +205,27 @@ class IrradianceChannel(DomainEntity):
     def __repr__(self):
         return '{}:{!r}'.format(self.name, self.k_var)
 
-    def setup(self, k_mods = None):
+    def setup(self, **kwargs):
         """
         Define attenuations when domain is available
+
+        Args:
+            model (object): The model object to perform object lookups on if necessary. This
+            object should have a callable :meth:`get_object(path)`
         Returns:
 
         """
         self.check_domain()
+        model = kwargs.get('model')
 
         if self.intensities is None:
             self.intensities = self.domain.create_var(self.name)
 
             self.define_attenuation()
 
-        if k_mods:
-            self.k_mods.extend(k_mods)
-
         for source in self.k_mods:
             var, coeff = source
-            self.add_attenuation_source(var=var, coeff=coeff)
+            self.add_attenuation_source(var=var, coeff=coeff, model=model)
 
     @property
     def k_name(self):
@@ -191,22 +235,26 @@ class IrradianceChannel(DomainEntity):
         """
         Create the attenuation variable for the channel
         """
-        if self.k_name not in self.domain.VARS:
-            k_var = self.domain.create_var(self.k_name, value=self.k0.value,
-                                           unit=self.k0.unit)
+        assert hasattr(self.k0, 'unit'), 'k0 should have attribute unit'
+        if self.k_name not in self.domain:
+            k_var = self.domain.create_var(self.k_name, value=self.k0, store=False)
             k_var[:self.domain.idx_surface] = 0
             self.k_var = k_var
 
-    def add_attenuation_source(self, var, coeff):
+    def add_attenuation_source(self, var, coeff, model=None):
         """
         Add an extra source of attenuation to this channel, for example through biomass that
         attenuates light intensity
 
         The term `var * coeff` should have dimensions of 1/length
 
+        `var` should be a string like "csb_biomass" in which case it is looked up from the
+        domain, else it can be a model reference such as "microbes.cyano.biomass".
+
         Args:
-            var (str): The domain variable for the source
+            var (str): The name for the variable as attenuation source
             coeff: The coefficient to multiply with
+            model (object): The model object to perform object lookups on if necessary.
 
         Returns:
 
@@ -215,7 +263,20 @@ class IrradianceChannel(DomainEntity):
         if var in self._mods_added:
             raise RuntimeError('attenuation source {} already added!')
 
-        atten_source = self.domain.VARS[var] * coeff
+        if '.' in var:
+            # this is a model object like: microbes.cyano.biomass
+            if model is None:
+                self.logger.warning("Attenuation source {} needs model, but is None".format(var))
+                return
+            else:
+                try:
+                    atten_source = model.get_object(var) * coeff
+                except ValueError:
+                    self.logger.error('Could not find attenuation source: {!r}'.format(var))
+                    return
+        else:
+            atten_source = self.domain[var] * coeff
+
         try:
             atten_source.inUnitsOf('1/m')
         except TypeError:
@@ -224,7 +285,16 @@ class IrradianceChannel(DomainEntity):
 
         self.k_var += atten_source
         self._mods_added[var] = atten_source
-        self.logger.info('Added attenuation source from {!r} and coeff={}'.format(var, coeff))
+        self.logger.info('Added attenuation source {!r} and coeff={}'.format(var, coeff))
+
+    @property
+    def is_setup(self):
+        pending = set([k[0] for k in self.k_mods]).difference(set(self._mods_added))
+        if pending:
+            self.logger.warning('Attenuation sources for {!r} still pending: {}'.format(
+                self,
+                pending))
+        return not bool(len(pending))
 
     @property
     def attenuation_profile(self):
@@ -235,6 +305,9 @@ class IrradianceChannel(DomainEntity):
         allowing this to be multiplied by a surface value to get the irradiance profile.
 
         """
+        if not self.is_setup:
+            self.logger.warning('Attenuation definition may be incomplete!')
+
         return numerix.cumprod(numerix.exp(-1 * self.k_var * self.domain.distances))
 
     def update_intensities(self, surface_level):
@@ -251,3 +324,47 @@ class IrradianceChannel(DomainEntity):
         intensities = self.attenuation_profile * surface_level
         self.intensities.value = intensities
         return intensities
+
+    def snapshot(self, base=False):
+        """
+        Returns a snapshot of the channel's state
+
+        Args:
+            base (bool): Convert to base units?
+
+        Returns:
+            Dictionary with structure:
+            * `attenuation`:
+                * `data`: (:attr:`.k_var`, dict(unit=unit))
+                * `metadata`:
+                    * dict of (`varname`, `coeff`)
+
+            * `intensity`:
+                * `data`: (:attr:`.intensities`, dict(unit=unit))
+                *  `metadata`:
+                    * unit: physical unit
+
+            *`metadata`:
+                * k0 for channel
+        """
+        self.logger.debug('Snapshot: {}'.format(self))
+
+        self.check_domain()
+        from .utils.snapshotters import snapshot_var
+
+        state = dict(
+            metadata = dict()
+            )
+        meta = state['metadata']
+        meta['k0'] = str(self.k0)
+
+        atten = state['attenuation'] = {}
+        ameta = atten['metadata'] = {}
+        for varname, val in self.k_mods:
+            ameta[varname] = str(val)
+        atten['data'] = snapshot_var(self.k_var, base=base)
+
+        inten = state['intensity'] = {}
+        inten['data'] = snapshot_var(self.intensities, base=base)
+
+        return state

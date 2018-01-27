@@ -1,5 +1,7 @@
-import pytest
 import copy
+
+import pytest
+
 from microbenthos import MicrobialGroup, SedimentDBLDomain
 
 VARdict = dict(
@@ -14,8 +16,9 @@ VARdict2['init_params']['name'] = 'abcd'
 PROCdict = dict(
     cls='ExprProcess',
     init_params=dict(
-        formula='a',
-        varnames=['a']
+        formula='a**2 * biomass',
+        varnames=['biomass'],
+        params = dict(a=3)
         )
     )
 
@@ -71,7 +74,7 @@ class TestMicrobialGroup:
                 dict(biomass=VARdict.copy(),
                      another=VARdict.copy()),
                 None,
-                RuntimeError),
+                None),
             (
                 dict(biomass=VARdict.copy(),
                      another=VARdict2.copy()),
@@ -83,6 +86,8 @@ class TestMicrobialGroup:
              ]
         )
     def test_setup(self, features, processes, err):
+        # Test that for microbes, the feature variables are not stored on the domain
+        # Also multiple features with same variable name will not raise an error
 
         domain = SedimentDBLDomain()
 
@@ -92,8 +97,54 @@ class TestMicrobialGroup:
         if err is None:
             m.setup()
             for feat in m.features.values():
-                assert feat.name in domain.VARS
+                assert feat.name not in domain
+                assert feat.name in m
+
+            for fname, fdict in features.items():
+                vname = fdict['init_params']['name']
+                assert vname in m
+                if fname != vname:
+                    assert fname not in m
+                    assert fname in m.features
 
         else:
             with pytest.raises(err):
                 m.setup()
+
+    @pytest.mark.parametrize('features', [
+        dict(biomass=VARdict.copy()),
+        (dict(biomass=VARdict.copy(), pigment=VARdict2.copy())),
+        ],
+                             ids=('1feat', '2feat')
+                             )
+    @pytest.mark.parametrize('processes',
+                            [
+                                dict(proc1=PROCdict.copy()),
+                                dict(proc1=PROCdict.copy(),
+                                     proc2=PROCdict.copy()
+                                     ),
+                                ],
+                            ids=('1proc', '2proc')
+                            )
+    def test_snapshot(self, features, processes):
+
+        domain = SedimentDBLDomain()
+        domain.create_var('biomass', value=1, unit='mg/cm**3')
+
+
+        m = MicrobialGroup('bugs', features=features, processes=processes)
+        m.set_domain(domain)
+        m.setup()
+
+        state = m.snapshot()
+
+        statekeys = ('metadata', 'features', 'processes')
+        assert set(statekeys) == set(state.keys())
+
+        featkeys = set(m.features)
+        assert featkeys == set(state['features'])
+
+        prockeys = set(m.processes)
+        assert prockeys == set(state['processes'])
+
+
