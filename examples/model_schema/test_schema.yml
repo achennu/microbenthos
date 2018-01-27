@@ -1,0 +1,60 @@
+
+entity_schema: &entity_schema
+    cls:
+        type: importpath
+        required: true
+
+    init_params:
+        type: dict
+
+irradiance: &irradiance
+    <<: *entity_schema
+    init_params:
+        schema:
+            hours_total:
+                type: float
+                min: 5
+                max: 48
+            day_fraction:
+                type: float
+                min: 0.1
+                max: 0.9
+    channels:
+        type: list
+        schema:
+            type: dict
+            schema:
+                name:
+                    type: string
+                    min: 2
+                    required: true
+
+                k0:
+                    type: physical_unit
+                    like_unit: 1/m
+
+                k_mods:
+                    type: list
+                    schema:
+                        #type: list
+                        items:
+                            - type: string
+                            - type: [physical_unit, float]
+
+
+model_schema:
+
+    entities:
+        required: true
+        type: dict
+        allow_unknown: true
+        keyschema:
+            type: string
+        schema:
+            irradiance:
+                schema:
+                    <<: *irradiance
+
+
+
+
