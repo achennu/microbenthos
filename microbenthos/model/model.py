@@ -4,6 +4,7 @@ from fipy import TransientTerm, ImplicitDiffusionTerm, ImplicitSourceTerm, CellV
 from sympy import Lambda, symbols
 
 from microbenthos import Entity, ExprProcess
+from microbenthos.utils.snapshotters import snapshot_var
 
 
 class MicroBenthosModel(object):
@@ -191,6 +192,7 @@ class MicroBenthosModel(object):
         """
         self.logger.debug('Creating model snapshot')
         state = {}
+        state['time'] = dict(data=snapshot_var(self.clocktime))
         state['domain'] = self.domain.snapshot(base=base)
 
         env = state['env'] = {}
@@ -205,7 +207,11 @@ class MicroBenthosModel(object):
             ostate = obj.snapshot(base=base)
             microbes[name] = ostate
 
-        state['equations'] = self.equation_defs
+        eqns = state['equations'] = {}
+        for name, obj in self.equations.items():
+            self.logger.debug('Snapshotting: {} --> {}'.format(name, obj))
+            ostate = obj.snapshot()
+            eqns[name] = ostate
 
         self.logger.info('Created model snapshot')
         return state
@@ -413,9 +419,11 @@ class ModelEquation(object):
 
         self._term_transient = None
         self._term_diffusion = None
-        self.source_objs = {}
         self.source_exprs = {}
         self.source_terms = {}
+        self.source_coeffs = {}
+
+        self.diffusion_def = ()
 
         self.obj = None
         self.finalized = False
@@ -467,7 +475,7 @@ class ModelEquation(object):
         self._term_transient = term
         self.logger.info('Transient term set: {}'.format(term))
 
-    def add_diffusion_term(self, coeff):
+    def _add_diffusion_term(self, coeff):
         """
         Add a linear diffusion term to the equation
 
@@ -501,7 +509,8 @@ class ModelEquation(object):
 
         obj = self.model.get_object(path)
         expr = obj.evaluate()
-        self.add_diffusion_term(coeff=expr * coeff)
+        self._add_diffusion_term(coeff=expr * coeff)
+        self.diffusion_def = (path, coeff)
 
     @property
     def term_diffusion(self):
@@ -552,10 +561,9 @@ class ModelEquation(object):
         expr = obj.evaluate()
         self.logger.debug('Created source expr: {!r}'.format(expr))
 
-        if path in self.source_objs:
-            raise RuntimeError('Source path already exists: {!r}'.foramt(path))
+        if path in self.source_exprs:
+            raise RuntimeError('Source term path already exists: {!r}'.foramt(path))
 
-        self.source_objs[path] = obj
         self.source_exprs[path] = expr
 
         # check if it should be an implicit source
@@ -571,6 +579,7 @@ class ModelEquation(object):
             term = coeff * expr
 
         self.source_terms[path] = term
+        self.source_coeffs[path] = coeff
         self.logger.info('Created source {!r}: {!r}'.format(path, term))
 
     @property
@@ -587,3 +596,20 @@ class ModelEquation(object):
 
         terms.extend(self.source_terms.values())
         return terms
+
+    def snapshot(self):
+        """
+        Return a state dictionary of the equation
+
+        This only includes the equation sources as metadata
+
+        Returns:
+            A dictionary of the equation state
+        """
+        self.logger.debug('Snapshot of {!r}'.format(self))
+        state = dict(
+            sources=dict(metadata=self.source_coeffs),
+            diffusion=dict(metadata=dict([self.diffusion_def])),
+            transient=dict(metadata={self.varpath: self.term_transient.coeff}),
+            )
+        return state

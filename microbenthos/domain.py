@@ -259,8 +259,8 @@ class SedimentDBLDomain(object):
         meta['sediment_porosity'] = self.sediment_porosity
         meta['idx_surface'] = self.idx_surface
 
-        state['depths'] = {'data': snapshot_var(self.depths, base=base)}
-        state['distances'] = {'data': snapshot_var(self.distances, base=base)}
+        state['depths'] = {'data_static': snapshot_var(self.depths, base=base)}
+        state['distances'] = {'data_static': snapshot_var(self.distances, base=base)}
 
         return state
 
