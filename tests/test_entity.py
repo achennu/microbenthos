@@ -1,11 +1,10 @@
 import pytest
 from fipy import PhysicalField
 from fipy import Variable as Var_
-PF = PhysicalField
 from fipy.tools import numerix
-
 from microbenthos import Entity, SedimentDBLDomain, DomainEntity, Variable
 
+PF = PhysicalField
 
 class TestEntity:
     def test_init(self):

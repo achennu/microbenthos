@@ -5,8 +5,8 @@ import logging
 from fipy import PhysicalField, Variable
 from fipy.tools import numerix
 from scipy.stats import cosine
-
-from microbenthos import DomainEntity
+from .entity import DomainEntity
+from ..utils.snapshotters import snapshot_var
 
 
 class Irradiance(DomainEntity):
@@ -350,7 +350,6 @@ class IrradianceChannel(DomainEntity):
         self.logger.debug('Snapshot: {}'.format(self))
 
         self.check_domain()
-        from .utils.snapshotters import snapshot_var
 
         state = dict(
             metadata = dict()

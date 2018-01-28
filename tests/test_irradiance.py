@@ -3,8 +3,7 @@ import pytest
 from fipy import PhysicalField, CellVariable, Variable
 from fipy.tools import numerix
 
-from microbenthos import SedimentDBLDomain
-from microbenthos.irradiance import Irradiance, IrradianceChannel
+from microbenthos import SedimentDBLDomain, Irradiance, IrradianceChannel
 
 
 @pytest.fixture()

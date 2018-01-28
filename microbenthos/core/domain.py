@@ -8,7 +8,7 @@ from fipy import PhysicalField, CellVariable, Variable, Grid1D
 # from fipy.meshes.uniformGrid1D import UniformGrid1D
 from fipy.tools import numerix
 
-from .utils.snapshotters import snapshot_var
+from ..utils.snapshotters import snapshot_var
 
 
 class SedimentDBLDomain(object):

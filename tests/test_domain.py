@@ -1,6 +1,6 @@
 import pytest
 from fipy import PhysicalField
-from microbenthos.domain import SedimentDBLDomain
+from microbenthos import SedimentDBLDomain
 
 
 class TestModelDomain:
@@ -125,10 +125,10 @@ class TestModelDomain:
         metakeys = ('cell_size', 'sediment_length', 'DBL_length', 'sediment_cells', 'DBL_cells', 'sediment_porosity', 'idx_surface', 'total_cells', 'total_length')
         assert set(state['metadata']) == set(metakeys)
 
-        assert len(state['depths']['data'][0]) == len(domain.mesh.x())
-        assert len(state['distances']['data'][0]) == len(domain.mesh.scaledCellDistances) - 1
+        assert len(state['depths']['data_static'][0]) == len(domain.mesh.x())
+        assert len(state['distances']['data_static'][0]) == len(domain.mesh.scaledCellDistances) - 1
 
         for k in ('depths', 'distances'):
             # check that the units are that of distances
-            p = PhysicalField(1, state[k]['data'][1]['unit']).inUnitsOf('m')
+            p = PhysicalField(1, state[k]['data_static'][1]['unit']).inUnitsOf('m')
             assert p.value > 0

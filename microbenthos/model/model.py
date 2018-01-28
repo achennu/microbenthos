@@ -3,8 +3,8 @@ import logging
 from fipy import TransientTerm, ImplicitDiffusionTerm, ImplicitSourceTerm, CellVariable
 from sympy import Lambda, symbols
 
-from microbenthos import Entity, ExprProcess
 from microbenthos.utils.snapshotters import snapshot_var
+from ..core import Entity, ExprProcess
 
 
 class MicroBenthosModel(object):

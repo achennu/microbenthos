@@ -1,6 +1,7 @@
 import logging
 
-from microbenthos import DomainEntity, Process, Variable
+from .entity import DomainEntity, Variable
+from .process import Process
 
 
 class MicrobialGroup(DomainEntity):

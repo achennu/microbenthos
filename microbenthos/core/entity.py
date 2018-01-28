@@ -4,7 +4,7 @@ import logging
 from fipy import PhysicalField
 from fipy.tools import numerix
 
-from .utils.snapshotters import snapshot_var
+from microbenthos.utils.snapshotters import snapshot_var
 
 
 class Entity(object):

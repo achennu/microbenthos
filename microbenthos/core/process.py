@@ -3,12 +3,11 @@ import operator
 from abc import ABCMeta, abstractmethod
 from collections import Mapping, OrderedDict
 
-from fipy import PhysicalField
 from fipy.tools import numerix
 from sympy import sympify, symbols, lambdify, Symbol, SympifyError
 
-from microbenthos import DomainEntity
-from .utils.snapshotters import snapshot_var
+from .entity import DomainEntity
+from ..utils.snapshotters import snapshot_var
 
 
 class Process(DomainEntity):

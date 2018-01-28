@@ -1,6 +1,5 @@
 import pytest
-from microbenthos.model import MicroBenthosModel, from_dict
-from microbenthos.domain import SedimentDBLDomain
+from microbenthos import MicroBenthosModel, from_dict, SedimentDBLDomain
 import yaml
 
 MODEL_DEF = """
@@ -164,7 +163,7 @@ class TestModel:
 
         state = model.snapshot()
 
-        statekeys = ('env', 'microbes', 'domain', 'equations')
+        statekeys = ('env', 'microbes', 'domain', 'equations', 'time')
         assert set(statekeys) == set(state)
 
         microbekeys = set(model.microbes)
