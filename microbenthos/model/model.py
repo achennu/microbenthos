@@ -1,10 +1,12 @@
 import logging
 
-from fipy import TransientTerm, ImplicitDiffusionTerm, ImplicitSourceTerm, CellVariable
+from fipy import TransientTerm, ImplicitDiffusionTerm, ImplicitSourceTerm, CellVariable, Variable, \
+    PhysicalField
 from sympy import Lambda, symbols
 
-from microbenthos.utils.snapshotters import snapshot_var
 from ..core import Entity, ExprProcess
+from ..core import Variable as mVariable
+from ..utils.snapshotters import snapshot_var
 
 
 class MicroBenthosModel(object):
@@ -22,12 +24,10 @@ class MicroBenthosModel(object):
         self.full_eqn = None
         self.source_exprs = {}
         self.equations = {}
-        self.equation_defs = {}
 
         self.domain = domain
 
-        from fipy import Variable
-        self.clocktime = Variable(0.0, unit='h', name='time')
+        self.clock = ModelClock(self, value=0.0, unit='h', name='time')
 
     def add_formula(self, name, variables, expr):
         """
@@ -192,7 +192,7 @@ class MicroBenthosModel(object):
         """
         self.logger.debug('Creating model snapshot')
         state = {}
-        state['time'] = dict(data=snapshot_var(self.clocktime))
+        state['time'] = dict(data=snapshot_var(self.clock))
         state['domain'] = self.domain.snapshot(base=base)
 
         env = state['env'] = {}
@@ -242,6 +242,28 @@ class MicroBenthosModel(object):
         if name in self.equations:
             raise RuntimeError('Equation with name {!r} already exists!'.format(name))
 
+        def is_pair_tuple(obj):
+            try:
+                path, coeff = obj
+                return True
+            except:
+                return False
+
+        if not is_pair_tuple(transient):
+            raise ValueError('Transient term must be a (path, coeff) tuple!')
+
+        if not (diffusion) and not (sources):
+            raise ValueError('One or both of diffusion and source terms must be given.')
+
+        if diffusion:
+            if not is_pair_tuple(diffusion):
+                raise ValueError('Diffusion term must be a (path, coeff) tuple')
+
+        if sources:
+            improper = filter(lambda x: not is_pair_tuple(x), sources)
+            if improper:
+                raise ValueError('Source terms not (path, coeff) tuples: {}'.format(improper))
+
         eqn = ModelEquation(self, *transient)
         if diffusion:
             eqn.add_diffusion_term_from(*diffusion)
@@ -254,8 +276,6 @@ class MicroBenthosModel(object):
 
         self.logger.info('Adding equation {!r}'.format(name))
         self.equations[name] = eqn
-        # save definitions for snapshot
-        self.equation_defs[name] = dict(transient=transient, diffusion=diffusion, sources=sources)
 
     def create_full_equation(self):
         """
@@ -292,27 +312,6 @@ class MicroBenthosModel(object):
                             'equation!'.format(
                                 name))
 
-    def _shorten_object_path(self, path):
-        """
-        Shorten a given string of model store path
-
-        Converts:
-            * microbes.cyano.processes.oxyPS --> cyano.oxyPS
-            * microbes.csb.features.biomass --> csb.biomass
-
-        Args:
-            path (str): the path to shorten
-
-        Returns:
-            The shortened path, or the path as is
-        """
-        parts = path.split('.')
-        if parts[0] == 'microbes':
-            if parts[2] in ('processes', 'features'):
-                return '{}.{}'.format(parts[1], parts[3])
-
-        return path
-
     def get_object(self, path):
         """
         Get an object stored in the model
@@ -329,6 +328,9 @@ class MicroBenthosModel(object):
         self.logger.debug('Getting object {!r}'.format(path))
         parts = path.split('.')
 
+        if len(parts) == 1:
+            raise ValueError('Path should dotted string, but got {!r}'.format(path))
+
         S = self
         for p in parts:
             self.logger.debug('Getting {!r} from {}'.format(p, S))
@@ -336,7 +338,7 @@ class MicroBenthosModel(object):
             if S_ is None:
                 try:
                     S = S[p]
-                except KeyError:
+                except (KeyError, TypeError):
                     raise ValueError(
                         'Unknown model path {!r}'.format('.'.join(parts[:parts.index(p)])))
             else:
@@ -346,42 +348,53 @@ class MicroBenthosModel(object):
         self.logger.debug('Got obj: {!r}'.format(obj))
         return obj
 
-    def update_time(self, clocktime):
+    def on_time_updated(self):
         """
-        Convenience function to update the time on all the stored entities
-
-        Args:
-            clocktime: The time of the model simulation clock
-
+        Callback function to update the time on all the stored entities
         """
+        self.logger.info('Updating entities for model clock: {}'.format(self.clock))
+
         for name, obj in self.env.items():
-            obj.update_time(clocktime)
+            obj.on_time_updated(self.clock)
 
         for name, obj in self.microbes.items():
-            obj.update_time(clocktime)
+            obj.on_time_updated(self.clock)
 
     def update_vars(self):
         """
         Update all stored variables which have an `hasOld` setting. This is used while sweeping
         for solutions.
         """
-        from microbenthos import Variable
+        self.logger.debug('Updating model variables with hasOld')
+        updated = []
         for name, obj in self.env.items():
-            if isinstance(obj, Variable):
+            path = 'env.{}'.format(name)
+            if isinstance(obj, mVariable):
                 try:
                     obj.var.updateOld()
-                    self.logger.debug("Updated old: {!r}".format(obj.var))
+                    self.logger.debug("Updated old: {}".format(path))
+                    updated.append(path)
                 except AssertionError:
-                    pass
-        for name, microbe in self.microbes.items():
-            for feat in microbe.features.values():
-                try:
-                    if isinstance(feat, Variable):
-                        feat.var.updateOld()
-                        self.logger.debug("Updated old: {!r}".format(feat.var))
-                except AssertionError:
-                    pass
+                    self.logger.debug('{} = {!r}.var.updateOld failed'.format(path, obj))
 
+            else:
+                self.logger.debug('env.{!r} not model variable'.format(obj))
+
+        for name, microbe in self.microbes.items():
+            for fname, feat in microbe.features.items():
+                path = 'microbes.{}.features.{}'.format(name, fname)
+                if isinstance(feat, mVariable):
+                    try:
+                        feat.var.updateOld()
+                        self.logger.debug("Updated old: {}".format(path))
+                        updated.append(path)
+                    except AssertionError:
+                        self.logger.debug('{} = {!r}.var.updateOld failed'.format(path, obj))
+                else:
+                    self.logger.debug(
+                        '{}={!r} is not model variable'.format(path, obj))
+
+        return updated
 
 class ModelEquation(object):
     """
@@ -409,6 +422,8 @@ class ModelEquation(object):
         self.model = model
 
         var = self.model.get_object(varpath)
+        if isinstance(var, mVariable):
+            var = var.var
         if not isinstance(var, CellVariable):
             raise ValueError('Var {!r} is {}, not CellVariable'.format(varpath, type(var)))
 
@@ -562,7 +577,7 @@ class ModelEquation(object):
         self.logger.debug('Created source expr: {!r}'.format(expr))
 
         if path in self.source_exprs:
-            raise RuntimeError('Source term path already exists: {!r}'.foramt(path))
+            raise RuntimeError('Source term path already exists: {!r}'.format(path))
 
         self.source_exprs[path] = expr
 
@@ -613,3 +628,59 @@ class ModelEquation(object):
             transient=dict(metadata={self.varpath: self.term_transient.coeff}),
             )
         return state
+
+
+class ModelClock(Variable):
+    def __init__(self, model, **kwargs):
+        self.model = model
+        super(ModelClock, self).__init__(**kwargs)
+
+    def _setValueProperty(self, newVal):
+        super(ModelClock, self)._setValueProperty(newVal)
+        self.model.on_time_updated()
+
+    def _getValue(self):
+        return super(ModelClock, self)._getValue()
+
+    value = property(_getValue, _setValueProperty)
+
+    def increment_time(self, dt):
+        """
+        Increment the clock
+
+        Args:
+            dt (float, PhysicalField): Time step in seconds
+        """
+        if dt <= 0:
+            raise ValueError('Time increment must be positive!')
+
+        dt = PhysicalField(dt, 's')
+        self.value += dt
+
+    def set_time(self, t):
+        """
+        Set the clock time in hours
+        Args:
+            t (float, PhysicalField): Time in hours
+
+        """
+        if t < 0:
+            raise ValueError('Time must be positive!')
+
+        t = PhysicalField(t, 'h')
+        self.value = t
+
+    @property
+    def as_hms(self):
+        """
+        Return a tuple of (hour, minute, second)
+        """
+        h, m, s = self.inUnitsOf(('h', 'min', 's'))
+        return h, m, s
+
+    @property
+    def as_hms_string(self):
+        """
+        Return a string of hour, min, sec
+        """
+        return '{}h {}m {:.0}s'.format(*self.as_hms)

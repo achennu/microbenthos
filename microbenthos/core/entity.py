@@ -86,9 +86,12 @@ class Entity(object):
               ValueError: If the cls is not a valid module path
               TypeError: If the class cannot be imported
         """
+
         try:
-            cls_path = cdict.pop('cls')
+            cls_path = cdict['cls']
         except KeyError:
+            logger = logging.getLogger(__name__)
+            logger.error('"cls" missing in def: {}'.format(cdict))
             raise KeyError('Config dict missing required key "cls"!')
 
         init_params = cdict.get('init_params', {})
@@ -109,13 +112,13 @@ class Entity(object):
         """
         # self.logger.debug('Empty post_init on {}'.format(self))
 
-    def update_time(self, clocktime):
+    def on_time_updated(self, clocktime):
         """
-        Method which should update the entity features for the simulation clocktime
+        Method which should update the entity features for the simulation clock
 
         :param float clocktime: The simulation time (units depends on the solver setup)
         """
-        self.logger.debug('Updating {} for clocktime {}'.format(self, clocktime))
+        self.logger.debug('Updating {} for clock {}'.format(self, clocktime))
 
     def snapshot(self):
         """

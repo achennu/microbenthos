@@ -103,7 +103,7 @@ class Irradiance(DomainEntity):
 
         return channel
 
-    def update_time(self, clocktime):
+    def on_time_updated(self, clocktime):
         """
         Update the surface irradiance according to the clock time
 
@@ -118,10 +118,10 @@ class Irradiance(DomainEntity):
         else:
             clocktime_ = clocktime % self.hours_total.numericValue
 
-        # logger.debug('clocktime % hours_total =  {} % {} = {}'.format(
-        #     clocktime, self.hours_total, clocktime_))
-        # logger.debug('Profile level for clocktime {}: {}'.format(
-        #     clocktime, self._profile.pdf(clocktime_)))
+        # logger.debug('clock % hours_total =  {} % {} = {}'.format(
+        #     clock, self.hours_total, clocktime_))
+        # logger.debug('Profile level for clock {}: {}'.format(
+        #     clock, self._profile.pdf(clocktime_)))
 
         surface_value = self.zenith_level * self.hours_day.numericValue / 2 * \
                         self._profile.pdf(clocktime_)

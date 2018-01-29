@@ -40,7 +40,7 @@ class ExprProcess(Process):
     """
     Class to represent a process occurring in the benthic domain. This class helps to formulate
     an expression of the relationships between variables as well as update specific features with
-    the simulation clocktime.
+    the simulation clock.
     """
 
     _lambdify_modules = (numerix, 'numpy')

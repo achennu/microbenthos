@@ -15,10 +15,11 @@ class TestEntity:
         # update to clock time
         e = Entity()
         with pytest.raises(TypeError):
-            e.update_time()
-        e.update_time(2)
-        e.update_time(3.5)
-        e.update_time(PhysicalField('35 s'))
+            e.on_time_updated()
+
+        e.on_time_updated(2)
+        e.on_time_updated(3.5)
+        e.on_time_updated(PhysicalField('35 s'))
 
     @pytest.mark.xfail(reason='not implemented')
     def test_from_params(self):
