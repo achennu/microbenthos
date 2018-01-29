@@ -3,15 +3,11 @@ import microbenthos
 microbenthos.setup_console_logging(level=20)
 
 import os
-
-
-from microbenthos.model import from_yaml
 from microbenthos.model.model import MicroBenthosModel
 
-
 model_path = os.path.join(os.path.dirname(__file__), 'model.yml')
-model_dict = from_yaml(model_path)
-model = MicroBenthosModel.from_definition(model_dict)
+with open(model_path) as fp:
+    model = MicroBenthosModel.from_yaml(fp)
 
 state = model.snapshot()
 

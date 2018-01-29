@@ -1,7 +1,9 @@
+import io
 import mock
 import pytest
 
 from microbenthos.model import Simulation
+from microbenthos.utils import yaml
 
 
 @pytest.fixture()
@@ -20,11 +22,31 @@ def model_with_eqn(model):
         yield model
 
 
+SIMULATION_DEF = """
+simtime_total: !unit 6 h
+simtime_step: !unit 120 s
+residual_lim: 1e-6
+max_sweeps: 15
+fipy_solver: scipy
+"""
+
+
 class TestSimulation:
     def test_init(self):
         sim = Simulation()
         assert sim
         assert sim.started is False
+
+    @pytest.mark.parametrize('obj', [
+        SIMULATION_DEF,
+        io.StringIO(unicode(SIMULATION_DEF)),
+        yaml.load(io.StringIO(unicode(SIMULATION_DEF)))
+        ],
+         ids=('string', 'stream', 'dict'))
+    def test_create_from(self, obj):
+        s = Simulation.create_from(obj)
+        assert s
+        assert s.started == False
 
     @pytest.mark.parametrize(
         'solver', (None,) + Simulation.FIPY_SOLVERS
@@ -146,7 +168,7 @@ class TestSimulation:
         sim.start()
         assert sim.started
 
-        RES = sim.residual_lim/10
+        RES = sim.residual_lim / 10
         model.full_eqn.sweep.return_value = RES
 
         dt = sim.simtime_step

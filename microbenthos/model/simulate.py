@@ -7,14 +7,16 @@ import logging
 import time
 
 from fipy import PhysicalField
-from fipy.terms.binaryTerm import _BinaryTerm
+
+from ..utils import CreateMixin
 
 
-class Simulation(object):
+class Simulation(CreateMixin):
     """
     Class that encapsulates the functionality for running a simulation on a MicroBenthos model
     instance.
     """
+    schema_key = 'simulation'
 
     FIPY_SOLVERS = ('scipy', 'trilinos', 'pysparse')
 
@@ -25,7 +27,9 @@ class Simulation(object):
                  max_sweeps = 15,
                  fipy_solver = 'scipy'
                  ):
-
+        super(Simulation, self).__init__()
+        # the __init__ call is deliberately empty. will implement cooeperative inheritance only
+        # when necessary
         self.logger = logging.getLogger(__name__)
         self._started = False
         self._solver = None
@@ -46,6 +50,42 @@ class Simulation(object):
         self.max_sweeps = max_sweeps
 
         self._model = None
+
+    # @classmethod
+    # def from_yaml(cls, stream, **kwargs):
+    #     """
+    #     Create an instance from a YAML format definition of Simulation parameters. See
+    #     :meth:`from_yaml` for arguments.
+    #
+    #     Args:
+    #         stream (file-like, str): Input stream for yaml
+    #
+    #     Returns:
+    #         instance of :class:`Simulation`
+    #
+    #     """
+    #     if kwargs.get('schema_stream') is None:
+    #         kwargs['key'] = 'simulation'
+    #     return cls(**from_yaml(stream, **kwargs))
+    #
+    # @classmethod
+    # def from_dict(cls, mdict, **kwargs):
+    #     """
+    #     Create an instance from a dictionary. See :meth:`from_dict` for
+    #             arguments.
+    #
+    #     Args:
+    #         mdict (dict): Definition dicitonary which will be validated with internal simulation
+    #         schema
+    #
+    #     Returns:
+    #         instance of :class:`Simulation`
+    #
+    #     """
+    #     if kwargs.get('schema_stream') is None:
+    #         kwargs['key'] = 'simulation'
+    #     inst = cls(**from_dict(mdict, **kwargs))
+    #     return inst
 
     @property
     def started(self):
@@ -167,7 +207,7 @@ class Simulation(object):
         #     raise TypeError(
         #         'Model {!r} equation is not a fipy BinaryTerm: {}'.format(m, type(full_eqn)))
 
-        def recursive_hasattr(obj, path, is_callable=False):
+        def recursive_hasattr(obj, path, is_callable = False):
             parts = path.split('.')
             S = obj
             FOUND = False
@@ -190,7 +230,8 @@ class Simulation(object):
         expected_attrs = ['clock', 'full_eqn']
         expected_callables = ['full_eqn.sweep', 'update_vars', 'clock.increment_time']
         failed_attrs = filter(lambda x: not recursive_hasattr(m, x), expected_attrs)
-        failed_callables = filter(lambda x: not recursive_hasattr(m, x, is_callable=True), expected_callables)
+        failed_callables = filter(lambda x: not recursive_hasattr(m, x, is_callable=True),
+                                  expected_callables)
 
         if failed_attrs:
             self.logger.error('Model is missing required attributes: {}'.format(failed_attrs))
@@ -198,7 +239,8 @@ class Simulation(object):
             self.logger.error('Model is missing required callables: {}'.format(failed_callables))
 
         if failed_callables or failed_attrs:
-            raise ValueError('Model interface is missing: {}'.format(set(failed_attrs + failed_callables)))
+            raise ValueError(
+                'Model interface is missing: {}'.format(set(failed_attrs + failed_callables)))
 
         self._model = m
 

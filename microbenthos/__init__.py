@@ -6,6 +6,7 @@ __version__ = '0.2.0'
 
 # TODO: refactor logging so that config doesn't occur at import level
 
+from .utils import *
 from .core import *
 from .model import *
 

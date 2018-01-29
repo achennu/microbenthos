@@ -1,10 +1,12 @@
+import io
+
+import mock
 import pytest
 import yaml
-from pprint import pprint
-from microbenthos import MicroBenthosModel, from_dict, SedimentDBLDomain
-from microbenthos.model.model import ModelClock, ModelEquation
 from fipy import Variable, PhysicalField
-import mock
+
+from microbenthos import MicroBenthosModel, from_dict, SedimentDBLDomain
+from microbenthos.model.model import ModelClock
 
 MODEL_DEF = """
 
@@ -140,12 +142,12 @@ def domain():
 
 @pytest.fixture()
 def model_dict():
-    return from_dict(yaml.load(MODEL_DEF))
+    return from_dict(yaml.load(MODEL_DEF), key='model')
 
 
 @pytest.fixture()
-def model(model_dict):
-    m = MicroBenthosModel.from_definition(model_dict)
+def model():
+    m = MicroBenthosModel.from_dict(yaml.load(MODEL_DEF))
     return m
 
 
@@ -156,16 +158,18 @@ class TestModel:
 
     def test_init_domain(self, domain):
 
-        m = MicroBenthosModel(domain)
+        m = MicroBenthosModel(domain=domain)
         assert m
         assert m.domain
 
-    def test_from_definition(self):
-
-        mdict = yaml.load(MODEL_DEF)
-        mdict = from_dict(mdict)
-        m = MicroBenthosModel.from_definition(mdict)
-
+    @pytest.mark.parametrize('obj', [
+        MODEL_DEF,
+        io.StringIO(unicode(MODEL_DEF)),
+        yaml.load(io.StringIO(unicode(MODEL_DEF)))
+        ],
+         ids=('string', 'stream', 'dict'))
+    def test_create_from(self, obj):
+        m = MicroBenthosModel.create_from(obj)
         assert m.domain
         assert m.all_entities_setup
 
@@ -203,12 +207,10 @@ class TestModel:
             for feat, fdef in mdef['init_params']['features'].items():
                 if fdef['cls'] == 'Variable' and fdef['init_params'].get(
                     'create', {}).get('hasOld'):
-
                     hasold_list.append('microbes.{}.features.{}'.format(name, feat))
 
         updated = model.update_vars()
         assert set(updated) == set(hasold_list)
-
 
     @pytest.mark.parametrize(
         'transient, diffusion, sources, error',
@@ -294,7 +296,6 @@ class TestModel:
 
 
 class TestModelClock:
-
     def test_init(self, model):
         with pytest.raises(TypeError):
             assert ModelClock()
@@ -308,7 +309,7 @@ class TestModelClock:
         assert isinstance(model.clock, Variable)
         assert model.clock.unit.name() == 'h'
 
-    @pytest.mark.parametrize('dt, error',[
+    @pytest.mark.parametrize('dt, error', [
         (-1, ValueError),
         (0, ValueError),
         (1, None),
@@ -329,9 +330,10 @@ class TestModelClock:
         model.clock.increment_time(dt)
         new = model.clock.value
 
-        assert new == old + PhysicalField(dt, 's'), 'Added {} to {} failed'.format(PhysicalField('s'), old)
+        assert new == old + PhysicalField(dt, 's'), 'Added {} to {} failed'.format(
+            PhysicalField('s'), old)
 
-    @pytest.mark.parametrize('t, error',[
+    @pytest.mark.parametrize('t, error', [
         (-1, ValueError),
         (0, None),
         (1, None),
@@ -376,6 +378,3 @@ class TestModelClock:
         mockobj.assert_called_with(mock.ANY, PhysicalField(3, 'h'))
         print(mockobj.mock_calls)
         assert len(mockobj.mock_calls) == count
-
-
-

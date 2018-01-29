@@ -260,7 +260,7 @@ eqn_term: &eqn_term_schema
 
 ### MAIN MODEL SCHEMA HERE ###
 
-model_schema:
+model:
 
     domain:
         type: dict
@@ -384,8 +384,38 @@ model_schema:
                               forbidden: [0, 0.0]
 
 
+### MAIN SIMULATE SCHEMA HERE ###
 
+simulation:
 
+    simtime_total:
+        type: physical_unit
+        like_unit: 'h'
+        min: 0
+        default: !unit 6 h
+
+    simtime_step:
+        type: physical_unit
+        like_unit: 's'
+        min: 1
+        default: !unit 60 s
+
+    residual_lim:
+        type: float
+        max: 1e-6
+        default: 1e-8
+        coerce: float
+
+    max_sweeps:
+        type: integer
+        min: 2
+        max: 100
+        default: 15
+
+    fipy_solver:
+        type: string
+        allowed: [scipy, trilinos, pysparse]
+        default: scipy
 
 
 
