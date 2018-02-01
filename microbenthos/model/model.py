@@ -241,7 +241,7 @@ class MicroBenthosModel(CreateMixin):
             ostate = obj.snapshot()
             eqns[name] = ostate
 
-        self.logger.info('Created model snapshot')
+        self.logger.debug('Created model snapshot')
         return state
 
     __getstate__ = snapshot

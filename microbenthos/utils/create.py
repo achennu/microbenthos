@@ -36,17 +36,22 @@ class CreateMixin(object):
         elif isinstance(obj, Mapping):
             inst = cls.from_dict(obj)
             inst.definition_ = obj
+            return inst
 
         elif isinstance(obj, basestring):
             inst = cls.from_yaml(io.StringIO(unicode(obj)))
             inst.definition_ = obj
             return inst
 
-        elif isinstance(obj, io.FileIO):
+        elif isinstance(obj, io.IOBase):
             # a file-like object
             inst = cls.from_yaml(obj, **kwargs)
             obj.seek(0)
             inst.definition_ = obj.readlines()
+            return inst
+
+        else:
+            raise NotImplementedError('Unknown type {} to create {} from'.format(type(obj), cls))
 
     @classmethod
     def from_yaml(cls, stream, **kwargs):

@@ -23,7 +23,7 @@ def model_with_eqn(model):
 
 
 SIMULATION_DEF = """
-simtime_total: !unit 6 h
+simtime_total: !unit 1 h
 simtime_step: !unit 120 s
 residual_lim: 1e-6
 max_sweeps: 15
@@ -178,3 +178,31 @@ class TestSimulation:
         model.full_eqn.sweep.assert_called_once()
         model.clock.increment_time.assert_called_once_with(dt)
         assert res == RES
+
+    def test_simulation_evolution(self):
+        pytest.xfail('Not implemented!')
+        odir = tempfile.mkdtemp()
+        runner = SimulationRunner(output_dir=odir)
+
+        simulation = mock.Mock(Simulation)
+        runner.simulation = simulation
+        runner.model = simulation.model
+
+        simulation.model.snapshot.return_value = {}
+
+        runner.simulation = SIMULATION_DEF
+        runner.model = model
+        runner.prepare_simulation()
+
+        total = runner.simulation.total_steps
+
+        # now run evolution
+        with mock.patch.object(runner.simulation, 'run_timestep') as obj:
+            for step in runner.simulation.evolution():
+                num, snap = step
+                assert isinstance(num, int)
+                assert num <= total
+                assert isinstance(snap, dict)
+
+            assert obj.call_count == total
+

@@ -7,6 +7,7 @@ import logging
 import time
 
 from fipy import PhysicalField
+import math
 
 from ..utils import CreateMixin
 
@@ -50,42 +51,6 @@ class Simulation(CreateMixin):
         self.max_sweeps = max_sweeps
 
         self._model = None
-
-    # @classmethod
-    # def from_yaml(cls, stream, **kwargs):
-    #     """
-    #     Create an instance from a YAML format definition of Simulation parameters. See
-    #     :meth:`from_yaml` for arguments.
-    #
-    #     Args:
-    #         stream (file-like, str): Input stream for yaml
-    #
-    #     Returns:
-    #         instance of :class:`Simulation`
-    #
-    #     """
-    #     if kwargs.get('schema_stream') is None:
-    #         kwargs['key'] = 'simulation'
-    #     return cls(**from_yaml(stream, **kwargs))
-    #
-    # @classmethod
-    # def from_dict(cls, mdict, **kwargs):
-    #     """
-    #     Create an instance from a dictionary. See :meth:`from_dict` for
-    #             arguments.
-    #
-    #     Args:
-    #         mdict (dict): Definition dicitonary which will be validated with internal simulation
-    #         schema
-    #
-    #     Returns:
-    #         instance of :class:`Simulation`
-    #
-    #     """
-    #     if kwargs.get('schema_stream') is None:
-    #         kwargs['key'] = 'simulation'
-    #     inst = cls(**from_dict(mdict, **kwargs))
-    #     return inst
 
     @property
     def started(self):
@@ -146,6 +111,13 @@ class Simulation(CreateMixin):
                     'simtime_total {} should be > step {}'.format(self.simtime_total, val))
 
         self._simtime_step = val
+
+    @property
+    def total_steps(self):
+        try:
+            return int(math.ceil(self.simtime_total / self.simtime_step))
+        except:
+            self.logger.error("Could not determine total_steps from simtime_total = {} and simtime_step = {}".format(self.simtime_total, self.simtime_step))
 
     @property
     def residual_lim(self):
@@ -264,8 +236,9 @@ class Simulation(CreateMixin):
         self._solver = Solver()
         self.logger.debug('Created fipy {} solver: {}'.format(self.fipy_solver, self._solver))
 
-        self.calc_times = []
         self._started = True
+        self.calc_times = []
+        self.residuals = []
 
     def run_timestep(self):
         """
@@ -283,7 +256,6 @@ class Simulation(CreateMixin):
 
         num_sweeps = 0
         res = 1
-        tic = time.time()
 
         EQN = self.model.full_eqn
 
@@ -297,16 +269,40 @@ class Simulation(CreateMixin):
             num_sweeps += 1
             self.logger.debug('Sweeps: {}  residual: {:.2g}'.format(num_sweeps, float(res)))
 
-        toc = time.time()
-
         if res > self.residual_lim:
             self.logger.warning('Timestep residual {:.2g} > limit {:.2g}'.format(
                 res, self.residual_lim))
 
-        calc_time = 1000 * (toc - tic)
-        self.calc_times.append(calc_time)
-        self.logger.debug('Timestep done in {:.2f} msec'.format(calc_time))
-
         self.model.clock.increment_time(dt)
 
         return res
+
+    def evolution(self):
+        self.logger.info('Simulation evolution starting')
+        self.start()
+
+        # yield the initial condition first
+        self.model.update_vars()
+        yield (0, self.model.snapshot())
+
+        for step in range(1, self.total_steps + 1):
+            self.logger.debug('Running step #{}'.format(step))
+
+            tic = time.time()
+            residual = self.run_timestep()
+            toc = time.time()
+
+            self.residuals.append(residual)
+            calc_time = 1000 * (toc - tic)
+            self.calc_times.append(calc_time)
+            self.logger.debug('Timestep done in {:.2f} msec'.format(calc_time))
+
+            state = self.model.snapshot()
+            state['metrics'] = dict(
+                calc_times=dict(data=(calc_time, dict(unit='ms')),
+                residuals=dict(data=(residual, None))
+                ))
+
+            yield (step, state)
+
+        self.logger.info('Simulation evolution completed')
