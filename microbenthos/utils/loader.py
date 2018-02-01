@@ -223,3 +223,19 @@ def get_schema(schema_stream = None):
             schema = yaml.load(fp)
 
     return schema
+
+
+def find_subclasses_recursive(baseclass, subclasses=None):
+    """
+    Find subclasses recursively. `subclasses` should be a set into which to add the subclasses
+    """
+    if subclasses is None:
+        subclasses = set()
+    if not isinstance(baseclass, type):
+        raise ValueError('Need a class, but received: {} of type {}'.format(
+            baseclass, type(baseclass)))
+    for sclass in baseclass.__subclasses__():
+        subclasses.add(sclass)
+        find_subclasses_recursive(sclass, subclasses)
+
+    return subclasses
