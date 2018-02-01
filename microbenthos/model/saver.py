@@ -3,8 +3,10 @@ Implements a data saver for model snapshots
 """
 
 import logging
-import h5py as hdf
 from collections import Mapping
+import h5py as hdf
+import numpy as np
+
 
 def save_snapshot(fpath, snapshot, compression = 6, shuffle = True):
     """
@@ -54,11 +56,10 @@ def save_snapshot(fpath, snapshot, compression = 6, shuffle = True):
 
     fpath = str(fpath)
 
-    logger.info('Saving snapshot ({}) to {}'.format(snapshot.keys(), fpath))
-    with hdf.File(fpath) as hf:
+    logger.debug('Saving snapshot ({}) to {}'.format(snapshot.keys(), fpath))
+    with hdf.File(fpath, libver='latest') as hf:
         _save_nested_dict(snapshot, hf)
-    logger.info('Snapshot saved in {}'.format(fpath))
-
+    logger.debug('Snapshot saved in {}'.format(fpath))
 
 
 def _save_nested_dict(D, root):
@@ -80,7 +81,8 @@ def _save_nested_dict(D, root):
     meta = D.pop('metadata', None)
     if meta:
         if not isinstance(meta, Mapping):
-            raise ValueError('"metadata" should be mapping, not {}. In path: {}'.format(type(meta), path))
+            raise ValueError(
+                '"metadata" should be mapping, not {}. In path: {}'.format(type(meta), path))
 
         logger.debug('Saving {}.metadta'.format(path))
         for metak, metav in meta.items():
@@ -93,9 +95,11 @@ def _save_nested_dict(D, root):
     if data:
         try:
             dsdata, dsmeta = data
+            dsdata = np.asarray(dsdata)
         except:
             logger.error('Improper {}.data: {}'.format(path, data))
-            raise ValueError('"data" should be a (array, meta_dict) sequence. In path: {}'.format(path))
+            raise ValueError(
+                '"data" should be a (array, meta_dict) sequence. In path: {}'.format(path))
 
         logger.debug('data at {}'.format(path))
         logger.debug('data shape={} dtype={}'.format(dsdata.shape, dsdata.dtype))
@@ -107,7 +111,8 @@ def _save_nested_dict(D, root):
             dsstdata, dsstmeta = stdata
         except:
             logger.error('Improper {}.data_static: {}'.format(path, stdata))
-            raise ValueError('"data_static" should be a (array, meta_dict) sequence. In path: {}'.format(path))
+            raise ValueError(
+                '"data_static" should be a (array, meta_dict) sequence. In path: {}'.format(path))
 
         logger.debug('data_static at {}'.format(path))
         logger.debug('data_static shape={} dtype={}'.format(dsstdata.shape, dsstdata.dtype))
@@ -118,7 +123,8 @@ def _save_nested_dict(D, root):
                                      compression=6,
                                      shuffle=True
                                      )
-            ds.attrs.update(dsstmeta)
+            if dsstmeta:
+                ds.attrs.update(dsstmeta)
 
     # now traverse the rest of the keys which are not popped
     for k in D:
@@ -126,7 +132,7 @@ def _save_nested_dict(D, root):
         _save_nested_dict(D[k], grp)
 
 
-def _save_data(root, data, meta, name='data'):
+def _save_data(root, data, meta, name = 'data'):
     if 'data' not in root:
         maxshape = data.shape + (None,)
         chunks = tuple([25 for s in range(len(data.shape))]) + (5,)
@@ -138,7 +144,8 @@ def _save_data(root, data, meta, name='data'):
                                  shuffle=True
                                  )
         ds[..., -1] = data
-        ds.attrs.update(meta)
+        if meta:
+            ds.attrs.update(meta)
 
     else:
         ds = root['data']

@@ -1,6 +1,6 @@
 import logging
 import os
-
+from collections import Mapping
 import cerberus
 from fipy import PhysicalField
 from sympy import sympify, Symbol
@@ -8,14 +8,14 @@ from sympy import sympify, Symbol
 from .yaml_setup import yaml
 
 
-class ModelSchemaValidator(cerberus.Validator):
+class MicroBenthosSchemaValidator(cerberus.Validator):
     logger = logging.getLogger(__name__)
     logger.addHandler(logging.NullHandler())
     logger.propagate = False
 
     # def __init__(self, *args, **kwargs):
     #     # self.logger.propagate = False
-    #     super(ModelSchemaValidator, self).__init__(*args, **kwargs)
+    #     super(MicroBenthosSchemaValidator, self).__init__(*args, **kwargs)
 
     def _validate_type_importpath(self, value):
         """
@@ -158,51 +158,84 @@ class ModelSchemaValidator(cerberus.Validator):
             if parts[2] not in mtargets:
                 self._error(field, 'Microbes model store should be of type {}'.format(mtargets))
 
+    def _normalize_coerce_float(self, value):
+        return float(value)
 
-def from_yaml(fpath, from_schema = None):
+
+def from_yaml(stream, key = None, schema = None, schema_stream = None):
     logger = logging.getLogger(__name__)
 
-    logger.info('Loading model from: {}'.format(fpath))
-    with open(fpath) as fp:
-        model_dict = yaml.load(fp)
+    logger.info('Loading definition with yaml')
 
-    return from_dict(model_dict, from_schema)
+    inp_dict = yaml.load(stream)
+
+    return from_dict(inp_dict, key=key, schema=schema, schema_stream=schema_stream)
 
 
-def from_dict(model_dict, from_schema = None):
+def from_dict(inp_dict, key, schema=None, schema_stream = None):
     logger = logging.getLogger(__name__)
 
-    logger.info('Loading model from: {}'.format(model_dict.keys()))
+    logger.info('Loading definition from: {}'.format(inp_dict.keys()))
 
-    INBUILT = os.path.join(os.path.dirname(__file__), 'schema.yml')
-    from_schema = from_schema or INBUILT
-    logger.debug('Using schema: {}'.format(from_schema))
-    with open(from_schema) as fp:
-        model_schema = yaml.load(fp)['model_schema']
+    logger.debug('Using schema key {} from schema_stream={}'.format(key, schema_stream))
+    if schema is None:
+        schema = get_schema(schema_stream=schema_stream)
+    else:
+        if not isinstance(schema, Mapping):
+            raise TypeError('Supplied schema should be a mapping, not {!r}'.format(type(schema)))
 
-    validator = ModelSchemaValidator()
+    if key:
+        schema = schema[key]
+    logger.debug('Schema with entries: {}'.format(schema.keys()))
 
-    valid_model = validator.validated(model_dict, model_schema)
+    validator = MicroBenthosSchemaValidator()
 
-    if not valid_model:
+    validated = validator.validated(inp_dict, schema)
+
+    if not validated:
         logger.propagate = True
-        logger.error('Model definition not validated!')
+        logger.error('Input definition not validated for schema {!r}!'.format(key))
 
-        logger.error(validator.errors)
+        for key, errmsg in validator.errors.items():
+            val = inp_dict[key]
+            logger.error('Validation error: {} : {} val={} (type={})'.format(key, errmsg, val,
+                                                                        type(val)))
+        # logger.error(validator.errors)
         # print('Errors: {!r}'.format(validator.errors))
 
-        raise ValueError('Model definition improper!')
+        raise ValueError('Definition of {!r} invalid!'.format(key))
     else:
-        logger.info('Model definition successfully loaded: {}'.format(valid_model.keys()))
-        return valid_model
+        logger.info('{} definition successfully loaded: {}'.format(key, validated.keys()))
+        return validated
 
 
-def get_model_schema():
+def get_schema(schema_stream = None):
     """
     Returns the inbuilt model schema
     """
-    INBUILT = os.path.join(os.path.dirname(__file__), 'schema.yml')
-    with open(INBUILT) as fp:
-        model_schema = yaml.load(fp)  # ['model_schema']
 
-    return model_schema
+    INBUILT = os.path.join(os.path.dirname(__file__), 'schema.yml')
+
+    if schema_stream:
+        schema = yaml.load(schema_stream)
+    else:
+        with open(INBUILT) as fp:
+            schema = yaml.load(fp)
+
+    return schema
+
+
+def find_subclasses_recursive(baseclass, subclasses=None):
+    """
+    Find subclasses recursively. `subclasses` should be a set into which to add the subclasses
+    """
+    if subclasses is None:
+        subclasses = set()
+    if not isinstance(baseclass, type):
+        raise ValueError('Need a class, but received: {} of type {}'.format(
+            baseclass, type(baseclass)))
+    for sclass in baseclass.__subclasses__():
+        subclasses.add(sclass)
+        find_subclasses_recursive(sclass, subclasses)
+
+    return subclasses
