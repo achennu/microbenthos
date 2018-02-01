@@ -11,7 +11,7 @@ with open('HISTORY.rst') as history_file:
 
 requirements = [
     'click>=6.0',
-    'fipy>=3',
+    'fipy>=3.1.3',
     'scipy',
     'logutils',
     'sympy',
@@ -40,7 +40,7 @@ setup(
                  'microbenthos'},
     entry_points={
         'console_scripts': [
-            'microbenthos=microbenthos.cli:main'
+            'microbenthos=microbenthos.cli:cli'
         ]
     },
     include_package_data=True,
@@ -55,7 +55,6 @@ setup(
         'License :: OSI Approved :: MIT License',
         'Natural Language :: English',
         'Programming Language :: Python :: 2.7',
-        'Programming Language :: Python :: 3.6',
     ],
     test_suite='tests',
     tests_require=test_requirements
