@@ -1,17 +1,23 @@
 import logging
-
-from fipy import TransientTerm, ImplicitDiffusionTerm, ImplicitSourceTerm, CellVariable
+from collections import Mapping
+from fipy import TransientTerm, ImplicitDiffusionTerm, ImplicitSourceTerm, CellVariable, Variable, \
+    PhysicalField
 from sympy import Lambda, symbols
 
-from microbenthos import Entity, ExprProcess
+from ..core import Entity, ExprProcess, SedimentDBLDomain
+from ..core import Variable as mVariable
+from ..utils import snapshot_var, CreateMixin
 
 
-class MicroBenthosModel(object):
+class MicroBenthosModel(CreateMixin):
     """
     Class that represents the model, as a container for all the entities in the domain
     """
-
-    def __init__(self, domain = None):
+    schema_key = 'model'
+    def __init__(self, **kwargs):
+        super(MicroBenthosModel, self).__init__()
+        # the __init__ call is deliberately empty. will implement cooeperative inheritance only
+        # when necessary
         self.logger = logging.getLogger(__name__)
         self.logger.info('Initializing {}'.format(self.__class__.__name__))
 
@@ -21,12 +27,12 @@ class MicroBenthosModel(object):
         self.full_eqn = None
         self.source_exprs = {}
         self.equations = {}
-        self.equation_defs = {}
 
-        self.domain = domain
+        # self.domain = domain
 
-        from fipy import Variable
-        self.clocktime = Variable(0.0, unit='h', name='time')
+        self.clock = ModelClock(self, value=0.0, unit='h', name='time')
+
+        self._setup(**kwargs)
 
     def add_formula(self, name, variables, expr):
         """
@@ -100,59 +106,82 @@ class MicroBenthosModel(object):
         self.logger.info('Adding {} entity {} = {}'.format(target, name, entity))
         tdict[name] = entity
 
-    @classmethod
-    def from_definition(cls, definition):
+    # @classmethod
+    # def _from_definition(cls, definition):
+    def _setup(self, **definition):
         """
-        Create a model instance from the definition dictionary
+        Create a model instance from the definition dictionary, which is assummed to be validated
 
         Returns:
             instance of :class:`MicrobenthosModel`
 
+
         """
-        logger = logging.getLogger(__name__)
-        logger.debug('Creating model from definition: {}'.format(definition.keys()))
+        self.logger.debug('Setting up model from definition: {}'.format(definition.keys()))
 
-        logger.warning('Creating the domain')
-        domain_def = definition['domain']
-        logger.debug(domain_def)
-        domain = Entity.from_dict(domain_def)
-
-        instance = cls(domain=domain)
+        domain_def = definition.get('domain')
+        if domain_def:
+            self.logger.warning('Creating the domain')
+            self.logger.debug(domain_def)
+            if isinstance(domain_def, Mapping):
+                self.domain = Entity.from_dict(domain_def)
+            elif isinstance(domain_def, SedimentDBLDomain):
+                self.domain = domain_def
 
         # Load up the formula namespace
         if 'formulae' in definition:
-            logger.warning('Creating formulae')
+            self.logger.warning('Creating formulae')
             for name, fdict in definition['formulae'].items():
-                instance.add_formula(name, **fdict)
+                self.add_formula(name, **fdict)
 
         env_def = definition.get('environment')
         if env_def:
-            logger.warning('Creating environment')
+            self.logger.warning('Creating environment')
 
             for name, pdict in env_def.items():
-                instance._create_entity_into('env', name, pdict)
+                self._create_entity_into('env', name, pdict)
 
         microbes_def = definition.get('microbes')
         if microbes_def:
-            logger.warning('Creating microbes')
+            self.logger.warning('Creating microbes')
 
             for name, pdict in microbes_def.items():
-                instance._create_entity_into('microbes', name, pdict)
+                self._create_entity_into('microbes', name, pdict)
 
-        if not instance.all_entities_setup:
-            instance.entities_setup()
+        if not self.all_entities_setup:
+            self.entities_setup()
 
         eqndef = definition.get('equations')
         if eqndef:
-            logger.warning('Creating equations')
+            self.logger.warning('Creating equations')
             for eqnname, eqndef in eqndef.items():
-                instance.add_equation(eqnname, **eqndef)
+                self.add_equation(eqnname, **eqndef)
 
-        if instance.equations:
-            instance.create_full_equation()
+        if self.equations:
+            self.create_full_equation()
 
-        logger.info('Model setup done')
-        return instance
+        self.logger.info('Model setup done')
+
+    # @classmethod
+    # def from_yaml(cls, stream, **kwargs):
+    #     """
+    #     Load definition from YAML stream and create instance. See :meth:`from_yaml` for arguments.
+    #     """
+    #     if kwargs.get('schema') is None:
+    #         kwargs['key'] = 'model'
+    #     return MicroBenthosModel._from_definition(
+    #         from_yaml(stream, **kwargs))
+    #
+    # @classmethod
+    # def from_dict(cls, mdict, **kwargs):
+    #     """
+    #     Load definition from dict and create instance. See :meth:`from_dict` for
+    #             arguments.
+    #             """
+    #     if kwargs.get('schema') is None:
+    #         kwargs['key'] = 'model'
+    #     return MicroBenthosModel._from_definition(
+    #         from_dict(mdict, **kwargs))
 
     def entities_setup(self):
         """
@@ -191,6 +220,7 @@ class MicroBenthosModel(object):
         """
         self.logger.debug('Creating model snapshot')
         state = {}
+        state['time'] = dict(data=snapshot_var(self.clock))
         state['domain'] = self.domain.snapshot(base=base)
 
         env = state['env'] = {}
@@ -205,9 +235,13 @@ class MicroBenthosModel(object):
             ostate = obj.snapshot(base=base)
             microbes[name] = ostate
 
-        state['equations'] = self.equation_defs
+        eqns = state['equations'] = {}
+        for name, obj in self.equations.items():
+            self.logger.debug('Snapshotting: {} --> {}'.format(name, obj))
+            ostate = obj.snapshot()
+            eqns[name] = ostate
 
-        self.logger.info('Created model snapshot')
+        self.logger.debug('Created model snapshot')
         return state
 
     __getstate__ = snapshot
@@ -236,6 +270,28 @@ class MicroBenthosModel(object):
         if name in self.equations:
             raise RuntimeError('Equation with name {!r} already exists!'.format(name))
 
+        def is_pair_tuple(obj):
+            try:
+                path, coeff = obj
+                return True
+            except:
+                return False
+
+        if not is_pair_tuple(transient):
+            raise ValueError('Transient term must be a (path, coeff) tuple!')
+
+        if not (diffusion) and not (sources):
+            raise ValueError('One or both of diffusion and source terms must be given.')
+
+        if diffusion:
+            if not is_pair_tuple(diffusion):
+                raise ValueError('Diffusion term must be a (path, coeff) tuple')
+
+        if sources:
+            improper = filter(lambda x: not is_pair_tuple(x), sources)
+            if improper:
+                raise ValueError('Source terms not (path, coeff) tuples: {}'.format(improper))
+
         eqn = ModelEquation(self, *transient)
         if diffusion:
             eqn.add_diffusion_term_from(*diffusion)
@@ -248,8 +304,6 @@ class MicroBenthosModel(object):
 
         self.logger.info('Adding equation {!r}'.format(name))
         self.equations[name] = eqn
-        # save definitions for snapshot
-        self.equation_defs[name] = dict(transient=transient, diffusion=diffusion, sources=sources)
 
     def create_full_equation(self):
         """
@@ -286,27 +340,6 @@ class MicroBenthosModel(object):
                             'equation!'.format(
                                 name))
 
-    def _shorten_object_path(self, path):
-        """
-        Shorten a given string of model store path
-
-        Converts:
-            * microbes.cyano.processes.oxyPS --> cyano.oxyPS
-            * microbes.csb.features.biomass --> csb.biomass
-
-        Args:
-            path (str): the path to shorten
-
-        Returns:
-            The shortened path, or the path as is
-        """
-        parts = path.split('.')
-        if parts[0] == 'microbes':
-            if parts[2] in ('processes', 'features'):
-                return '{}.{}'.format(parts[1], parts[3])
-
-        return path
-
     def get_object(self, path):
         """
         Get an object stored in the model
@@ -323,6 +356,9 @@ class MicroBenthosModel(object):
         self.logger.debug('Getting object {!r}'.format(path))
         parts = path.split('.')
 
+        if len(parts) == 1:
+            raise ValueError('Path should dotted string, but got {!r}'.format(path))
+
         S = self
         for p in parts:
             self.logger.debug('Getting {!r} from {}'.format(p, S))
@@ -330,7 +366,7 @@ class MicroBenthosModel(object):
             if S_ is None:
                 try:
                     S = S[p]
-                except KeyError:
+                except (KeyError, TypeError):
                     raise ValueError(
                         'Unknown model path {!r}'.format('.'.join(parts[:parts.index(p)])))
             else:
@@ -340,41 +376,53 @@ class MicroBenthosModel(object):
         self.logger.debug('Got obj: {!r}'.format(obj))
         return obj
 
-    def update_time(self, clocktime):
+    def on_time_updated(self):
         """
-        Convenience function to update the time on all the stored entities
-
-        Args:
-            clocktime: The time of the model simulation clock
-
+        Callback function to update the time on all the stored entities
         """
+        self.logger.info('Updating entities for model clock: {}'.format(self.clock))
+
         for name, obj in self.env.items():
-            obj.update_time(clocktime)
+            obj.on_time_updated(self.clock)
 
         for name, obj in self.microbes.items():
-            obj.update_time(clocktime)
+            obj.on_time_updated(self.clock)
 
     def update_vars(self):
         """
         Update all stored variables which have an `hasOld` setting. This is used while sweeping
         for solutions.
         """
-        from microbenthos import Variable
+        self.logger.debug('Updating model variables with hasOld')
+        updated = []
         for name, obj in self.env.items():
-            if isinstance(obj, Variable):
+            path = 'env.{}'.format(name)
+            if isinstance(obj, mVariable):
                 try:
                     obj.var.updateOld()
-                    self.logger.debug("Updated old: {!r}".format(obj.var))
+                    self.logger.debug("Updated old: {}".format(path))
+                    updated.append(path)
                 except AssertionError:
-                    pass
+                    self.logger.debug('{} = {!r}.var.updateOld failed'.format(path, obj))
+
+            else:
+                self.logger.debug('env.{!r} not model variable'.format(obj))
+
         for name, microbe in self.microbes.items():
-            for feat in microbe.features.values():
-                try:
-                    if isinstance(feat, Variable):
+            for fname, feat in microbe.features.items():
+                path = 'microbes.{}.features.{}'.format(name, fname)
+                if isinstance(feat, mVariable):
+                    try:
                         feat.var.updateOld()
-                        self.logger.debug("Updated old: {!r}".format(feat.var))
-                except AssertionError:
-                    pass
+                        self.logger.debug("Updated old: {}".format(path))
+                        updated.append(path)
+                    except AssertionError:
+                        self.logger.debug('{} = {!r}.var.updateOld failed'.format(path, obj))
+                else:
+                    self.logger.debug(
+                        '{}={!r} is not model variable'.format(path, obj))
+
+        return updated
 
 
 class ModelEquation(object):
@@ -403,6 +451,8 @@ class ModelEquation(object):
         self.model = model
 
         var = self.model.get_object(varpath)
+        if isinstance(var, mVariable):
+            var = var.var
         if not isinstance(var, CellVariable):
             raise ValueError('Var {!r} is {}, not CellVariable'.format(varpath, type(var)))
 
@@ -413,9 +463,11 @@ class ModelEquation(object):
 
         self._term_transient = None
         self._term_diffusion = None
-        self.source_objs = {}
         self.source_exprs = {}
         self.source_terms = {}
+        self.source_coeffs = {}
+
+        self.diffusion_def = ()
 
         self.obj = None
         self.finalized = False
@@ -467,7 +519,7 @@ class ModelEquation(object):
         self._term_transient = term
         self.logger.info('Transient term set: {}'.format(term))
 
-    def add_diffusion_term(self, coeff):
+    def _add_diffusion_term(self, coeff):
         """
         Add a linear diffusion term to the equation
 
@@ -501,7 +553,8 @@ class ModelEquation(object):
 
         obj = self.model.get_object(path)
         expr = obj.evaluate()
-        self.add_diffusion_term(coeff=expr * coeff)
+        self._add_diffusion_term(coeff=expr * coeff)
+        self.diffusion_def = (path, coeff)
 
     @property
     def term_diffusion(self):
@@ -552,10 +605,9 @@ class ModelEquation(object):
         expr = obj.evaluate()
         self.logger.debug('Created source expr: {!r}'.format(expr))
 
-        if path in self.source_objs:
-            raise RuntimeError('Source path already exists: {!r}'.foramt(path))
+        if path in self.source_exprs:
+            raise RuntimeError('Source term path already exists: {!r}'.format(path))
 
-        self.source_objs[path] = obj
         self.source_exprs[path] = expr
 
         # check if it should be an implicit source
@@ -571,6 +623,7 @@ class ModelEquation(object):
             term = coeff * expr
 
         self.source_terms[path] = term
+        self.source_coeffs[path] = coeff
         self.logger.info('Created source {!r}: {!r}'.format(path, term))
 
     @property
@@ -587,3 +640,76 @@ class ModelEquation(object):
 
         terms.extend(self.source_terms.values())
         return terms
+
+    def snapshot(self):
+        """
+        Return a state dictionary of the equation
+
+        This only includes the equation sources as metadata
+
+        Returns:
+            A dictionary of the equation state
+        """
+        self.logger.debug('Snapshot of {!r}'.format(self))
+        state = dict(
+            sources=dict(metadata=self.source_coeffs),
+            diffusion=dict(metadata=dict([self.diffusion_def])),
+            transient=dict(metadata={self.varpath: self.term_transient.coeff}),
+            )
+        return state
+
+
+class ModelClock(Variable):
+    def __init__(self, model, **kwargs):
+        self.model = model
+        super(ModelClock, self).__init__(**kwargs)
+
+    def _setValueProperty(self, newVal):
+        super(ModelClock, self)._setValueProperty(newVal)
+        self.model.on_time_updated()
+
+    def _getValue(self):
+        return super(ModelClock, self)._getValue()
+
+    value = property(_getValue, _setValueProperty)
+
+    def increment_time(self, dt):
+        """
+        Increment the clock
+
+        Args:
+            dt (float, PhysicalField): Time step in seconds
+        """
+        if dt <= 0:
+            raise ValueError('Time increment must be positive!')
+
+        dt = PhysicalField(dt, 's')
+        self.value += dt
+
+    def set_time(self, t):
+        """
+        Set the clock time in hours
+        Args:
+            t (float, PhysicalField): Time in hours
+
+        """
+        if t < 0:
+            raise ValueError('Time must be positive!')
+
+        t = PhysicalField(t, 'h')
+        self.value = t
+
+    @property
+    def as_hms(self):
+        """
+        Return a tuple of (hour, minute, second)
+        """
+        h, m, s = self.inUnitsOf('h', 'min', 's')
+        return h, m, s
+
+    @property
+    def as_hms_string(self):
+        """
+        Return a string of hour, min, sec
+        """
+        return '{}h {}m {:.0}s'.format(*self.as_hms)

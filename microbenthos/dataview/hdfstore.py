@@ -1,0 +1,38 @@
+from fipy import PhysicalField
+import h5py as hdf
+from .base import ModelData
+
+
+class HDFModelData(ModelData):
+    """
+    Class that encapsulates the model data from a simulation run stored in a HDF file.
+    """
+
+    def check_store(self, obj):
+        return isinstance(obj, hdf.Group)
+
+    def read_data_from(self, path, tidx=None):
+        """
+        Read out the data into a :class:`PhysicalField`
+
+        If `tidx` is None, then no slicing of the dataset is done
+
+        """
+        path = path.replace('.', '/')
+
+        if not path.endswith('/data'):
+            path += '/data'
+        ds = self.store[path]
+        ds.id.refresh()
+
+        self.logger.debug('Found {}: {}'.format(path, ds))
+        ds_unit = ds.attrs['unit']
+        if tidx is None:
+            return PhysicalField(ds, ds_unit)
+        else:
+            return PhysicalField(ds[tidx], ds_unit)
+
+    def read_metadata_from(self, path):
+        path = path.replace('.', '/')
+        node = self.store[path]
+        return node.attrs

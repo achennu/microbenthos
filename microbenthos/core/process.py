@@ -3,12 +3,11 @@ import operator
 from abc import ABCMeta, abstractmethod
 from collections import Mapping, OrderedDict
 
-from fipy import PhysicalField
 from fipy.tools import numerix
 from sympy import sympify, symbols, lambdify, Symbol, SympifyError
 
-from microbenthos import DomainEntity
-from .utils.snapshotters import snapshot_var
+from .entity import DomainEntity
+from ..utils.snapshotters import snapshot_var
 
 
 class Process(DomainEntity):
@@ -41,7 +40,7 @@ class ExprProcess(Process):
     """
     Class to represent a process occurring in the benthic domain. This class helps to formulate
     an expression of the relationships between variables as well as update specific features with
-    the simulation clocktime.
+    the simulation clock.
     """
 
     _lambdify_modules = (numerix, 'numpy')

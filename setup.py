@@ -11,22 +11,27 @@ with open('HISTORY.rst') as history_file:
 
 requirements = [
     'click>=6.0',
-    'fipy>=3',
-    'scipy',
+    'scipy>=1.0.0',
+    'numpy',
+    'fipy',
     'logutils',
     'sympy',
     'cerberus',
     'PyYaml',
+    'h5py',
+    'tqdm',
+    'matplotlib>=2.1'
 ]
 
 test_requirements = [
     # TODO: put package test requirements here
     'pytest',
+    'mock',
 ]
 
 setup(
     name='microbenthos',
-    version='0.2.0',
+    version='0.3.0',
     description="In silico microbenthic simulations for studies of biogeochemistry and microbial ecology",
     long_description=readme + '\n\n' + history,
     author="Arjun Chennu",
@@ -39,23 +44,25 @@ setup(
                  'microbenthos'},
     entry_points={
         'console_scripts': [
-            'microbenthos=microbenthos.cli:main'
+            'microbenthos=microbenthos.cli:cli'
         ]
     },
     include_package_data=True,
     install_requires=requirements,
+    extras_require=dict(
+        test=test_requirements,
+        ),
     license="MIT license",
     zip_safe=False,
     keywords=['microbenthos', 'biogeochemistry', 'marine biology', 'microbial ecology',
-              'simulation'],
+              'simulation', 'modeling', 'microbial mats', 'sediments'],
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',
         'Natural Language :: English',
         'Programming Language :: Python :: 2.7',
-        'Programming Language :: Python :: 3.6',
     ],
-    test_suite='tests',
-    tests_require=test_requirements
+    test_suite='pytest',
+    # tests_require=test_requirements
 )

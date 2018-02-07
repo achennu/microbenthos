@@ -4,7 +4,7 @@ logger.setLevel(10)
 from logutils.colorize import ColorizingStreamHandler
 logger.addHandler(ColorizingStreamHandler())
 
-from microbenthos.entity import Entity
+from microbenthos import Entity
 import yaml
 from pprint import pprint
 
@@ -13,7 +13,7 @@ YAML_TEXT = """
 entities:
     
     irradiance:
-        cls: microbenthos.irradiance.Irradiance
+        cls: microbenthos.core.Irradiance
         init_params:
             hours_total: !unit 24 h
             day_fraction: 0.5

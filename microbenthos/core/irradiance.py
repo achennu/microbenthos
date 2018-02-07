@@ -5,8 +5,8 @@ import logging
 from fipy import PhysicalField, Variable
 from fipy.tools import numerix
 from scipy.stats import cosine
-
-from microbenthos import DomainEntity
+from .entity import DomainEntity
+from ..utils.snapshotters import snapshot_var
 
 
 class Irradiance(DomainEntity):
@@ -27,8 +27,8 @@ class Irradiance(DomainEntity):
         self.channels = {}
 
         self.hours_total = PhysicalField(hours_total, 'h')
-        if not (4 <= self.hours_total.value <= 48):
-            raise ValueError('Hours total {} should be between (4, 48)'.format(self.hours_total))
+        if not (2 <= self.hours_total.value <= 48):
+            raise ValueError('Hours total {} should be between (2, 48)'.format(self.hours_total))
         day_fraction = float(day_fraction)
         if not (0 < day_fraction < 1):
             raise ValueError("Day fraction should be between 0 and 1")
@@ -103,7 +103,7 @@ class Irradiance(DomainEntity):
 
         return channel
 
-    def update_time(self, clocktime):
+    def on_time_updated(self, clocktime):
         """
         Update the surface irradiance according to the clock time
 
@@ -118,10 +118,10 @@ class Irradiance(DomainEntity):
         else:
             clocktime_ = clocktime % self.hours_total.numericValue
 
-        # logger.debug('clocktime % hours_total =  {} % {} = {}'.format(
-        #     clocktime, self.hours_total, clocktime_))
-        # logger.debug('Profile level for clocktime {}: {}'.format(
-        #     clocktime, self._profile.pdf(clocktime_)))
+        # logger.debug('clock % hours_total =  {} % {} = {}'.format(
+        #     clock, self.hours_total, clocktime_))
+        # logger.debug('Profile level for clock {}: {}'.format(
+        #     clock, self._profile.pdf(clocktime_)))
 
         surface_value = self.zenith_level * self.hours_day.numericValue / 2 * \
                         self._profile.pdf(clocktime_)
@@ -272,7 +272,7 @@ class IrradianceChannel(DomainEntity):
                 try:
                     atten_source = model.get_object(var) * coeff
                 except ValueError:
-                    self.logger.error('Could not find attenuation source: {!r}'.format(var))
+                    self.logger.warning('Could not find attenuation source: {!r}'.format(var))
                     return
         else:
             atten_source = self.domain[var] * coeff
@@ -350,7 +350,6 @@ class IrradianceChannel(DomainEntity):
         self.logger.debug('Snapshot: {}'.format(self))
 
         self.check_domain()
-        from .utils.snapshotters import snapshot_var
 
         state = dict(
             metadata = dict()

@@ -3,8 +3,8 @@ logger = logging.getLogger('microbenthos')
 logger.setLevel(20)
 from logutils.colorize import ColorizingStreamHandler
 logger.addHandler(ColorizingStreamHandler())
-from microbenthos.domain import SedimentDBLDomain
-from microbenthos.irradiance import Irradiance
+from microbenthos import SedimentDBLDomain, Irradiance
+
 from scipy.stats import norm
 from fipy import PhysicalField, Variable
 from matplotlib import pyplot as plt
@@ -39,7 +39,7 @@ plt.plot(CLOCKTIME.numericValue/3600.0, Irrad.surface_irrad.numericValue, 'ro')
 for i in range(30*60/15):
 
     CLOCKTIME.value = CLOCKTIME() + dT
-    Irrad.update_time(CLOCKTIME)
+    Irrad.on_time_updated(CLOCKTIME)
 
     plt.plot(CLOCKTIME.inUnitsOf('h').value, Irrad.surface_irrad.numericValue, 'ro')
 
@@ -83,7 +83,7 @@ plt.legend()
 
 
 # CLOCKTIME.value = Irrad.clocktime_zenith
-Irrad.update_time(Irrad.zenith_time)
+Irrad.on_time_updated(Irrad.zenith_time)
 
 
 plt.axes(ax2)
@@ -109,7 +109,7 @@ plt.show()
 # for i in range(50):
 #     CLOCKTIME.value = CLOCKTIME.value + dT
 #     print('CLOCKTIME NOW: {}'.format(CLOCKTIME))
-#     Irrad.update_time(CLOCKTIME)
+#     Irrad.on_time_updated(CLOCKTIME)
 #
 #     TIMES.append(float(CLOCKTIME().numericValue))
 #     INTENSITIES.append(float(Irrad.surface_irrad()))
