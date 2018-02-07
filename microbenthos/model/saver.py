@@ -4,6 +4,7 @@ Implements a data saver for model snapshots
 
 import logging
 from collections import Mapping
+
 import h5py as hdf
 import numpy as np
 
@@ -58,11 +59,11 @@ def save_snapshot(fpath, snapshot, compression = 6, shuffle = True):
 
     logger.debug('Saving snapshot ({}) to {}'.format(snapshot.keys(), fpath))
     with hdf.File(fpath, libver='latest') as hf:
-        _save_nested_dict(snapshot, hf)
+        _save_nested_dict(snapshot, hf, compression=compression, shuffle=shuffle)
     logger.debug('Snapshot saved in {}'.format(fpath))
 
 
-def _save_nested_dict(D, root):
+def _save_nested_dict(D, root, **kwargs):
     """
     Recursively traverse the nested dictionary and save data and metadata into a mirrored hierarchy
 
@@ -77,6 +78,8 @@ def _save_nested_dict(D, root):
 
     if not isinstance(D, Mapping):
         raise TypeError('Expected (nested) dict, but got {}'.format(type(D)))
+
+    D = D.copy()
 
     meta = D.pop('metadata', None)
     if meta:
@@ -103,7 +106,7 @@ def _save_nested_dict(D, root):
 
         logger.debug('data at {}'.format(path))
         logger.debug('data shape={} dtype={}'.format(dsdata.shape, dsdata.dtype))
-        _save_data(root, dsdata, dsmeta, name='data')
+        _save_data(root, dsdata, dsmeta, name='data', **kwargs)
 
     stdata = D.pop('data_static', None)
     if stdata:
@@ -120,8 +123,7 @@ def _save_nested_dict(D, root):
         if 'data' not in root:
             ds = root.create_dataset('data',
                                      data=dsstdata,
-                                     compression=6,
-                                     shuffle=True
+                                     **kwargs
                                      )
             if dsstmeta:
                 ds.attrs.update(dsstmeta)
@@ -129,25 +131,24 @@ def _save_nested_dict(D, root):
     # now traverse the rest of the keys which are not popped
     for k in D:
         grp = root.require_group(k)
-        _save_nested_dict(D[k], grp)
+        _save_nested_dict(D[k], grp, **kwargs)
 
 
-def _save_data(root, data, meta, name = 'data'):
+def _save_data(root, data, meta, name = 'data', **kwargs):
     if 'data' not in root:
-        maxshape = data.shape + (None,)
-        chunks = tuple([25 for s in range(len(data.shape))]) + (5,)
+        maxshape = (None,) + data.shape
+        chunks = (5,) + tuple([25 for s in range(len(data.shape))])
         ds = root.create_dataset(name,
-                                 shape=data.shape + (1,),
+                                 shape=(1,) + data.shape,
                                  maxshape=maxshape,
                                  chunks=chunks,
-                                 compression=6,
-                                 shuffle=True
+                                 **kwargs
                                  )
-        ds[..., -1] = data
+        ds[0] = data
         if meta:
             ds.attrs.update(meta)
 
     else:
         ds = root['data']
-        ds.resize(ds.shape[-1] + 1, axis=len(ds.shape) - 1)
-        ds[..., -1] = data
+        ds.resize(ds.shape[0] + 1, axis=0)
+        ds[-1] = data

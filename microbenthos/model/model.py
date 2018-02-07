@@ -704,7 +704,7 @@ class ModelClock(Variable):
         """
         Return a tuple of (hour, minute, second)
         """
-        h, m, s = self.inUnitsOf(('h', 'min', 's'))
+        h, m, s = self.inUnitsOf('h', 'min', 's')
         return h, m, s
 
     @property

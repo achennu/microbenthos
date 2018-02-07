@@ -108,7 +108,7 @@ class SimulationRunner(object):
         self._exporter_classes = {c._exports_: c for c in find_subclasses_recursive(BaseExporter)}
         self.logger.debug("Loaded exporter classes: {}".format(self._exporter_classes.keys()))
 
-    def add_exporter(self, exptype, name=None, **kwargs):
+    def add_exporter(self, exptype, name = None, **kwargs):
         """
         Add an exporter to the simulation run
 
@@ -132,7 +132,8 @@ class SimulationRunner(object):
 
         cls = self._exporter_classes.get(exptype)
         if cls is None:
-            raise ValueError('No exporter of type {!r} found. Available: {}'.format(exptype, self._exporter_classes.keys()))
+            raise ValueError('No exporter of type {!r} found. Available: {}'.format(exptype,
+                                                                                    self._exporter_classes.keys()))
 
         instance = cls(name=name, **kwargs)
         self.logger.info('Adding exporter {!r}: {!r}'.format(name, instance))
@@ -157,9 +158,10 @@ class SimulationRunner(object):
         """
         logfile = os.path.join(self.output_dir, 'simulation.log')
         logger = logging.getLogger(__name__.split('.')[0])
-        lvl = logger.getEffectiveLevel()
+        lvl = 20
 
         fh = self._log_fh = logging.FileHandler(logfile, mode=mode)
+        fh.setLevel(lvl)
 
         fmt = SIMULATION_DEBUG_FORMATTER if lvl < 20 else SIMULATION_DEFAULT_FORMATTER
         fh.setFormatter(fmt)
@@ -198,12 +200,15 @@ class SimulationRunner(object):
         """
         runner = dict(cls=self.__class__.__name__)
         libraries = ['fipy', 'scipy', 'PyTrilinos', 'pysparse', 'numpy', 'cerberus', 'yaml',
-                     'sympy', 'click', 'h5py']
+                     'sympy', 'click', 'h5py', 'matplotlib']
         library_versions = {}
         for name in libraries:
-            lib = importlib.import_module(name)
-            version = lib.__version__
-            library_versions[name] = version
+            try:
+                lib = importlib.import_module(name)
+                version = lib.__version__
+                library_versions[name] = version
+            except ImportError:
+                self.logger.debug('Could not import module: {}'.format(name))
 
         exporters = {}
         for expname in self.exporters:
@@ -282,12 +287,16 @@ class SimulationRunner(object):
 
         self.prepare_simulation()
 
+        for name, eqn in self.model.equations.items():
+            self.logger.info('Equation {}: {!r}'.format(name, eqn.obj))
+
         with self.exporters_activated():
             for step in self.simulation.evolution():
 
                 # step is (num, state) is the model snapshot
                 if step:
                     num, state = step
+
                     self.logger.info('Step #{}: Exporting model state'.format(num))
                     for exporter in self.exporters.values():
                         exporter.process(num, state)

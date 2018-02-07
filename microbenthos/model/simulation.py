@@ -299,9 +299,9 @@ class Simulation(CreateMixin):
 
             state = self.model.snapshot()
             state['metrics'] = dict(
-                calc_times=dict(data=(calc_time, dict(unit='ms')),
+                calc_times=dict(data=(calc_time, dict(unit='ms'))),
                 residuals=dict(data=(residual, None))
-                ))
+                )
 
             yield (step, state)
 
