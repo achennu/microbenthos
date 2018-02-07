@@ -11,12 +11,16 @@ with open('HISTORY.rst') as history_file:
 
 requirements = [
     'click>=6.0',
-    'fipy>=3.1.3',
-    'scipy',
+    'scipy>=1.0.0',
+    'numpy',
+    'fipy',
     'logutils',
     'sympy',
     'cerberus',
     'PyYaml',
+    'h5py',
+    'tqdm',
+    'matplotlib>=2.1'
 ]
 
 test_requirements = [
@@ -45,10 +49,13 @@ setup(
     },
     include_package_data=True,
     install_requires=requirements,
+    extras_require=dict(
+        test=test_requirements,
+        ),
     license="MIT license",
     zip_safe=False,
     keywords=['microbenthos', 'biogeochemistry', 'marine biology', 'microbial ecology',
-              'simulation'],
+              'simulation', 'modeling', 'microbial mats', 'sediments'],
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
         'Intended Audience :: Developers',
@@ -56,6 +63,6 @@ setup(
         'Natural Language :: English',
         'Programming Language :: Python :: 2.7',
     ],
-    test_suite='tests',
-    tests_require=test_requirements
+    test_suite='pytest',
+    # tests_require=test_requirements
 )

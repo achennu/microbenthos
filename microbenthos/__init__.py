@@ -9,10 +9,14 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 logger.addHandler(logging.NullHandler())
 
+import warnings
+warnings.filterwarnings('ignore', category=FutureWarning)
+
 from .utils import *
 from .core import *
 from .model import *
-
+from .dataview import *
+from .exporters import *
 
 def setup_console_logging(name=None, level=20):
     import logging

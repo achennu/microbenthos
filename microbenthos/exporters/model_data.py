@@ -18,7 +18,7 @@ class ModelDataExporter(BaseExporter):
     def __init__(self, overwrite = False, filename = 'simulation_data.h5', compression = 6,
                  **kwargs):
         self.logger = kwargs.get('logger') or logging.getLogger(__name__)
-        self.logger.debug('Init in Process')
+        self.logger.debug('Init in {}'.format(self.__class__.__name__))
         kwargs['logger'] = self.logger
         super(ModelDataExporter, self).__init__(**kwargs)
 
@@ -45,10 +45,11 @@ class ModelDataExporter(BaseExporter):
         if os.path.exists(self.outpath):
             if self.overwrite:
                 self.logger.warning('Overwrite set for output file: {}'.format(self.outpath))
+                os.remove(self.outpath)
             else:
                 raise ValueError('Overwrite is false but output path exists: {}'.format(self.outpath))
 
-        with hdf.File(self.outpath, 'w') as hf:
+        with hdf.File(self.outpath, 'w', libver='latest') as hf:
             hf.attrs.update(self.get_info())
 
         self.logger.debug('Preparation done')
