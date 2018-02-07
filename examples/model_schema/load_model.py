@@ -6,8 +6,16 @@ import os
 from microbenthos.model.model import MicroBenthosModel
 
 model_path = os.path.join(os.path.dirname(__file__), 'model.yml')
+
+# one way: send in a dictionary
 with open(model_path) as fp:
-    model = MicroBenthosModel.from_yaml(fp)
+    model_def = microbenthos.yaml.load(fp)
+model = MicroBenthosModel.create_from(model_def)
+
+# second way: send in the string
+with open(model_path) as fp:
+    model_def = fp.readlines()
+model = MicroBenthosModel.create_from('\n'.join(model_def))
 
 state = model.snapshot()
 

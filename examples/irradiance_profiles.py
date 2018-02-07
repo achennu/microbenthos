@@ -3,8 +3,8 @@ logger = logging.getLogger('microbenthos')
 logger.setLevel(20)
 from logutils.colorize import ColorizingStreamHandler
 logger.addHandler(ColorizingStreamHandler())
-from microbenthos.domain import SedimentDBLDomain
-from microbenthos.irradiance import Irradiance
+from microbenthos import SedimentDBLDomain, Irradiance
+
 from scipy.stats import norm
 from fipy import PhysicalField, Variable
 from matplotlib import pyplot as plt

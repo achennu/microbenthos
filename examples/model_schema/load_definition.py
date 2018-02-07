@@ -1,7 +1,7 @@
 import logging
 from microbenthos.utils.log import ColorizingStreamHandler
 import os
-from microbenthos import from_yaml, get_schema, yaml
+from microbenthos import from_dict, get_schema, yaml
 from pprint import pprint
 
 logger = logging.getLogger('microbenthos')
@@ -21,11 +21,11 @@ logger.warning('Opening model file!')
 with open(model_path) as fp:
     mdict = yaml.load(fp)
 
+
 # pprint(mdict['microbes']['cyano'].items())
 pprint(mdict['microbes']['cyano']['init_params']['features'])
 
-with open(model_path) as fp:
-    model_dict = from_yaml(fp, key='model') # uses inbuilt schema
+model_dict = from_dict(mdict, key='model') # uses inbuilt schema
 
 # model_dict = from_yaml(model_path, open(schema_path))
 
