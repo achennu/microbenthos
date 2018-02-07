@@ -292,19 +292,20 @@ class SimulationRunner(object):
 
         with self.exporters_activated():
             for step in self.simulation.evolution():
+                try:
+                    # step is (num, state) is the model snapshot
+                    if step:
+                        num, state = step
 
-                # step is (num, state) is the model snapshot
-                if step:
-                    num, state = step
+                        self.logger.info('Step #{}: Exporting model state'.format(num))
+                        for exporter in self.exporters.values():
+                            exporter.process(num, state)
+                    else:
+                        self.logger.debug('Step #{}: Empty model state received!'.format(num))
 
-                    self.logger.info('Step #{}: Exporting model state'.format(num))
-                    for exporter in self.exporters.values():
-                        exporter.process(num, state)
-                else:
-                    self.logger.debug('Step #{}: Empty model state received!'.format(num))
+                except KeyboardInterrupt:
+                    self.logger.error("Keyboard interrupt on simulation run!")
+                    break
 
-        # self.logger.info('Closing exporters')
-        # for exporter in self.exporters:
-        #     exporter.finish()
 
         self.teardown_logfile()
