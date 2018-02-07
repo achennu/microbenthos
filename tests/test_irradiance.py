@@ -152,7 +152,7 @@ class TestIrradiance:
     @pytest.mark.parametrize('hours_total', (3, 4, 10, 18, 24, 32, 48, 50))
     @pytest.mark.parametrize('day_fraction', (0, 0.1, 0.2, 0.5, 0.8, 0.9, 1.0))
     def test_fractions_hours(self, hours_total, day_fraction):
-        if not 4 <= hours_total <= 48:
+        if not 2 <= hours_total <= 48:
             with pytest.raises(ValueError):
                 I = Irradiance(hours_total=hours_total, day_fraction=day_fraction)
         elif not 0 < day_fraction < 1:
