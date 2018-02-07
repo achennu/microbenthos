@@ -27,8 +27,8 @@ class Irradiance(DomainEntity):
         self.channels = {}
 
         self.hours_total = PhysicalField(hours_total, 'h')
-        if not (4 <= self.hours_total.value <= 48):
-            raise ValueError('Hours total {} should be between (4, 48)'.format(self.hours_total))
+        if not (2 <= self.hours_total.value <= 48):
+            raise ValueError('Hours total {} should be between (2, 48)'.format(self.hours_total))
         day_fraction = float(day_fraction)
         if not (0 < day_fraction < 1):
             raise ValueError("Day fraction should be between 0 and 1")
@@ -272,7 +272,7 @@ class IrradianceChannel(DomainEntity):
                 try:
                     atten_source = model.get_object(var) * coeff
                 except ValueError:
-                    self.logger.error('Could not find attenuation source: {!r}'.format(var))
+                    self.logger.warning('Could not find attenuation source: {!r}'.format(var))
                     return
         else:
             atten_source = self.domain[var] * coeff

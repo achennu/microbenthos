@@ -136,7 +136,7 @@ irradiance: &irradiance_schema
         schema:
             hours_total:
                 type: float
-                min: 5
+                min: 2
                 max: 48
 
             day_fraction:
