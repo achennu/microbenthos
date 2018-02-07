@@ -1,14 +1,22 @@
 # -*- coding: utf-8 -*-
 
-import click
 import os
 
+import click
+
 from microbenthos.model import Simulation
+
 SOLVERS = Simulation.FIPY_SOLVERS
 
 from microbenthos.utils import find_subclasses_recursive
 from microbenthos.exporters import BaseExporter
 _exporters = {e._exports_: e for e in find_subclasses_recursive(BaseExporter)}
+
+try:
+    from matplotlib import style
+    STYLES = style.available
+except ImportError:
+    STYLES = []
 
 @click.group('microbenthos')
 @click.option('-v', '--verbosity', count=True, help='Set verbosity of console logging')
@@ -24,8 +32,11 @@ def cli(verbosity):
         elif verbosity >= 4:
             loglevel = 10
 
-        from microbenthos import setup_console_logging
-        setup_console_logging(level=loglevel)
+    else:
+        loglevel= 40
+
+    from microbenthos import setup_console_logging
+    setup_console_logging(level=loglevel)
 
 
 @cli.command('simulate')
@@ -38,13 +49,19 @@ def cli(verbosity):
 @click.option('--solver', help='Solver type to use from fipy', type=click.Choice(SOLVERS))
 @click.option('--overwrite', help='Overwrite data if file exists', is_flag=True)
 @click.option('-c', '--compression', type=click.IntRange(0, 9), default=6, help='Compression level for data (default: 6)')
-@click.option('--confirm', is_flag=True,
+@click.option('--confirm/--no-confirm', ' /-Y', default=True,
               help='Confirm before running simulation')
-@click.option('--progress/--no-progress', '-P/-nP', help='Show progress bar', default=True)
+@click.option('--progress/--no-progress', help='Show progress bar', default=True)
+@click.option('--plot/--no-plot', help='Show graphical plot of model data',
+              default=False)
+@click.option('--video/--no-video', help='Save video of simulation plot. This can slow things '
+                                         'down. ',
+              default=False)
 @click.argument('model_file', type=click.File())
-def cli_simulate(model_file, output_dir, export, overwrite, compression, confirm, progress, simtime_total, simtime_step, solver):
+def cli_simulate(model_file, output_dir, export, overwrite, compression, confirm, progress,
+                 simtime_total, simtime_step, solver, plot, video):
     """
-    Run simulation from model file.
+    Run simulation from model file
     """
     from microbenthos.utils import yaml
     from microbenthos.runners import SimulationRunner
@@ -78,6 +95,9 @@ def cli_simulate(model_file, output_dir, export, overwrite, compression, confirm
     if progress:
         runner.add_exporter('progress')
 
+    if plot or video:
+        runner.add_exporter('graphic', write_video=video, show=plot)
+
     for name, exptype in export:
         runner.add_exporter(exptype=exptype, name=name)
 
@@ -90,6 +110,77 @@ def cli_simulate(model_file, output_dir, export, overwrite, compression, confirm
     click.secho('Starting simulation...', fg='green')
     runner.run()
     click.secho('Simulation done.', fg='green')
+
+
+
+
+
+@cli.group('export')
+def export():
+    """
+    Export simulation data
+    """
+
+@export.command('video')
+@click.argument('datafile', type=click.Path(dir_okay=False, exists=True))
+@click.option('-o', '--outfile', type=click.Path(dir_okay=False),
+              help='Name of the output file')
+@click.option('--style', type=click.Choice(STYLES),
+              help='Matplotlib style name')
+@click.option('--figsize', type=(float, float), default=(9.6, 5.4),
+              help='Figure size in inches (default: 9.6, 5.4)')
+@click.option('--dpi', type=click.IntRange(100, 300), default=200,
+              help='Dots per inch for figure export (default: 200)')
+@click.option('--show', is_flag=True, help='Show figure on screen during export')
+def export_video(datafile, outfile, style, figsize, dpi, show):
+    """
+    Export video from model data
+    """
+    from microbenthos.dataview import HDFModelData, ModelPlotter
+    from matplotlib import animation
+    from tqdm import tqdm
+    import h5py as hdf
+
+    if outfile:
+        if os.path.exists(outfile):
+            click.confirm('Output file exists: {}\nOverwrite?'.format(outfile),
+                          abort=True)
+    else:
+        outfile = datafile.replace('.h5', '.mp4')
+
+    if not os.path.splitext(outfile)[1] == '.mp4':
+        outfile += '.mp4'
+
+    try:
+        Writer = animation.writers['ffmpeg']
+    except:
+        click.secho('Animation writer ffmpeg not available. Is it installed?', fg='red')
+        click.Abort()
+
+    writer = Writer(fps=15, bitrate=1800,
+                    metadata=dict(artist='Microbenthos - Arjun Chennu', copyright='2018'))
+
+    with hdf.File(datafile, 'r', libver='latest') as hf:
+        dm = HDFModelData(store=hf)
+
+        plot = ModelPlotter(model=dm, style=style, figsize=figsize, dpi=dpi)
+        if show:
+            plot.show(block=False)
+
+        click.secho('Exporting video to {} with size {} and dpi {}'.format(outfile, figsize,
+                                                                           dpi), fg='green')
+
+        with writer.saving(plot.fig, outfile, dpi=dpi):
+
+            for i in tqdm(range(len(dm.times))):
+                plot.update_artists(tidx=i)
+                plot.draw()
+                writer.grab_frame()
+
+        click.secho('Video export completed', fg='green')
+
+
+
 
 
 if __name__ == "__main__":

@@ -23,7 +23,7 @@ class ProgressExporter(BaseExporter):
         """
         Set up the progress bar
         """
-        self.logger.error('SIMULATION {} {} {}'.format(
+        self.logger.debug('Preparing progressbar for simulation: {} {} {}'.format(
             sim.simtime_total, sim.simtime_step, sim.total_steps
             ))
         self._pbar = tqdm.tqdm(total=sim.total_steps, desc=self._desc)
