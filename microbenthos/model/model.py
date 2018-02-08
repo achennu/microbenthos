@@ -1,5 +1,6 @@
 import logging
 from collections import Mapping
+
 from fipy import TransientTerm, ImplicitDiffusionTerm, ImplicitSourceTerm, CellVariable, Variable, \
     PhysicalField
 from sympy import Lambda, symbols
@@ -14,6 +15,7 @@ class MicroBenthosModel(CreateMixin):
     Class that represents the model, as a container for all the entities in the domain
     """
     schema_key = 'model'
+
     def __init__(self, **kwargs):
         super(MicroBenthosModel, self).__init__()
         # the __init__ call is deliberately empty. will implement cooeperative inheritance only

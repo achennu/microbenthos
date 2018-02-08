@@ -16,7 +16,7 @@ class GraphicExporter(BaseExporter):
     _exports_ = 'graphic'
     __version__ = '1.0'
 
-    def __init__(self, show=False, write_video = False, video_dpi = 200, filename =
+    def __init__(self, show = False, write_video = False, video_dpi = 200, filename =
     'simulation.mp4', **kwargs):
         self.logger = kwargs.get('logger') or logging.getLogger(__name__)
         self.logger.debug('Init in {}'.format(self.__class__.__name__))
@@ -57,7 +57,6 @@ class GraphicExporter(BaseExporter):
             self.writer.setup(self.plot.fig, self.outpath, dpi=self.video_dpi)
             self.logger.debug('Created video writer {}: dpi={}'.format(self.writer, self.video_dpi))
 
-
     def process(self, num, state):
         """
         Process the simulation step for graphical export
@@ -70,7 +69,6 @@ class GraphicExporter(BaseExporter):
         self.logger.debug('Processing snapshot #{}'.format(num))
 
         self.mdata.store = state
-        self.mdata.update()
 
         if num == 0:
             self.plot.setup_model()

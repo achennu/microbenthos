@@ -3,24 +3,28 @@
 import os
 
 import click
-
 from microbenthos.model import Simulation
 
 SOLVERS = Simulation.FIPY_SOLVERS
 
 from microbenthos.utils import find_subclasses_recursive
 from microbenthos.exporters import BaseExporter
+
 _exporters = {e._exports_: e for e in find_subclasses_recursive(BaseExporter)}
 
 try:
     from matplotlib import style
+
     STYLES = style.available
 except ImportError:
     STYLES = []
 
+
 @click.group('microbenthos')
 @click.option('-v', '--verbosity', count=True, help='Set verbosity of console logging')
-def cli(verbosity):
+@click.option('--logger', help='Set specified logger to loglevel (example: microbenthos.model 20)',
+              multiple=True, type=(str, click.IntRange(10, 40)))
+def cli(verbosity, logger):
     """Console entry point for microbenthos"""
     if verbosity:
         if verbosity == 1:
@@ -33,22 +37,28 @@ def cli(verbosity):
             loglevel = 10
 
     else:
-        loglevel= 40
+        loglevel = 40
 
     from microbenthos import setup_console_logging
     setup_console_logging(level=loglevel)
 
+    if logger:
+        for name, level in logger:
+            setup_console_logging(name=name, level=level)
+
 
 @cli.command('simulate')
-@click.option('-o', '--output-dir', type=click.Path(file_okay=False), default=os.getcwd(), help='Output directory for simulation')
+@click.option('-o', '--output-dir', type=click.Path(file_okay=False), default=os.getcwd(),
+              help='Output directory for simulation')
 @click.option('-x', '--export', multiple=True,
               type=(str, str),
               help="Add an exporter to run. Form: -x <name> <export_type>")
 @click.option('-T', '--simtime_total', type=str, help='Total simulation time. Example: "10h"')
 @click.option('-dt', '--simtime_step', type=str, help='Total simulation time. Example: "10s"')
 @click.option('--solver', help='Solver type to use from fipy', type=click.Choice(SOLVERS))
-@click.option('--overwrite', help='Overwrite data if file exists', is_flag=True)
-@click.option('-c', '--compression', type=click.IntRange(0, 9), default=6, help='Compression level for data (default: 6)')
+@click.option('-O', '--overwrite', help='Overwrite file, if exists', is_flag=True)
+@click.option('-c', '--compression', type=click.IntRange(0, 9), default=6,
+              help='Compression level for data (default: 6)')
 @click.option('--confirm/--no-confirm', ' /-Y', default=True,
               help='Confirm before running simulation')
 @click.option('--progress/--no-progress', help='Show progress bar', default=True)
@@ -63,11 +73,22 @@ def cli_simulate(model_file, output_dir, export, overwrite, compression, confirm
     """
     Run simulation from model file
     """
+
+    click.secho('Starting MicroBenthos simulation', fg='green')
     from microbenthos.utils import yaml
     from microbenthos.runners import SimulationRunner
 
     click.echo('Loading model from {}'.format(model_file.name))
     defs = yaml.load(model_file)
+
+    data_outpath = os.path.join(output_dir, 'simulation_data.h5')
+    if os.path.exists(data_outpath) and not overwrite:
+        if not confirm:
+            overwrite = True
+        else:
+            click.confirm('Overwrite existing file: {}?'.format(data_outpath),
+                          abort=True)
+            overwrite = True
 
     runner = SimulationRunner(output_dir=output_dir,
                               model=defs['model'],
@@ -101,18 +122,18 @@ def cli_simulate(model_file, output_dir, export, overwrite, compression, confirm
     for name, exptype in export:
         runner.add_exporter(exptype=exptype, name=name)
 
-    click.secho('Simulation setup: solver={0.fipy_solver} total={0.simtime_total} step={0.simtime_step} steps={0.total_steps}'.format(runner.simulation), fg='green')
+    click.secho(
+        'Simulation setup: solver={0.fipy_solver} total={0.simtime_total} step={0.simtime_step} '
+        'steps={0.total_steps}'.format(
+            runner.simulation), fg='green')
 
     if confirm:
         click.confirm('Proceed with simulation run?',
-                     default=True, abort=True)
+                      default=True, abort=True)
 
     click.secho('Starting simulation...', fg='green')
     runner.run()
     click.secho('Simulation done.', fg='green')
-
-
-
 
 
 @cli.group('export')
@@ -121,10 +142,12 @@ def export():
     Export simulation data
     """
 
+
 @export.command('video')
 @click.argument('datafile', type=click.Path(dir_okay=False, exists=True))
 @click.option('-o', '--outfile', type=click.Path(dir_okay=False),
               help='Name of the output file')
+@click.option('-O', '--overwrite', help='Overwrite file, if exists', is_flag=True)
 @click.option('--style', type=click.Choice(STYLES),
               help='Matplotlib style name')
 @click.option('--figsize', type=(float, float), default=(9.6, 5.4),
@@ -132,7 +155,7 @@ def export():
 @click.option('--dpi', type=click.IntRange(100, 300), default=200,
               help='Dots per inch for figure export (default: 200)')
 @click.option('--show', is_flag=True, help='Show figure on screen during export')
-def export_video(datafile, outfile, style, figsize, dpi, show):
+def export_video(datafile, outfile, overwrite, style, figsize, dpi, show):
     """
     Export video from model data
     """
@@ -142,11 +165,12 @@ def export_video(datafile, outfile, style, figsize, dpi, show):
     import h5py as hdf
 
     if outfile:
-        if os.path.exists(outfile):
-            click.confirm('Output file exists: {}\nOverwrite?'.format(outfile),
+        if os.path.exists(outfile) and not overwrite:
+            click.confirm('Overwrite existing file: {}?'.format(outfile),
                           abort=True)
     else:
-        outfile = datafile.replace('.h5', '.mp4')
+        # outfile = datafile.replace('.h5', '.mp4')
+        outfile = os.path.join(os.path.dirname(datafile), 'simulation.mp4')
 
     if not os.path.splitext(outfile)[1] == '.mp4':
         outfile += '.mp4'
@@ -178,9 +202,6 @@ def export_video(datafile, outfile, style, figsize, dpi, show):
                 writer.grab_frame()
 
         click.secho('Video export completed', fg='green')
-
-
-
 
 
 if __name__ == "__main__":

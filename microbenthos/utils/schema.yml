@@ -400,6 +400,11 @@ simulation:
         min: 1
         default: !unit 60 s
 
+    simtime_days:
+        type: float
+        min: 0
+        nullable: true
+
     residual_lim:
         type: float
         max: 1e-6
