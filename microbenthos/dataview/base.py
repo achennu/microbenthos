@@ -108,6 +108,7 @@ class ModelData(object):
         self.update_equations()
         self.update_microbes()
         self.update_irradiance()
+        self.logger.info('Updated model dataview')
 
     def update_domain_info(self):
         """
@@ -116,14 +117,14 @@ class ModelData(object):
         """
 
         self.depths = self.read_data_from(self.PATH_DEPTHS)
-        self.logger.info('Domain depths ({}): {}--> {}'.format(
+        self.logger.debug('Domain depths ({}): {}--> {}'.format(
             self.depths.shape,
             self.depths[0],
             self.depths[1],
             ))
 
         self.times = self.read_data_from(self.PATH_TIMES)
-        self.logger.info(
+        self.logger.debug(
             'Times ({}): {} --> {}'.format(
                 self.times.shape,
                 self.times[0],
@@ -164,8 +165,8 @@ class ModelData(object):
 
         self.eqn_vars = eqn_vars
         self.eqn_sources = eqn_sources
-        self.logger.info('Updated equation vars: {}'.format(self.eqn_vars))
-        self.logger.info('Updated equation sources: {}'.format(self.eqn_sources))
+        self.logger.debug('Updated equation vars: {}'.format(self.eqn_vars))
+        self.logger.debug('Updated equation sources: {}'.format(self.eqn_sources))
 
     def update_microbes(self):
         """
@@ -191,7 +192,7 @@ class ModelData(object):
                 microbes_features.add(data_path)
 
         self.microbe_features = microbes_features
-        self.logger.info('Updated microbial features: {}'.format(self.microbe_features))
+        self.logger.debug('Updated microbial features: {}'.format(self.microbe_features))
 
     def update_irradiance(self):
         """
@@ -202,13 +203,13 @@ class ModelData(object):
 
         irradiance = self.store[self.ENTRY_ENV].get(self.ENTRY_IRRADIANCE)
         if not irradiance:
-            self.logger.info('No irradiance info found')
+            self.logger.debug('No irradiance info found')
 
         else:
 
             for chname in irradiance['channels']:
                 data_path = self.PATH_IRRADIANCE_CHANNELS + '/'.join([
-                    '', # for a leading slash in the subpath
+                    '',  # for a leading slash in the subpath
                     chname,
                     'intensity'
                     ])
@@ -216,4 +217,4 @@ class ModelData(object):
                 self.logger.debug('Added irradiance intensity: {}'.format(data_path))
 
         self.irradiance_intensities = irradiances
-        self.logger.info('Updated irradiance intensities: {}'.format(self.irradiance_intensities))
+        self.logger.debug('Updated irradiance intensities: {}'.format(self.irradiance_intensities))

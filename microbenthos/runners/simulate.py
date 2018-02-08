@@ -300,12 +300,13 @@ class SimulationRunner(object):
                         self.logger.info('Step #{}: Exporting model state'.format(num))
                         for exporter in self.exporters.values():
                             exporter.process(num, state)
+
+                        self.logger.info('Step #{}: Export done'.format(num))
                     else:
                         self.logger.debug('Step #{}: Empty model state received!'.format(num))
 
                 except KeyboardInterrupt:
                     self.logger.error("Keyboard interrupt on simulation run!")
                     break
-
 
         self.teardown_logfile()

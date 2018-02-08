@@ -25,7 +25,7 @@ class Simulation(CreateMixin):
                  simtime_total = 6,
                  simtime_step = 120,
                  residual_lim = 1e-8,
-                 max_sweeps = 15,
+                 max_sweeps = 25,
                  fipy_solver = 'scipy'
                  ):
         super(Simulation, self).__init__()
@@ -272,6 +272,8 @@ class Simulation(CreateMixin):
         if res > self.residual_lim:
             self.logger.warning('Timestep residual {:.2g} > limit {:.2g}'.format(
                 res, self.residual_lim))
+            if res > 0.1:
+                raise RuntimeError('Residual {:.2g} too high to continue'.format(res))
 
         self.model.clock.increment_time(dt)
 

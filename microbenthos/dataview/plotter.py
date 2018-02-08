@@ -14,8 +14,10 @@ def fexp(number):
     (sign, digits, exponent) = Decimal(number).as_tuple()
     return len(digits) + exponent - 1
 
+
 def fman(number):
     return int(Decimal(number).scaleb(-fexp(number)).normalize().to_integral())
+
 
 def frepr(number):
     d = Decimal(number)
@@ -23,6 +25,7 @@ def frepr(number):
     nexp = len(digits) + exponent - 1
     nman = digits[0]
     return nman, nexp
+
 
 def flabel(number):
     return r' ${%d}\times\mathregular{10^{%d}}$' % frepr(number)
@@ -329,18 +332,19 @@ class ModelPlotter(object):
             data_normed = getattr(ax, 'data_normed_', False)
 
             if data_normed:
-                self.logger.debug('Normalizing data')
                 Dabs = abs(D)
-                Dabsmax = Dabs.max()
-                Dabsmin = Dabs.min()
-                Drange = float(Dabsmax - Dabsmin)
+                Dabsmax = float(Dabs.max())
+                Dabsmin = float(Dabs.min())
+                Drange = Dabsmax - Dabsmin
                 if Drange == 0:
                     if Dabsmax == 0:
-                        Drange = 1
+                        Drange = 1.0
                     else:
-                        Drange = float(Dabsmax)
+                        Drange = Dabsmax
 
                 D = D / Drange
+                self.logger.debug('Normalized {} data by {:.2g}: {:.2g} --> {:.2g}'.format(
+                    label_base, Drange, D.min(), D.max()))
                 label = label_base + flabel(Drange)
 
             else:
