@@ -31,7 +31,7 @@ test_requirements = [
 
 setup(
     name='microbenthos',
-    version='0.3.2',
+    version='0.3.3',
     description="In silico microbenthic simulations for studies of biogeochemistry and microbial ecology",
     long_description=readme + '\n\n' + history,
     author="Arjun Chennu",
