@@ -5,11 +5,13 @@ __email__ = 'achennu@mpi-bremen.de'
 __version__ = '0.3.2'
 
 import logging
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 logger.addHandler(logging.NullHandler())
 
 import warnings
+
 warnings.filterwarnings('ignore', category=FutureWarning)
 
 from .utils import *
@@ -18,7 +20,8 @@ from .model import *
 from .dataview import *
 from .exporters import *
 
-def setup_console_logging(name=None, level=20):
+
+def setup_console_logging(name = None, level = 20):
     import logging
     name = name or __name__
     logger = logging.getLogger(name)
