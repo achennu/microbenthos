@@ -170,7 +170,7 @@ def export_video(datafile, outfile, overwrite, style, figsize, dpi, show):
                           abort=True)
     else:
         # outfile = datafile.replace('.h5', '.mp4')
-        outfile = 'simulation.mp4'
+        outfile = os.path.join(os.path.dirname(datafile), 'simulation.mp4')
 
     if not os.path.splitext(outfile)[1] == '.mp4':
         outfile += '.mp4'

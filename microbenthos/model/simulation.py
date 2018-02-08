@@ -4,10 +4,10 @@ Module to handle the simulation of microbenthos models
 
 import importlib
 import logging
+import math
 import time
 
 from fipy import PhysicalField
-import math
 
 from ..utils import CreateMixin
 
@@ -24,10 +24,25 @@ class Simulation(CreateMixin):
     def __init__(self,
                  simtime_total = 6,
                  simtime_step = 120,
+                 simtime_days = 1,
                  residual_lim = 1e-8,
                  max_sweeps = 25,
                  fipy_solver = 'scipy'
                  ):
+        """
+        Initialize the Simulation with parameters
+
+        Args:
+            simtime_total (float): The number of hours for the simulation to run
+            simtime_step (float) Number of seconds in each simulation step
+            simtime_days (float): The number of days (in terms of the
+            model's irradiance cycle) the simulation should run for. Note that specifying this
+            will override the given `simtime_total` when the :attr:`.model` is supplied.
+            residual_lim (float): The max residual limit below which the timestep is considered
+            to be numerically accurate
+            max_sweeps (int): Number of sweeps to use within the timestep
+            fipy_solver (str): Name of the fipy solver to use
+        """
         super(Simulation, self).__init__()
         # the __init__ call is deliberately empty. will implement cooeperative inheritance only
         # when necessary
@@ -40,6 +55,13 @@ class Simulation(CreateMixin):
 
         self._simtime_total = None
         self._simtime_step = None
+        self.simtime_days = 0
+
+        if simtime_days:
+            simtime_days = float(simtime_days)
+            if simtime_days <= 0:
+                raise ValueError('simtime_days should be >0, not {:.2f}'.format(simtime_days))
+            self.simtime_days = simtime_days
 
         self.simtime_total = simtime_total
         self.simtime_step = simtime_step
@@ -117,7 +139,10 @@ class Simulation(CreateMixin):
         try:
             return int(math.ceil(self.simtime_total / self.simtime_step))
         except:
-            self.logger.error("Could not determine total_steps from simtime_total = {} and simtime_step = {}".format(self.simtime_total, self.simtime_step))
+            self.logger.error(
+                "Could not determine total_steps from simtime_total = {} "
+                "and simtime_step = {}".format(
+                    self.simtime_total, self.simtime_step))
 
     @property
     def residual_lim(self):
@@ -215,6 +240,15 @@ class Simulation(CreateMixin):
                 'Model interface is missing: {}'.format(set(failed_attrs + failed_callables)))
 
         self._model = m
+
+        # if simtime_days is given, override the simtime_total with it
+        if self.simtime_days is not None:
+            I = self.model.get_object('env.irradiance')
+            simtime_total = self.simtime_days * I.hours_total
+            self.logger.warning('Setting simtime_total={} for {} days of simtime'.format(
+                simtime_total, self.simtime_days
+                ))
+            self.simtime_total = simtime_total
 
     def start(self):
         """
