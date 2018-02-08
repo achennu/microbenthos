@@ -9,9 +9,23 @@ from cycler import cycler
 from . import ModelData
 
 
+# from https://stackoverflow.com/a/45359185
 def fexp(number):
     (sign, digits, exponent) = Decimal(number).as_tuple()
     return len(digits) + exponent - 1
+
+def fman(number):
+    return int(Decimal(number).scaleb(-fexp(number)).normalize().to_integral())
+
+def frepr(number):
+    d = Decimal(number)
+    (sign, digits, exponent) = d.as_tuple()
+    nexp = len(digits) + exponent - 1
+    nman = digits[0]
+    return nman, nexp
+
+def flabel(number):
+    return r' ${%d}\times\mathregular{10^{%d}}$' % frepr(number)
 
 
 class ModelPlotter(object):
@@ -107,7 +121,7 @@ class ModelPlotter(object):
         self.logger.debug('Setting model data: {}'.format(self.model))
 
         if self.model.store is None:
-            self.logger.warning('Cannot setup model, since store is empty')
+            self.logger.debug('Cannot setup model, since store is empty')
             return
 
         depth_unit = 'mm'
@@ -178,11 +192,11 @@ class ModelPlotter(object):
         mcycler = cycler('marker', ['s', '^', 'o', 'd', 'v', ])
         lwcycler = cycler('lw', [1.25])
         lscycler = cycler('ls', ['-', '--', ':'])
-        mscycler = cycler('ms', [4])
-        mevery = cycler('markevery', [len(self.depths) // 15])
+        mscycler = cycler('ms', [3])
+        mevery = cycler('markevery', [len(self.depths) // 20])
         # animcycler = cycler('animated', [True])
 
-        artiststyle_cycler = mcycler * lscycler * mscycler * mevery * lwcycler  # * animcycler
+        artiststyle_cycler = lscycler * mcycler * mscycler * mevery * lwcycler  # * animcycler
 
         color_iter = colcycler()
         artiststyle_iter = artiststyle_cycler()
@@ -190,6 +204,7 @@ class ModelPlotter(object):
         linestyles = defaultdict(lambda: artiststyle_cycler())
         self.styles_color = colstyles
         self.styles_lines = linestyles
+        self.artist_style = {}
 
     def create_artists(self):
 
@@ -219,19 +234,28 @@ class ModelPlotter(object):
         self.logger.debug('Creating artists for {}: {}'.format(ax.name, data_paths))
         label_paths = {self._get_label(p): p for p in data_paths}
         plot_order = sorted(label_paths)
+        self.logger.debug('Plot order for {} ax: {}'.format(ax.name, plot_order))
 
         zeros = np.zeros_like(self.model.depths)
 
         for label in plot_order:
             path = label_paths[label]
-            sourcename = label.split('.')[0]
-            style = self.styles_color[sourcename]
-            style.update(next(self.styles_lines[sourcename]))
-            self.logger.debug(
-                'Style for {} = {}'.format(label, sorted(style.items()))
-                )
 
-            artist = ax.plot(zeros, self.depths, label=label, **style)[0]
+            style = self.artist_style.get(label)
+            if style:
+                self.logger.debug('Retrieved style for {}: {}'.format(label, sorted(style.items())))
+            else:
+                sourcename = label.split('.')[0]
+                style = self.styles_color[sourcename].copy()
+                # copy required to not leak dict state across subentities
+                style.update(next(self.styles_lines[sourcename]))
+                self.logger.debug(
+                    'Created style for {} = {}'.format(label, sorted(style.items()))
+                    )
+                assert label not in self.artist_style
+                self.artist_style[label] = style
+
+            artist = ax.plot(zeros, self.depths, label=label, **self.artist_style[label])[0]
             self.artist_paths[artist] = path
             self.logger.debug('Created artist for {}: {} from {}'.format(label, artist, path))
 
@@ -299,7 +323,6 @@ class ModelPlotter(object):
 
             # now data is a numpy array
 
-
             label_base = self._get_label(dpath)
 
             # normalize if necessary
@@ -308,17 +331,17 @@ class ModelPlotter(object):
             if data_normed:
                 self.logger.debug('Normalizing data')
                 Dabs = abs(D)
-                Dmax = Dabs.max()
-                if Dmax == 0:
-                    self.logger.debug('Skipping data norm for {} because zero'.format(dpath))
+                Dabsmax = Dabs.max()
+                Dabsmin = Dabs.min()
+                Drange = float(Dabsmax - Dabsmin)
+                if Drange == 0:
+                    if Dabsmax == 0:
+                        Drange = 1
+                    else:
+                        Drange = float(Dabsmax)
 
-                else:
-                    D = D / Dmax
-
-                # set up the label with data norm exponent
-
-                dexp = fexp(float(Dmax))
-                label = label_base + r' $\times\mathregular{10^{%d}}$' % dexp
+                D = D / Drange
+                label = label_base + flabel(Drange)
 
             else:
                 label = label_base
