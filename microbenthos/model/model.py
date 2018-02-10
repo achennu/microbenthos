@@ -438,7 +438,7 @@ class ModelEquation(object):
         Initialize the model equation for a given variable
 
         Args:
-            model (object): an instance of :class:`MicroBenthosModel`
+            model (MicroBenthosModel): an instance of :class:`MicroBenthosModel`
             varpath (str): Model path of the equation variable
             coeff (int, float): the coefficient for the transient term
         """
@@ -451,6 +451,7 @@ class ModelEquation(object):
             raise ValueError('Invalid model type supplied: {}'.format(type(model)))
 
         self.model = model
+        """:type : MicroBenthosModel"""
 
         var = self.model.get_object(varpath)
         if isinstance(var, mVariable):
@@ -662,6 +663,10 @@ class ModelEquation(object):
 
 
 class ModelClock(Variable):
+    """
+    Subclass of :class:`Variable` to implement time incrementing as clock of the model.
+    """
+
     def __init__(self, model, **kwargs):
         self.model = model
         super(ModelClock, self).__init__(**kwargs)

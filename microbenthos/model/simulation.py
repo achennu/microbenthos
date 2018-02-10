@@ -310,6 +310,20 @@ class Simulation(CreateMixin):
         return res
 
     def evolution(self):
+        """
+        Evolves the model clock through the time steps for the simulation.
+
+        This yields the initial model state, followed by a snapshot for every time step. Along
+        with the model state, some metrics of the simulation run are injected into the state
+        dictionary.
+
+        Yields:
+            `(step, state)` tuple of step number and model state
+
+        """
+
+        # TODO: uncouple state yield time from time step, esp for small time steps
+
         self.logger.info('Simulation evolution starting')
         self.start()
 
