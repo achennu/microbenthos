@@ -24,7 +24,7 @@ class Simulation(CreateMixin):
     def __init__(self,
                  simtime_total = 6,
                  simtime_step = 120,
-                 simtime_days = 1,
+                 simtime_days = None,
                  residual_lim = 1e-8,
                  max_sweeps = 25,
                  fipy_solver = 'scipy'
@@ -55,7 +55,7 @@ class Simulation(CreateMixin):
 
         self._simtime_total = None
         self._simtime_step = None
-        self.simtime_days = 0
+        self.simtime_days = None
 
         if simtime_days:
             simtime_days = float(simtime_days)
@@ -277,10 +277,6 @@ class Simulation(CreateMixin):
     def run_timestep(self):
         """
         Evolve the model through a single timestep
-        Args:
-            dt:
-
-        Returns:
         """
         if not self.started:
             raise RuntimeError('Simulation timestep cannot be run since started=False')
