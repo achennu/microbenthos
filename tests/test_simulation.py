@@ -1,8 +1,11 @@
 import io
+import tempfile
+
 import mock
 import pytest
 
 from microbenthos.model import Simulation
+from microbenthos.runners import SimulationRunner
 from microbenthos.utils import yaml
 
 
@@ -162,6 +165,7 @@ class TestSimulation:
             sim.start()
 
     def test_run_timestep(self, model_with_eqn):
+
         model = model_with_eqn
         sim = Simulation()
         sim.model = model
@@ -174,9 +178,11 @@ class TestSimulation:
         dt = sim.simtime_step
 
         res = sim.run_timestep()
-        model.update_vars.assert_called_once()
         model.full_eqn.sweep.assert_called_once()
-        model.clock.increment_time.assert_called_once_with(dt)
+        model.clock.increment_time.assert_not_called()
+        model.update_vars.assert_called_once()
+        model.update_equations.assert_called_once_with(dt)
+
         assert res == RES
 
     def test_simulation_evolution(self):
@@ -189,6 +195,7 @@ class TestSimulation:
         runner.model = simulation.model
 
         simulation.model.snapshot.return_value = {}
+        simulation.simtime_step.return_value = dt = object()
 
         runner.simulation = SIMULATION_DEF
         runner.model = model
@@ -205,4 +212,5 @@ class TestSimulation:
                 assert isinstance(snap, dict)
 
             assert obj.call_count == total
-
+            assert simulation.model.clock.increment_time.call_count == total
+            assert simulation.model.clock.increment_timme.called_with(dt)
