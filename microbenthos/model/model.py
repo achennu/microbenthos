@@ -640,14 +640,13 @@ class ModelEquation(object):
 
         # check if it should be an implicit source
 
-        # dvars = obj.dependent_vars()
-        # ovars = dvars.difference({self.varname})
-        # is_implicit = bool(ovars)
+        dvars = obj.dependent_vars()
+        ovars = dvars.difference({self.varname})
+        is_implicit = bool(ovars)
 
 
-        if obj.implicit_source:
-            # self.logger.debug('Making implicit because of other vars: {}'.format(ovars))
-            self.logger.warning('Casting {!r} as implicit source'.format(path))
+        if is_implicit:
+            self.logger.debug('Making implicit because of other vars: {}'.format(ovars))
             term = ImplicitSourceTerm(coeff=coeff * expr, var=self.var)
 
         else:

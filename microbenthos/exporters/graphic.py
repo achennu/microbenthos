@@ -17,7 +17,7 @@ class GraphicExporter(BaseExporter):
     __version__ = '1.0'
 
     def __init__(self, show = False, write_video = False, video_dpi = 200, filename =
-    'simulation.mp4', **kwargs):
+    'simulation.mp4', track_vars=False, **kwargs):
         self.logger = kwargs.get('logger') or logging.getLogger(__name__)
         self.logger.debug('Init in {}'.format(self.__class__.__name__))
         kwargs['logger'] = self.logger
@@ -28,6 +28,7 @@ class GraphicExporter(BaseExporter):
         self.writer = None
         self.write_video = bool(write_video)
         self.video_dpi = int(video_dpi)
+        self.track_vars = track_vars
 
     @property
     def outpath(self):
@@ -43,7 +44,7 @@ class GraphicExporter(BaseExporter):
         """
         self.logger.info('Preparing graphic exporter')
         self.mdata = SnapshotModelData()
-        self.plot = ModelPlotter(model=self.mdata)
+        self.plot = ModelPlotter(model=self.mdata, track_vars=self.track_vars)
 
         if self.write_video:
             Writer = animation.writers['ffmpeg']
