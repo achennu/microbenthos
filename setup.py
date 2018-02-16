@@ -12,7 +12,6 @@ with open('HISTORY.rst') as history_file:
 requirements = [
     'click>=6.0',
     'scipy>=1.0.0',
-    'numpy',
     'fipy',
     'logutils',
     'sympy',
