@@ -47,6 +47,7 @@ class ExprProcess(Process):
     _sympy_ns = {}
 
     def __init__(self, formula, varnames, params = None, responses = None, expected_unit = None,
+                 implicit_source = False,
                  **kwargs):
         """
         Create a process expressed by the formula, possibly containing subprocesses.
@@ -114,6 +115,8 @@ class ExprProcess(Process):
         self._evaled_domain = None
         self._evaled_params = None
         self._evaled = None
+
+        self.implicit_source = implicit_source
 
     def __repr__(self):
         return 'Proc[{},{}]:Resp[{}]'.format(self.expr, self.vars, ','.join(self.responses.keys()))
@@ -278,6 +281,7 @@ class ExprProcess(Process):
         # collect the arguments
         varargs = [domain[_] for _ in self.varnames]
         pargs = [params[_] for _ in self.params]
+        # from fipy import PhysicalField
         # pargs = [_.inBaseUnits() if isinstance(_, PhysicalField) else _ for _ in pargs]
 
         args = varargs + pargs

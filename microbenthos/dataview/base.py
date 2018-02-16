@@ -34,12 +34,24 @@ class ModelData(object):
         #: numerical array of the domain depths
         self.eqn_vars = set()
         #: Set of data paths for equation variables
-        self.eqn_sources = set()
-        #: Set of data paths for equation sources
+        self.eqn_processes = set()
+        #: Set of data paths for equation process expressions
+        self.eqn_source_totals = set()
+        #: Set of data paths for equation source totals
+        self.eqn_var_actual = set()
+        #: Set of data paths for equation var actual density
+        self.eqn_var_expected = set()
+        #: Set of data paths for equation var expected density
+        self.eqn_var_difference = set()
+        #: Set of data paths var (expected - actual)
         self.microbe_features = set()
         #: set of data paths for microbial features
         self.irradiance_intensities = set()
         #: set of data paths for irradiance intensity channels
+        self.aliased_paths = dict()
+        #: mapping of aliased to real path
+        self.derived_paths = dict()
+        #: mapping of derived paths to its inputs and processor
 
         self.tdim = 0
 
@@ -62,15 +74,32 @@ class ModelData(object):
         """
         Get the data at the given path and time index
 
+        The path is first checked if it is in the :attr:`aliased_paths` or :attr:`derived_paths`,
+        and if not the data is looked for in the store.
+
         Args:
             path (str): A dotted path to the data
             tidx (int): The index for the :attr:`.times`
 
         Returns:
             A :class:`PhysicalField` of the data
+
         """
         self.logger.debug('Getting data from {} at time index {}'.format(path, tidx))
-        return self.read_data_from(path, tidx)
+
+        if path in self.aliased_paths:
+            path = self.aliased_paths[path]
+
+        if path in self.derived_paths:
+            self.logger.debug('Processing derived path: {}'.format(path))
+            input_names, processor = self.derived_paths[path]
+            inputs = [self.read_data_from(p, tidx) for p in input_names]
+            data = processor(*inputs)
+            self.logger.debug('Calculated derived data: {} {}'.format(data.shape, data.unit))
+            return data
+
+        else:
+            return self.read_data_from(path, tidx)
 
     @abc.abstractmethod
     def check_store(self, obj):
@@ -79,6 +108,21 @@ class ModelData(object):
 
         Returns:
             True if a valid store obj
+        """
+
+    @abc.abstractmethod
+    def get_node(self, path):
+        """
+        Return the node at the given path
+
+        Args:
+            path (str): A "/" separated path
+
+        Returns:
+            The node in the nested data store
+
+        Raises:
+            KeyError: if no such node exists
         """
 
     @abc.abstractmethod
@@ -133,13 +177,17 @@ class ModelData(object):
 
     def update_equations(self):
         """
-        Update the information about the equation variables and sources in :attr:`.eqn_vars` and
-        :attr:`eqn_sources`.
-
+        Update the information about the equation variables and sources in :attr:`.eqn_vars`,
+        :attr:`eqn_source_totals` and
+        :attr:`eqn_processes`.
         """
         self.logger.debug('Updating equations')
         eqn_sources = set()
         eqn_vars = set()
+        eqn_source_totals = set()
+        eqn_var_actual = set()
+        eqn_var_expected = set()
+        eqn_var_difference = set()
 
         eqns = self.store[self.ENTRY_EQUATIONS]
         for eqnname in eqns:
@@ -151,22 +199,121 @@ class ModelData(object):
                 'transient'
                 ]))
             varname = transient.keys()[0]
-            eqn_vars.add(varname.replace('domain', 'env').replace('.', '/'))
+            varname = varname.replace('domain', 'env').replace('.', '/')
+            eqn_vars.add(varname)
 
-            sources = self.read_metadata_from('/'.join([
+            sources_path = '/'.join([
                 self.ENTRY_EQUATIONS,
                 eqnname,
-                'sources'
-                ])).keys()
+                'sources',
+                ])
+            aliased_sources_path = varname + '/sources_total'
+            self.add_aliased_path(sources_path, aliased_sources_path)
+
+            eqn_source_totals.add(aliased_sources_path)
+
+            sources = self.read_metadata_from(sources_path).keys()
 
             self.logger.debug('Eqn {} with sources: {}'.format(varname, sources))
             for sname in sources:
                 eqn_sources.add(sname.replace('.', '/'))
 
+            tracked_path = '/'.join([
+                self.ENTRY_EQUATIONS,
+                eqnname,
+                'tracked_quantities'
+                ])
+            actual = tracked_path + '/var_actual'
+            actual_alias = varname + '/actual'
+            if actual_alias not in self.aliased_paths:
+                self.add_aliased_path(actual, actual_alias)
+
+            expected = tracked_path + '/var_expected'
+            expected_alias = varname + '/expected'
+            if expected_alias not in self.aliased_paths:
+                self.add_aliased_path(expected, expected_alias)
+
+            eqn_var_actual.add(actual_alias)
+            eqn_var_expected.add(expected_alias)
+
+            difference = varname + '/difference'
+
+            if difference not in self.derived_paths:
+                self.add_derived_data(difference,
+                                      inputs=(expected, actual),
+                                      processor=lambda expected, actual: expected - actual)
+            eqn_var_difference.add(difference)
+
         self.eqn_vars = eqn_vars
-        self.eqn_sources = eqn_sources
+        self.eqn_processes = eqn_sources
+        self.eqn_source_totals = eqn_source_totals
+        self.eqn_var_actual = eqn_var_actual
+        self.eqn_var_expected = eqn_var_expected
+        self.eqn_var_difference = eqn_var_difference
+
         self.logger.debug('Updated equation vars: {}'.format(self.eqn_vars))
-        self.logger.debug('Updated equation sources: {}'.format(self.eqn_sources))
+        self.logger.debug('Updated equation sources: {}'.format(self.eqn_processes))
+
+    def add_aliased_path(self, path, alias):
+        """
+        Alias a given path
+        """
+        self.logger.debug('Aliasing path {} --> {}'.format(path, alias))
+
+        try:
+            node = self.get_node(alias)
+        except KeyError:
+            node = None
+        finally:
+            if node is not None:
+                raise ValueError('Aliased path exists in store! {!r}'.format(alias))
+
+        self.aliased_paths[alias] = path
+
+    def add_derived_data(self, path, inputs, processor):
+        """
+        Add a path entry for derived data
+
+        This method is used to add a data path which will provide data based on the `inputs` and
+        a callable `processor`, as `processor(*inputs)`.
+
+        Args:
+            path (str): The new derived path
+            inputs (tuple): Set of input paths for the calculation
+            processor (callable): The callable that performs the calculation
+
+        Returns:
+            PhysicalField: The output from the calculation
+
+        Raises:
+            ValueError: if `path` exists in store
+            TypeError: if `processor` is not a callable
+        """
+        self.logger.debug('Adding derived path: {}'.format(path))
+
+        try:
+            node = self.get_node(path)
+        except KeyError:
+            node = None
+        finally:
+            if node is not None:
+                raise ValueError('Derived path exists in store! {!r}'.format(path))
+
+        if not callable(processor):
+            raise TypeError('Given data processor is not a callable: {}'.format(processor))
+
+        assert isinstance(inputs, (tuple, list))
+
+        if path in self.derived_paths:
+            self.logger.warning('Derived path exists and will be overwritten: {!r}'.format(path))
+
+        self.derived_paths[str(path)] = (inputs, processor)
+        self.logger.debug('Added derived path: {}'.format(path))
+
+    def update_tracked(self):
+        """
+        Update the information about the tracked history of the equation variables & sources
+        """
 
     def update_microbes(self):
         """

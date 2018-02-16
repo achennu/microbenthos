@@ -270,7 +270,10 @@ class IrradianceChannel(DomainEntity):
                 return
             else:
                 try:
-                    atten_source = model.get_object(var) * coeff
+                    atten_source_var = model.get_object(var)
+                    if not isinstance(atten_source_var, Variable):
+                        atten_source_var = atten_source_var.var
+                    atten_source = atten_source_var * coeff
                 except ValueError:
                     self.logger.warning('Could not find attenuation source: {!r}'.format(var))
                     return

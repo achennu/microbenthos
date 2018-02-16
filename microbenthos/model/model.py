@@ -206,12 +206,12 @@ class MicroBenthosModel(CreateMixin):
         state['domain'] = self.domain.snapshot(base=base)
 
         env = state['env'] = {}
-        microbes = state['microbes'] = {}
         for name, obj in self.env.items():
             self.logger.debug('Snapshotting: {} --> {}'.format(name, obj))
             ostate = obj.snapshot(base=base)
             env[name] = ostate
 
+        microbes = state['microbes'] = {}
         for name, obj in self.microbes.items():
             self.logger.debug('Snapshotting: {} --> {}'.format(name, obj))
             ostate = obj.snapshot(base=base)
@@ -474,10 +474,10 @@ class ModelEquation(object):
         self.term_transient = term
 
         self.Tracked = namedtuple('tracked_quantities',
-                                  ('time_step', 'var_expected', 'sources_change',
+                                  ('time_step', 'var_expected', 'var_actual', 'sources_change',
                                    'transport_change')
                                   )
-        self.tracked = self.Tracked(0.0, 0.0, 0.0, 0.0)
+        self.tracked = self.Tracked(0.0, 0.0, 0.0, 0.0, 0.0)
 
         self._track_quantities = None
         self.track_quantites = track_quantities
@@ -640,18 +640,18 @@ class ModelEquation(object):
 
         # check if it should be an implicit source
 
-        dvars = obj.dependent_vars()
-        ovars = dvars.difference({self.varname})
-        is_implicit = bool(ovars)
-        if is_implicit:
-            self.logger.debug('Making implicit because of other vars: {}'.format(ovars))
+        # dvars = obj.dependent_vars()
+        # ovars = dvars.difference({self.varname})
+        # is_implicit = bool(ovars)
+
+
+        if obj.implicit_source:
+            # self.logger.debug('Making implicit because of other vars: {}'.format(ovars))
+            self.logger.warning('Casting {!r} as implicit source'.format(path))
             term = ImplicitSourceTerm(coeff=coeff * expr, var=self.var)
 
         else:
             term = coeff * expr
-
-        # self.logger.error('TEST: all terms are now explicit, no implicit')
-        # term = coeff * expr
 
         self.source_terms[path] = term
         self.source_coeffs[path] = coeff
@@ -738,7 +738,7 @@ class ModelEquation(object):
             tracked_state = {k: dict(data=snapshot_var(v, base=base)) for \
                              (k, v) in self.tracked._asdict().items()
                              }
-            tracked_state['var_actual'] = dict(data=snapshot_var(self.var_quantity(), base=base))
+            # tracked_state['var_actual'] = dict(data=snapshot_var(self.var_quantity(), base=base))
             state['tracked_quantities'] = tracked_state
 
         return state
@@ -827,10 +827,12 @@ class ModelEquation(object):
         transport_change = dt * self.transport_rate()
 
         net_change = sources_change - transport_change
+        var_expected = self.tracked.var_expected + net_change()
 
         self.tracked = self.tracked._replace(
             time_step=dt,
-            var_expected=self.tracked.var_expected + net_change(),
+            var_expected=var_expected,
+            var_actual=self.var_quantity(),
             sources_change=sources_change,
             transport_change=transport_change()
             )
@@ -859,11 +861,12 @@ class ModelEquation(object):
             return
 
         elif b and not self.track_quantites:
-            self.logger.debug("track_quantites being set. Estimating quantities.")
+            self.logger.debug("track_quantities being set. Estimating quantities.")
 
             self.tracked = self.Tracked(
                 time_step=0.0,
                 var_expected=self.var_quantity(),
+                var_actual=self.var_quantity(),
                 sources_change=self.sources_rate(),
                 transport_change=self.transport_rate()
                 )
@@ -875,7 +878,7 @@ class ModelEquation(object):
         elif not b:
             self.logger.debug('Resetting track quantity')
 
-            self.tracked = self.Tracked(0.0, 0.0, 0.0, 0.0)
+            self.tracked = self.Tracked(0.0, 0.0, 0.0, 0.0, 0.0)
 
             self._track_quantities = b
 
