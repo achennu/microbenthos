@@ -210,6 +210,43 @@ def export_video(datafile, outfile, overwrite, style, figsize, dpi, show, budget
 
         click.secho('Video export completed', fg='green')
 
+@export.command('model')
+@click.argument('model_file', type=click.File())
+@click.option('--key', help='Load this key from the input file')
+@click.option('-v', '--verbose', is_flag=True, default=False,
+              help='Set this to see verbose output')
+def export_model(model_file, key, verbose):
+    """
+    Load a model from a file and export it after validation.
+    """
+    if verbose:
+        click.secho('Loading model from {}'.format(model_file), fg='green')
+
+    from microbenthos.utils import yaml, validate_dict
+
+    defs = yaml.load(model_file)
+    if key:
+        defs = defs[key]
+
+    try:
+        valid = validate_dict(defs, key='model')
+        from pprint import pformat
+        if verbose:
+            click.secho('Validated dictionary!', fg='green')
+
+        click.secho(yaml.dump(valid, indent=4, explicit_start=True, explicit_end=True), fg='yellow')
+
+    except ValueError:
+        click.secho('Model definition not validated!', fg='red')
+        click.Abort()
+    finally:
+        if verbose:
+            click.secho('Model export done', fg='green')
+
+
+
+
+
 
 if __name__ == "__main__":
     cli()

@@ -5,7 +5,7 @@ import pytest
 import yaml
 from fipy import Variable, PhysicalField
 
-from microbenthos import MicroBenthosModel, from_dict, SedimentDBLDomain
+from microbenthos import MicroBenthosModel, validate_dict, SedimentDBLDomain
 from microbenthos.model.model import ModelClock
 
 MODEL_DEF = """
@@ -142,7 +142,7 @@ def domain():
 
 @pytest.fixture()
 def model_dict():
-    return from_dict(yaml.load(MODEL_DEF), key='model')
+    return validate_dict(yaml.load(MODEL_DEF), key='model')
 
 
 @pytest.fixture()

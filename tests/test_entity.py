@@ -27,7 +27,7 @@ class TestEntity:
 
     @pytest.mark.xfail(reason='not implemented')
     def test_from_dict(self):
-        raise NotImplementedError('For Entity.from_dict()')
+        raise NotImplementedError('For Entity.validate_dict()')
 
 
 class TestDomainEntity:
