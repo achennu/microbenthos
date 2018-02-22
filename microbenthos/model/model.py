@@ -228,7 +228,7 @@ class MicroBenthosModel(CreateMixin):
 
     __getstate__ = snapshot
 
-    def add_equation(self, name, transient, sources = None, diffusion = None):
+    def add_equation(self, name, transient, sources = None, diffusion = None, track_budget = False):
         """
         Create a transient equation for the model.
 
@@ -274,7 +274,7 @@ class MicroBenthosModel(CreateMixin):
             if improper:
                 raise ValueError('Source terms not (path, coeff) tuples: {}'.format(improper))
 
-        eqn = ModelEquation(self, *transient)
+        eqn = ModelEquation(self, *transient, track_budget=track_budget)
 
         if diffusion:
             eqn.add_diffusion_term_from(*diffusion)
@@ -433,7 +433,7 @@ class ModelEquation(object):
     the model
     """
 
-    def __init__(self, model, varpath, coeff = 1, track_budget = True):
+    def __init__(self, model, varpath, coeff = 1, track_budget = False):
         """
         Initialize the model equation for a given variable
 
@@ -509,8 +509,11 @@ class ModelEquation(object):
         if not RHS_terms:
             raise RuntimeError('Cannot finalize equation without right-hand side terms')
 
-        self.sources_total = sum(self.source_exprs.values())
-        #: the additive sum of all the sources
+        if self.source_exprs:
+            self.sources_total = sum(self.source_exprs.values())
+            #: the additive sum of all the sources
+        else:
+            self.sources_total = PhysicalField(np.zeros_like(self.var), self.var.unit.name() + '/s')
 
         self.obj = self.term_transient == sum(self.RHS_terms)
         self.finalized = True
@@ -717,18 +720,18 @@ class ModelEquation(object):
             diff_def = dict()
 
         state = dict(
-            sources=dict(
-                metadata=self.source_coeffs,
-                data=snapshot_var(self.sources_total, base=base)
-                ),
-
             diffusion=dict(metadata=diff_def),
 
             transient=dict(metadata={self.varpath: self.term_transient.coeff}),
 
             metadata=dict(
                 variable=self.varpath,
-                )
+                ),
+
+            sources = dict(
+                metadata=self.source_coeffs,
+                data=snapshot_var(self.sources_total, base=base)
+                ),
             )
 
         if self.track_budget:
@@ -752,7 +755,6 @@ class ModelEquation(object):
         self.logger.debug('Estimating rate from {} sources '.format(len(self.source_terms)))
 
         # the total sources contribution
-
         if self.sources_total is not None:
             depths = self.model.domain.depths
             sources_rate = np.trapz(self.sources_total.numericValue, depths.numericValue)

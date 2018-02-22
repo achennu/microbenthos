@@ -101,7 +101,7 @@ class Entity(object):
 
     def post_init(self, **kwargs):
         """
-        Hook to customize initialization of entity after construction by :meth:`.from_dict`. This
+        Hook to customize initialization of entity after construction by :meth:`.validate_dict`. This
         must be overriden by subclasses, to be useful.
 
         Args:

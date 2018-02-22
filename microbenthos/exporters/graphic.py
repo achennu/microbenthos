@@ -14,7 +14,7 @@ class GraphicExporter(BaseExporter):
     committed to disk, reducing risk of data corruption. It uses :func:`save_snapshot` internally.
     """
     _exports_ = 'graphic'
-    __version__ = '2.0'
+    __version__ = '2.1'
 
     def __init__(self, show = False, write_video = False, video_dpi = 200, filename =
     'simulation.mp4', track_budget = False, **kwargs):

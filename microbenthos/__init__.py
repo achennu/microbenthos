@@ -2,7 +2,7 @@
 
 __author__ = """Arjun Chennu"""
 __email__ = 'achennu@mpi-bremen.de'
-__version__ = '0.4.1'
+__version__ = '0.4.2'
 
 import logging
 
@@ -26,11 +26,13 @@ def setup_console_logging(name = None, level = 20):
     name = name or __name__
     logger = logging.getLogger(name)
 
-    from .utils.log import ColorizingStreamHandler
+    from .utils.log import ColorizingStreamHandler, CONSOLE_DEBUG_FORMATTER, CONSOLE_SHORT_FORMATTER
     handler = ColorizingStreamHandler()
 
-    fmt = '%(module)s:%(funcName)s:%(levelname)s :: %(message)s'
-    fmter = logging.Formatter(fmt=fmt)
+    # fmt = '%(module)s:%(funcName)s:%(lineno)d:%(levelname)s :: %(message)s'
+    # fmter = logging.Formatter(fmt=fmt)
+
+    fmter = CONSOLE_DEBUG_FORMATTER if level < 20 else CONSOLE_SHORT_FORMATTER
     handler.setFormatter(fmter)
     handler.setLevel(level)
 

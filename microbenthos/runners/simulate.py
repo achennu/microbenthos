@@ -11,8 +11,8 @@ from ..utils.log import SIMULATION_DEFAULT_FORMATTER, SIMULATION_DEBUG_FORMATTER
 
 """
 def run():
-    model = MicroBenthosModel.from_yaml(model_file)
-    sim = Simulation.from_yaml(sim_file)
+    model = MicroBenthosModel.validate_yaml(model_file)
+    sim = Simulation.validate_yaml(sim_file)
     sim.model = model
     sim.start()
 

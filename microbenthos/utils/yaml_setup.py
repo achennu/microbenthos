@@ -7,7 +7,7 @@ from fipy import PhysicalField
 #     yaml_tag = u'!unit'
 #
 #     @classmethod
-#     def from_yaml(cls, constructor, node):
+#     def validate_yaml(cls, constructor, node):
 #         value = node.value
 #         if isinstance(value, (str, unicode)):
 #             ret = PhysicalField(str(value))

@@ -2,7 +2,7 @@ import io
 import logging
 from collections import Mapping
 
-from .loader import from_yaml, from_dict
+from .loader import validate_yaml, validate_dict
 
 
 class CreateMixin(object):
@@ -13,17 +13,17 @@ class CreateMixin(object):
 
         Various types of `obj` are handled:
             * if obj is an instance of the cls, then it is returned
-            * if obj is a Mapping (like `dict`), then it is passed to :meth:`cls.from_dict`
-            * if obj is a string, it is converted to stream-like and passed to :meth:`cls.from_yaml`
-            * if obj is a stream, it is passed to :meth:`cls.from_yaml`
+            * if obj is a Mapping (like `dict`), then it is passed to :meth:`cls.validate_dict`
+            * if obj is a string, it is converted to stream-like and passed to :meth:`cls.validate_yaml`
+            * if obj is a stream, it is passed to :meth:`cls.validate_yaml`
 
         Args:
             obj (obj, dict, str, stream): The various inputsIf an object is supplied,
             it is checked to
             be an instance of
             :class:`MicroBenthosModel`. If a dictionary is supplied then it is loaded with
-            :meth:`from_dict`. If a stream is supplied, it is considered to be a path to the
-            model definition yaml file and is loaded with :meth:`from_yaml`.
+            :meth:`validate_dict`. If a stream is supplied, it is considered to be a path to the
+            model definition yaml file and is loaded with :meth:`validate_yaml`.
 
         """
         logger = logging.getLogger(__name__)
@@ -57,7 +57,7 @@ class CreateMixin(object):
     def from_yaml(cls, stream, **kwargs):
         """
         Create an instance from a YAML format text stream. See
-        :meth:`from_yaml` for arguments.
+        :meth:`validate_yaml` for arguments.
 
         Args:
             stream (file-like stream): Input stream for yaml, which will be validated with the
@@ -70,12 +70,12 @@ class CreateMixin(object):
         if kwargs.get('schema_stream') is None:
             if kwargs.get('key') is None:
                 kwargs['key'] = cls.schema_key
-        return cls(**from_yaml(stream, **kwargs))
+        return cls(**validate_yaml(stream, **kwargs))
 
     @classmethod
     def from_dict(cls, mdict, **kwargs):
         """
-        Create an instance from a dictionary. See :meth:`from_dict` for arguments.
+        Create an instance from a dictionary. See :meth:`validate_dict` for arguments.
 
         Args:
             mdict (dict): Definition dicitonary which will be validated with internal or supplied
@@ -88,5 +88,5 @@ class CreateMixin(object):
         if kwargs.get('schema_stream') is None:
             if kwargs.get('key') is None:
                 kwargs['key'] = cls.schema_key
-        inst = cls(**from_dict(mdict, **kwargs))
+        inst = cls(**validate_dict(mdict, **kwargs))
         return inst

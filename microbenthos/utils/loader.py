@@ -165,17 +165,17 @@ class MicroBenthosSchemaValidator(cerberus.Validator):
         return float(value)
 
 
-def from_yaml(stream, key = None, schema = None, schema_stream = None):
+def validate_yaml(stream, key = None, schema = None, schema_stream = None):
     logger = logging.getLogger(__name__)
 
     logger.info('Loading definition with yaml')
 
     inp_dict = yaml.load(stream)
 
-    return from_dict(inp_dict, key=key, schema=schema, schema_stream=schema_stream)
+    return validate_dict(inp_dict, key=key, schema=schema, schema_stream=schema_stream)
 
 
-def from_dict(inp_dict, key, schema=None, schema_stream = None):
+def validate_dict(inp_dict, key, schema = None, schema_stream = None):
     logger = logging.getLogger(__name__)
 
     logger.info('Loading definition from: {}'.format(inp_dict.keys()))
@@ -198,18 +198,39 @@ def from_dict(inp_dict, key, schema=None, schema_stream = None):
     if not validated:
         logger.propagate = True
         logger.error('Input definition not validated for schema {!r}!'.format(key))
+        from pprint import pformat
+        logger.warning(pformat(validator.errors))
 
-        for key, errmsg in validator.errors.items():
-            val = inp_dict[key]
-            logger.error('Validation error: {} : {} val={} (type={})'.format(key, errmsg, val,
-                                                                        type(val)))
-        # logger.error(validator.errors)
-        # print('Errors: {!r}'.format(validator.errors))
+        for path, errmsg in _denest_errors(validator.errors, [], []):
+            logger.error('Error: {} :: {}'.format(path, errmsg))
 
         raise ValueError('Definition of {!r} invalid!'.format(key))
+
     else:
         logger.info('{} definition successfully loaded: {}'.format(key, validated.keys()))
         return validated
+
+
+def _denest_errors(D, paths, all_items):
+    for k in D:
+        # print('descending into {}'.format(k))
+        v = D[k]
+        paths.append(k)
+        for item in v:
+            if isinstance(item, dict):
+                _denest_errors(item, paths, all_items)
+                if paths:
+                    paths.pop(-1)
+
+            elif isinstance(item, str):
+                # full_path = '.'.join([str(_) for _ in paths])
+                # print(f'{full_path}: {item}')
+                all_items.append(('.'.join(str(_) for _ in paths), item))
+
+            if paths:
+                paths.pop(-1)
+
+    return all_items
 
 
 def get_schema(schema_stream = None):
@@ -228,7 +249,7 @@ def get_schema(schema_stream = None):
     return schema
 
 
-def find_subclasses_recursive(baseclass, subclasses=None):
+def find_subclasses_recursive(baseclass, subclasses = None):
     """
     Find subclasses recursively. `subclasses` should be a set into which to add the subclasses
     """
