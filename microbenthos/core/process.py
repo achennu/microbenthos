@@ -119,7 +119,8 @@ class ExprProcess(Process):
         self.implicit_source = implicit_source
 
     def __repr__(self):
-        return 'Proc[{},{}]:Resp[{}]'.format(self.expr, self.vars, ','.join(self.responses.keys()))
+        return 'Process[{},{}]:responses[{}]'.format(self.expr, self.vars,
+                                                     ','.join(self.responses.keys()))
 
     def check_names(self, names):
         """

@@ -30,7 +30,10 @@ def frepr(number):
 
 
 def flabel(number):
-    return r' ${%d}\times\mathregular{10^{%d}}$' % frepr(number)
+    try:
+        return r' ${%d}\times\mathregular{10^{%d}}$' % frepr(number)
+    except:
+        return r' ${%s}\timesERROR' % number
 
 
 class ModelPlotter(object):
@@ -140,7 +143,7 @@ class ModelPlotter(object):
             depth_ymin = yMIN + ySPACE
             depth_rect = [xMIN, depth_ymin + yPAD, depth_xspan, depth_yspan]
 
-            time_rect = [xMIN, yMIN, depth_xspan, ySPACE- yPAD]
+            time_rect = [xMIN, yMIN, depth_xspan, ySPACE - yPAD]
             time_nrows_ncols = (num_time_axis, 1)
 
         else:
@@ -156,7 +159,6 @@ class ModelPlotter(object):
                                share_x=True,
                                )
             self.axError = axgrid_time.axes_all[0]
-
 
         self.axMicrobes, self.axEnv, self.axSources, self.axProcesses = axgrid_depths.axes_all
 
@@ -557,8 +559,9 @@ class ModelPlotter(object):
             # get the data
             data = self.model.get_data(dpath, tidx=tidx)
             data_unit = data.unit.name()
-            self.logger.info('Got data {} {} of unit: {!r}'.format(type(data), data.shape,
-                                                                   data_unit))
+            self.logger.debug('Got data {} {} of unit: {!r}'.format(data.__class__.__name__,
+                                                                    data.shape,
+                                                                    data_unit))
 
             # cast to units
             if not getattr(ax, 'data_unit_', None):
@@ -570,15 +573,14 @@ class ModelPlotter(object):
 
             try:
                 D = data.inUnitsOf(ax_unit).value
-                self.logger.debug('Got data {} of shape {} dtype {}'.format(type(D),
-                                                                            D.shape,
-                                                                            D.dtype)
-                                  )
+                self.logger.debug('Got data {} dtype {} --> {}'.format(D.dtype, D.min(), D.max()))
+
             except TypeError:
                 self.logger.error("Error casting {} units from {} to {}".format(
                     dpath, data_unit, ax_unit
                     ))
-                raise
+                # raise
+                D = data.value
 
             # now data D is a numpy array
 
