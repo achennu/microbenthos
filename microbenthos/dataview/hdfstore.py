@@ -1,5 +1,6 @@
-from fipy import PhysicalField
 import h5py as hdf
+from fipy import PhysicalField
+
 from .base import ModelData
 
 
@@ -10,6 +11,10 @@ class HDFModelData(ModelData):
 
     def check_store(self, obj):
         return isinstance(obj, hdf.Group)
+
+    def get_node(self, path):
+        self.logger.debug('Looking for node path: {}'.format(path))
+        return self.store[path]
 
     def read_data_from(self, path, tidx=None):
         """

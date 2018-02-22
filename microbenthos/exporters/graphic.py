@@ -17,7 +17,7 @@ class GraphicExporter(BaseExporter):
     __version__ = '1.0'
 
     def __init__(self, show = False, write_video = False, video_dpi = 200, filename =
-    'simulation.mp4', **kwargs):
+    'simulation.mp4', track_budget = False, **kwargs):
         self.logger = kwargs.get('logger') or logging.getLogger(__name__)
         self.logger.debug('Init in {}'.format(self.__class__.__name__))
         kwargs['logger'] = self.logger
@@ -28,6 +28,7 @@ class GraphicExporter(BaseExporter):
         self.writer = None
         self.write_video = bool(write_video)
         self.video_dpi = int(video_dpi)
+        self.track_budget = track_budget
 
     @property
     def outpath(self):
@@ -43,7 +44,7 @@ class GraphicExporter(BaseExporter):
         """
         self.logger.info('Preparing graphic exporter')
         self.mdata = SnapshotModelData()
-        self.plot = ModelPlotter(model=self.mdata)
+        self.plot = ModelPlotter(model=self.mdata, track_budget=self.track_budget)
 
         if self.write_video:
             Writer = animation.writers['ffmpeg']
@@ -53,8 +54,6 @@ class GraphicExporter(BaseExporter):
                                      artist='Microbenthos - Arjun Chennu',
                                      copyright='2018')
                                  )
-
-            self.writer.setup(self.plot.fig, self.outpath, dpi=self.video_dpi)
             self.logger.debug('Created video writer {}: dpi={}'.format(self.writer, self.video_dpi))
 
     def process(self, num, state):
@@ -72,6 +71,8 @@ class GraphicExporter(BaseExporter):
 
         if num == 0:
             self.plot.setup_model()
+            if self.write_video:
+                self.writer.setup(self.plot.fig, self.outpath, dpi=self.video_dpi)
 
             if self.show:
                 self.plot.show()

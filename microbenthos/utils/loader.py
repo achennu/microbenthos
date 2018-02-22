@@ -1,12 +1,15 @@
 import logging
 import os
 from collections import Mapping
+
 import cerberus
 from fipy import PhysicalField
 from sympy import sympify, Symbol
 
 from .yaml_setup import yaml
 
+
+# TODO: Allow equation with no diffusion term
 
 class MicroBenthosSchemaValidator(cerberus.Validator):
     logger = logging.getLogger(__name__)

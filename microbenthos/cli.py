@@ -3,6 +3,7 @@
 import os
 
 import click
+
 from microbenthos.model import Simulation
 
 SOLVERS = Simulation.FIPY_SOLVERS
@@ -67,9 +68,11 @@ def cli(verbosity, logger):
 @click.option('--video/--no-video', help='Save video of simulation plot. This can slow things '
                                          'down. ',
               default=False)
+@click.option('--budget', is_flag=True, help='Track variable budget over time and show in plot',
+              default=False)
 @click.argument('model_file', type=click.File())
 def cli_simulate(model_file, output_dir, export, overwrite, compression, confirm, progress,
-                 simtime_total, simtime_step, solver, plot, video):
+                 simtime_total, simtime_step, solver, plot, video, budget):
     """
     Run simulation from model file
     """
@@ -117,10 +120,12 @@ def cli_simulate(model_file, output_dir, export, overwrite, compression, confirm
         runner.add_exporter('progress')
 
     if plot or video:
-        runner.add_exporter('graphic', write_video=video, show=plot)
+        runner.add_exporter('graphic', write_video=video, show=plot, track_budget=budget)
 
     for name, exptype in export:
         runner.add_exporter(exptype=exptype, name=name)
+
+    click.secho('Full equation: {}'.format(runner.model.full_eqn), fg='red')
 
     click.secho(
         'Simulation setup: solver={0.fipy_solver} total={0.simtime_total} step={0.simtime_step} '
@@ -155,7 +160,9 @@ def export():
 @click.option('--dpi', type=click.IntRange(100, 300), default=200,
               help='Dots per inch for figure export (default: 200)')
 @click.option('--show', is_flag=True, help='Show figure on screen during export')
-def export_video(datafile, outfile, overwrite, style, figsize, dpi, show):
+@click.option('--budget', is_flag=True, help='Show temporal budget error of variables',
+              default=False)
+def export_video(datafile, outfile, overwrite, style, figsize, dpi, show, budget):
     """
     Export video from model data
     """
@@ -184,10 +191,10 @@ def export_video(datafile, outfile, overwrite, style, figsize, dpi, show):
     writer = Writer(fps=15, bitrate=1800,
                     metadata=dict(artist='Microbenthos - Arjun Chennu', copyright='2018'))
 
-    with hdf.File(datafile, 'r', libver='latest') as hf:
+    with hdf.File(datafile, 'r') as hf:
         dm = HDFModelData(store=hf)
 
-        plot = ModelPlotter(model=dm, style=style, figsize=figsize, dpi=dpi)
+        plot = ModelPlotter(model=dm, style=style, figsize=figsize, dpi=dpi, track_budget=budget)
         if show:
             plot.show(block=False)
 

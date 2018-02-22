@@ -106,7 +106,12 @@ def _save_nested_dict(D, root, **kwargs):
 
         logger.debug('data at {}'.format(path))
         logger.debug('data shape={} dtype={}'.format(dsdata.shape, dsdata.dtype))
-        _save_data(root, dsdata, dsmeta, name='data', **kwargs)
+        try:
+            _save_data(root, dsdata, dsmeta, name='data', **kwargs)
+        except IOError:
+            logger.error('Error saving {} data {}: {}'.format(root, root['data'], dsdata.shape))
+            raise
+
 
     stdata = D.pop('data_static', None)
     if stdata:

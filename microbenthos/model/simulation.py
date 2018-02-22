@@ -9,6 +9,7 @@ import time
 
 from fipy import PhysicalField
 
+from .model import MicroBenthosModel
 from ..utils import CreateMixin
 
 
@@ -173,20 +174,27 @@ class Simulation(CreateMixin):
     @property
     def model(self):
         """
-                The model to run the simulation on. This is typically an instance of
-                :class:`~microbenthos.MicroBenthosModel` or its subclasses. The interface it must
-                provide is:
+        The model to run the simulation on. This is typically an instance of
+        :class:`~microbenthos.MicroBenthosModel` or its subclasses. The interface it must
+        provide is:
 
-                * a method :meth:`create_full_equation()`
-                * an attribute :attr:`full_eqn` created by above method, which is a
-                :class:`~fipy.terms.binaryTerm._BinaryTerm` that has a :meth:`sweep()` method.
-                * method :meth:`update_vars()` which is called before each timestep
-                * method :meth:`model.clock.increment_time(dt)` which is called after each timestep
-                """
+        * a method :meth:`create_full_equation()`
+        * an attribute :attr:`full_eqn` created by above method, which is a
+        :class:`~fipy.terms.binaryTerm._BinaryTerm` that has a :meth:`sweep()` method.
+        * method :meth:`update_vars()` which is called before each timestep
+        * method :meth:`model.clock.increment_time(dt)` which is called after each timestep
+        """
         return self._model
 
     @model.setter
     def model(self, m):
+        """
+        The model to operate the simulation on
+
+        Args:
+            m (MicroBenthosModel): The model instance
+
+        """
 
         if self.model:
             raise RuntimeError('Model already set')
@@ -289,9 +297,8 @@ class Simulation(CreateMixin):
 
         EQN = self.model.full_eqn
 
-        self.model.update_vars()
-
         while (res > self.residual_lim) and (num_sweeps < self.max_sweeps):
+
             res = EQN.sweep(
                 solver=self._solver,
                 dt=float(dt.numericValue)
@@ -305,7 +312,8 @@ class Simulation(CreateMixin):
             if res > 0.1:
                 raise RuntimeError('Residual {:.2g} too high to continue'.format(res))
 
-        self.model.clock.increment_time(dt)
+        self.model.update_vars()
+        self.model.update_equations(dt)
 
         return res
 
@@ -325,10 +333,12 @@ class Simulation(CreateMixin):
         # TODO: uncouple state yield time from time step, esp for small time steps
 
         self.logger.info('Simulation evolution starting')
+        self.logger.debug('Solving: {}'.format(self.model.full_eqn))
         self.start()
 
         # yield the initial condition first
         self.model.update_vars()
+
         yield (0, self.model.snapshot())
 
         for step in range(1, self.total_steps + 1):
@@ -350,5 +360,7 @@ class Simulation(CreateMixin):
                 )
 
             yield (step, state)
+
+            self.model.clock.increment_time(self.simtime_step)
 
         self.logger.info('Simulation evolution completed')

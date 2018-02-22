@@ -1,5 +1,6 @@
 from fipy import Variable, PhysicalField
-from fipy.tools import numerix
+from fipy.terms.binaryTerm import _BinaryTerm
+from fipy.tools import numerix as np
 
 
 def snapshot_var(V, base = False, to_unit = None):
@@ -7,7 +8,7 @@ def snapshot_var(V, base = False, to_unit = None):
     Utility to express a variable array as its numeric value and corresponding units
 
     Args:
-        V (PhysicalField, Variable, CellVariable, binOp, array): The variable
+        V (PhysicalField, Variable, CellVariable, binOp, np.ndarray, int, float): The variable
         base (bool): Whether to express in base units
         to_unit (str): Return array in these units. Ignored if `base = True`
 
@@ -15,7 +16,7 @@ def snapshot_var(V, base = False, to_unit = None):
         Tuple of (array, dict(unit=unit))
 
     """
-    if isinstance(V, (PhysicalField, Variable)):
+    if isinstance(V, (PhysicalField, Variable, _BinaryTerm)):
         # This should also cover fipy.CellVariable and fipy.variables.binaryOperatorVariable.binOp
         Vunit = V.unit.name()
         try:
@@ -35,14 +36,18 @@ def snapshot_var(V, base = False, to_unit = None):
 
         if Vunit != '1':
             unit = var.unit.name()
-            arr = numerix.array(var.value)
+            arr = np.array(var.value)
 
         else:
             arr = var
             unit = Vunit
 
-    elif isinstance(V, numerix.ndarray):
+    elif isinstance(V, np.ndarray):
         arr = V
+        unit = '1'
+
+    elif isinstance(V, (int, float)):
+        arr = np.array(V)
         unit = '1'
 
     else:
