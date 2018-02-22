@@ -367,6 +367,10 @@ model:
         valueschema:
             type: dict
             schema:
+                track_budget:
+                    type: boolean
+                    default: false
+
                 transient:
                     required: true
                     type: list

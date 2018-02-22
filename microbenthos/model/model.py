@@ -228,7 +228,7 @@ class MicroBenthosModel(CreateMixin):
 
     __getstate__ = snapshot
 
-    def add_equation(self, name, transient, sources = None, diffusion = None):
+    def add_equation(self, name, transient, sources = None, diffusion = None, track_budget = False):
         """
         Create a transient equation for the model.
 
@@ -274,7 +274,7 @@ class MicroBenthosModel(CreateMixin):
             if improper:
                 raise ValueError('Source terms not (path, coeff) tuples: {}'.format(improper))
 
-        eqn = ModelEquation(self, *transient)
+        eqn = ModelEquation(self, *transient, track_budget=track_budget)
 
         if diffusion:
             eqn.add_diffusion_term_from(*diffusion)
@@ -433,7 +433,7 @@ class ModelEquation(object):
     the model
     """
 
-    def __init__(self, model, varpath, coeff = 1, track_budget = True):
+    def __init__(self, model, varpath, coeff = 1, track_budget = False):
         """
         Initialize the model equation for a given variable
 
