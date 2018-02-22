@@ -333,6 +333,7 @@ class Simulation(CreateMixin):
         # TODO: uncouple state yield time from time step, esp for small time steps
 
         self.logger.info('Simulation evolution starting')
+        self.logger.debug('Solving: {}'.format(self.model.full_eqn))
         self.start()
 
         # yield the initial condition first

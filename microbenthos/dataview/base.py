@@ -1,6 +1,9 @@
 import abc
 import logging
 
+from fipy import PhysicalField
+from fipy.tools import numerix as np
+
 
 class ModelData(object):
     """
@@ -221,7 +224,7 @@ class ModelData(object):
             tracked_path = '/'.join([
                 self.ENTRY_EQUATIONS,
                 eqnname,
-                'tracked_quantities'
+                'tracked_budget'
                 ])
             actual = tracked_path + '/var_actual'
             actual_alias = varname + '/actual'
@@ -238,10 +241,18 @@ class ModelData(object):
 
             difference = varname + '/difference'
 
+            def relative_error(a, b):
+                if np.allclose(b.numericValue, 0):
+                    return PhysicalField(0.0, '')
+                else:
+                    return PhysicalField((a - b) / a, '')
+
+
             if difference not in self.derived_paths:
                 self.add_derived_data(difference,
                                       inputs=(expected, actual),
-                                      processor=lambda expected, actual: expected - actual)
+                                      processor=relative_error
+                                      )
             eqn_var_difference.add(difference)
 
         self.eqn_vars = eqn_vars

@@ -2,7 +2,7 @@ import logging
 from collections import Mapping, namedtuple
 
 import fipy.tools.numerix as np
-from fipy import TransientTerm, ImplicitDiffusionTerm, ImplicitSourceTerm, CellVariable, Variable, \
+from fipy import TransientTerm, ImplicitDiffusionTerm, CellVariable, Variable, \
     PhysicalField
 from sympy import Lambda, symbols
 
@@ -156,7 +156,7 @@ class MicroBenthosModel(CreateMixin):
 
         eqndef = definition.get('equations')
         if eqndef:
-            self.logger.warning('Creating equations')
+            self.logger.debug('Creating equations')
             for eqnname, eqndef in eqndef.items():
                 self.add_equation(eqnname, **eqndef)
 
@@ -385,6 +385,12 @@ class MicroBenthosModel(CreateMixin):
                 try:
                     obj.var.updateOld()
                     self.logger.debug("Updated old: {}".format(path))
+
+                    if obj.clip_min is not None or obj.clip_max is not None:
+                        obj.var.value = np.clip(obj.var.value, obj.clip_min, obj.clip_max)
+                        self.logger.info('Clipped {} between {} and {}'.format(
+                            obj, obj.clip_min, obj.clip_max
+                            ))
                     updated.append(path)
                 except AssertionError:
                     self.logger.debug('{} = {!r}.var.updateOld failed'.format(path, obj))
@@ -418,7 +424,7 @@ class MicroBenthosModel(CreateMixin):
         self.logger.debug('Updating model equations. Current time: {}'.format(self.clock))
 
         for eqn in self.equations.values():
-            eqn.update_tracked_quantities(dt)
+            eqn.update_tracked_budget(dt)
 
 
 class ModelEquation(object):
@@ -427,7 +433,7 @@ class ModelEquation(object):
     the model
     """
 
-    def __init__(self, model, varpath, coeff = 1, track_quantities = True):
+    def __init__(self, model, varpath, coeff = 1, track_budget = True):
         """
         Initialize the model equation for a given variable
 
@@ -473,14 +479,14 @@ class ModelEquation(object):
         self.logger.debug('Created transient term with coeff: {}'.format(coeff))
         self.term_transient = term
 
-        self.Tracked = namedtuple('tracked_quantities',
+        self.Tracked = namedtuple('tracked_budget',
                                   ('time_step', 'var_expected', 'var_actual', 'sources_change',
                                    'transport_change')
                                   )
         self.tracked = self.Tracked(0.0, 0.0, 0.0, 0.0, 0.0)
 
-        self._track_quantities = None
-        self.track_quantites = track_quantities
+        self._track_budget = None
+        self.track_budget = track_budget
 
     def __repr__(self):
         return 'TransientEqn({})'.format(self.varname)
@@ -640,17 +646,20 @@ class ModelEquation(object):
 
         # check if it should be an implicit source
 
-        dvars = obj.dependent_vars()
-        ovars = dvars.difference({self.varname})
-        is_implicit = bool(ovars)
+        # dvars = obj.dependent_vars()
+        # ovars = dvars.difference({self.varname})
+        # is_implicit = bool(ovars)
+        # if is_implicit:
+        #   self.logger.debug('Making implicit because of other vars: {}'.format(ovars))
 
+        # is_implicit = obj.implicit_source
+        #
+        # if is_implicit:
+        #     term = ImplicitSourceTerm(coeff=coeff * expr, var=self.var)
+        # else:
+        #     term = coeff * expr
 
-        if is_implicit:
-            self.logger.debug('Making implicit because of other vars: {}'.format(ovars))
-            term = ImplicitSourceTerm(coeff=coeff * expr, var=self.var)
-
-        else:
-            term = coeff * expr
+        term = coeff * expr
 
         self.source_terms[path] = term
         self.source_coeffs[path] = coeff
@@ -671,17 +680,6 @@ class ModelEquation(object):
         terms.extend(self.source_terms.values())
         return terms
 
-    # @property
-    # def sources_total(self):
-    #     """
-    #     The additive sum of all the source terms
-    #
-    #     Returns:
-    #         :class:`~fipy.terms.binaryTerm._BinaryTerm` if source_terms exist
-    #
-    #     """
-    #     return sum(self.source_exprs.values())
-
     def snapshot(self, base = False):
         """
         Return a state dictionary of the equation
@@ -698,7 +696,7 @@ class ModelEquation(object):
             * transient:
                 * metadata: transient term coeff and equation variable name
 
-            * tracked_quantities:
+            * tracked_budget:
                 * var_expected: data: integrated density of variable from tracked changes
                 * var_actual: data: integrated density of variable
                 * time_step: data: the time step duration
@@ -733,12 +731,12 @@ class ModelEquation(object):
                 )
             )
 
-        if self.track_quantites:
+        if self.track_budget:
             tracked_state = {k: dict(data=snapshot_var(v, base=base)) for \
                              (k, v) in self.tracked._asdict().items()
                              }
             # tracked_state['var_actual'] = dict(data=snapshot_var(self.var_quantity(), base=base))
-            state['tracked_quantities'] = tracked_state
+            state['tracked_budget'] = tracked_state
 
         return state
 
@@ -757,9 +755,9 @@ class ModelEquation(object):
 
         if self.sources_total is not None:
             depths = self.model.domain.depths
-            sources_rate = np.trapz(self.sources_total, depths)
+            sources_rate = np.trapz(self.sources_total.numericValue, depths.numericValue)
             # the trapz function removes all units, so figure out the unit
-            source_total_unit = self.sources_total.unit * depths.unit
+            source_total_unit = (self.sources_total[0] * depths[0]).inBaseUnits().unit
             sources_rate = PhysicalField(sources_rate, source_total_unit)
             self.logger.debug('Calculated source rate: {}'.format(sources_rate))
         else:
@@ -776,20 +774,20 @@ class ModelEquation(object):
             PhysicalField: The integrated quantity of the transport rate
 
         """
-        self.logger.debug('Estimating transport rate')
+        self.logger.debug('Estimating transport rate at boundaries')
 
         # the total transport at the boundaries
         # from Fick's law: J = -D dC/dx
 
         if self.term_diffusion:
-            distances = self.model.domain.distances
+            depths = self.model.domain.depths
 
             D = self.term_diffusion.coeff[0]
 
-            top = -D[0] * (self.var[0] - self.var[1]) / distances[0]
-            bottom = -D[-1] * (self.var[-1] - self.var[-2]) / distances[-1]
-            transport_rate = (top + bottom)
-            self.logger.debug('Calculated transport rate: {}'.format(transport_rate))
+            top = -D[0] * (self.var[0] - self.var[1]) / (depths[0] - depths[1])
+            bottom = -D[-1] * (self.var[-1] - self.var[-2]) / (depths[-1] - depths[-2])
+            transport_rate = (top + bottom).inBaseUnits()
+            # self.logger.debug('Calculated transport rate: {}'.format(transport_rate))
 
         else:
             transport_rate = 0.0
@@ -803,11 +801,12 @@ class ModelEquation(object):
         Returns:
             PhysicalField: depth integrated amount
         """
-        self.logger.debug('Calculating actual var quantity')
-        q = np.trapz(self.var, self.model.domain.depths)
-        return PhysicalField(q, self.var.unit * self.model.domain.depths.unit)
+        # self.logger.debug('Calculating actual var quantity')
+        q = np.trapz(self.var.numericValue, self.model.domain.depths.numericValue)
+        unit = (self.var[0] * self.model.domain.depths[0]).inBaseUnits().unit
+        return PhysicalField(q, unit)
 
-    def update_tracked_quantities(self, dt):
+    def update_tracked_budget(self, dt):
         """
         Update the tracked quantities for the variable, sources and transport
 
@@ -815,31 +814,34 @@ class ModelEquation(object):
             dt (PhysicalField): the time step
 
         """
-        if not self.track_quantites:
+        if not self.track_budget:
             return
 
-        self.logger.debug("{}: Updating tracked quantities".format(self))
+        self.logger.debug("{}: Updating tracked budget".format(self))
 
         # the change in the domain for this time step is then:
         # (source - transport) * dt
         sources_change = dt * self.sources_rate()
         transport_change = dt * self.transport_rate()
 
-        net_change = sources_change - transport_change
-        var_expected = self.tracked.var_expected + net_change()
+        self.logger.debug('source change: {}  transport_change: {}'.format(
+            sources_change, transport_change
+            ))
+        net_change = sources_change + transport_change
+        var_expected = self.tracked.var_expected + net_change
 
         self.tracked = self.tracked._replace(
             time_step=dt,
             var_expected=var_expected,
             var_actual=self.var_quantity(),
             sources_change=sources_change,
-            transport_change=transport_change()
+            transport_change=transport_change
             )
 
         self.logger.debug('{}: Updated tracked: {}'.format(self, self.tracked))
 
     @property
-    def track_quantites(self):
+    def track_budget(self):
         """
         Flag to indicate if the variable quantity should be tracked.
 
@@ -850,17 +852,17 @@ class ModelEquation(object):
             bool: Flag state
 
         """
-        return self._track_quantities
+        return self._track_budget
 
-    @track_quantites.setter
-    def track_quantites(self, b):
+    @track_budget.setter
+    def track_budget(self, b):
         b = bool(b)
-        if b and self.track_quantites:
-            self.logger.debug('track_quantites already set. Doing nothing.')
+        if b and self.track_budget:
+            self.logger.debug('track_budget already set. Doing nothing.')
             return
 
-        elif b and not self.track_quantites:
-            self.logger.debug("track_quantities being set. Estimating quantities.")
+        elif b and not self.track_budget:
+            self.logger.debug("track_budget being set. Estimating quantities.")
 
             self.tracked = self.Tracked(
                 time_step=0.0,
@@ -870,16 +872,16 @@ class ModelEquation(object):
                 transport_change=self.transport_rate()
                 )
 
-            self.logger.debug('Started tracking: {}'.format(self.tracked))
+            self.logger.debug('Started tracking budget: {}'.format(self.tracked))
 
-            self._track_quantities = b
+            self._track_budget = b
 
         elif not b:
-            self.logger.debug('Resetting track quantity')
+            self.logger.debug('Resetting track budget')
 
             self.tracked = self.Tracked(0.0, 0.0, 0.0, 0.0, 0.0)
 
-            self._track_quantities = b
+            self._track_budget = b
 
 
 class ModelClock(Variable):

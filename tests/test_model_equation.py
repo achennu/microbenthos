@@ -29,7 +29,7 @@ class TestModelEquation:
         assert eqn.term_transient.coeff == 3
         assert eqn.term_diffusion is None
         assert eqn.sources_total == 0
-        assert not eqn.track_quantites
+        assert not eqn.track_budget
 
     def test_finalize(self):
         self.fail()
@@ -82,7 +82,7 @@ class TestModelEquation:
                 mobj['sources_rate'].return_value = v
                 mobj['transport_rate'].return_value = v
 
-                eqn.track_quantites = True
+                eqn.track_budget = True
 
                 state = eqn.snapshot()
                 print('Got state with keys: {}'.format(state.keys()))
@@ -92,8 +92,8 @@ class TestModelEquation:
 
                 statekeys = ['sources', 'diffusion', 'transient', 'metadata']
 
-                if eqn.track_quantites:
-                    statekeys.append('tracked_quantities')
+                if eqn.track_budget:
+                    statekeys.append('tracked_budget')
 
                 assert set(statekeys) == set(state)
 
@@ -111,7 +111,7 @@ class TestModelEquation:
                 if track:
                     track_keys = ('var_expected', 'var_actual', 'sources_change',
                                   'transport_change', 'time_step')
-                    assert set(track_keys) == set(state['tracked_quantities'])
+                    assert set(track_keys) == set(state['tracked_budget'])
 
     def test_sources_rate(self):
         self.fail()

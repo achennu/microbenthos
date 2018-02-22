@@ -223,6 +223,8 @@ class Variable(DomainEntity):
     def __init__(self, name, create,
                  constraints = None,
                  seed = None,
+                 clip_min = None,
+                 clip_max = None,
                  **kwargs):
         """
         Configure the creation of a variable and its boundary conditions
@@ -251,6 +253,8 @@ class Variable(DomainEntity):
         self.check_constraints(self.constraints)
 
         self.seed_params = seed or dict()
+        self.clip_min = clip_min
+        self.clip_max = clip_max
 
     def __repr__(self):
         return 'Var({})'.format(self.name)

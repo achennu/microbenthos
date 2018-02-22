@@ -38,11 +38,11 @@ class ModelPlotter(object):
                  style = None,
                  figsize = (9.6, 5.4),
                  dpi = 100,
-                 unit_env = 'mol/m**3',
+                 unit_env = 'mol/l',
                  unit_microbes = 'mg/cm**3',
                  unit_sources = 'mol/l/h',
                  unit_process = 'mol/l/h',
-                 track_vars = False,
+                 track_budget = False,
                  ):
         self.logger = logging.getLogger(__name__)
         self.logger.debug('Initializing model plotter')
@@ -63,7 +63,7 @@ class ModelPlotter(object):
         self.unit_process = unit_process
         self.unit_sources = unit_sources
 
-        self.track_vars = track_vars
+        self.track_budget = track_budget
 
         style = style or 'seaborn-colorblind'
 
@@ -93,7 +93,7 @@ class ModelPlotter(object):
             * Sources (eqn source totals distribution)
             * Processes (eqn process expression distribution)
 
-        If :attr:`track_vars` is True and corresponding data is available in model, then the
+        If :attr:`track_budget` is True and corresponding data is available in model, then the
         `time_vars` axes is created.
 
         Returns:
@@ -101,13 +101,11 @@ class ModelPlotter(object):
         """
         self.logger.debug('Determining axes for model {}'.format(self.model))
 
-        # if track_vars is True and there are tracked quantities in the model store, then add a
-        # time panel for vars
-        # if track_vars is True and there are var_difference paths in the model store then add a
-        #  time panel for errors
+        # if track_budget is True and there are tracked quantities in the model store, then add a
+        # time panel for the estimated budget error on variables
         assert isinstance(self.model, ModelData)
 
-        vars_panel = len(self.model.eqn_var_actual) and bool(self.track_vars)
+        vars_panel = len(self.model.eqn_var_actual) and bool(self.track_budget)
 
         self.logger.debug('Creating figure: {}'.format(self._fig_kwds))
 
@@ -135,7 +133,7 @@ class ModelPlotter(object):
 
         if vars_panel:
             # time axes are required
-            num_time_axis = int(vars_panel) + int(error_panel)
+            num_time_axis = int(vars_panel)  # + int(error_panel)
             ySPACE = 0.15 * num_time_axis  # 15% per time axis
             depth_xspan = xMAX - xMIN
             depth_yspan = yMAX - (yMIN + ySPACE)
@@ -157,7 +155,7 @@ class ModelPlotter(object):
                                nrows_ncols=time_nrows_ncols,
                                share_x=True,
                                )
-            self.axVars, self.axError = axgrid_time.axes_all
+            self.axError = axgrid_time.axes_all[0]
 
 
         self.axMicrobes, self.axEnv, self.axSources, self.axProcesses = axgrid_depths.axes_all
@@ -221,14 +219,14 @@ class ModelPlotter(object):
             #                                     sharey=self.axMicrobes
             #                                     )
 
-            ax = self.axVars
-            ax.name = 'Var'
+            ax = self.axError
+            ax.name = 'BudgetError'
             # unit will be determined from data
             ax.data_unit_ = None
-            ax.data_normed_ = True
+            ax.data_normed_ = False
             axes_time.append(ax)
         else:
-            self.axVars = None
+            self.axError = None
 
         # if error_panel:
         #     # linked_ = self.axVars
@@ -283,6 +281,7 @@ class ModelPlotter(object):
 
             if ax is self.axes_time[-1]:
                 ax.set_xlabel('Time (h)')
+                ax.set_ylabel(r'$\frac{actual-expected}{expected}$')
 
             ax.skip_legend_ = False
             ax.annotate(ax.name, xycoords='axes fraction', size='small',
@@ -455,7 +454,7 @@ class ModelPlotter(object):
             ]
 
         if self.axes_time:
-            artist_sets.append((self.model.eqn_var_actual, self.axVars))
+            # artist_sets.append((self.model.eqn_var_actual, self.axVars))
             artist_sets.append((self.model.eqn_var_difference, self.axError))
 
         for data_paths, ax in artist_sets:

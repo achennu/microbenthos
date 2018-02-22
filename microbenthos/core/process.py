@@ -252,9 +252,9 @@ class ExprProcess(Process):
         # check that the expression actually only contains these symbols
         mismatched = set(args).difference(eatoms)
         if mismatched:
-            self.logger.error(
-                'Expression atoms {} mismatch with vars & params {}'.format(eatoms, args))
-            raise ValueError('Expression & var/params mismatch!')
+            self.logger.warning(
+                'Expression atoms {} possible mismatch with vars & params {}'.format(eatoms, args))
+            # raise ValueError('Expression & var/params mismatch!')
 
         self.logger.debug('Lambdifying: {} with args {}'.format(expr, args))
         exprfunc = lambdify(args, expr, modules=self._lambdify_modules)
@@ -281,8 +281,8 @@ class ExprProcess(Process):
         # collect the arguments
         varargs = [domain[_] for _ in self.varnames]
         pargs = [params[_] for _ in self.params]
-        # from fipy import PhysicalField
-        # pargs = [_.inBaseUnits() if isinstance(_, PhysicalField) else _ for _ in pargs]
+        from fipy import PhysicalField
+        pargs = [_.inBaseUnits() if isinstance(_, PhysicalField) else _ for _ in pargs]
 
         args = varargs + pargs
         # follow the same order of the params ordered dict
