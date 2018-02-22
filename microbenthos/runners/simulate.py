@@ -200,7 +200,7 @@ class SimulationRunner(object):
         """
         runner = dict(cls=self.__class__.__name__)
         libraries = ['fipy', 'scipy', 'PyTrilinos', 'pysparse', 'numpy', 'cerberus', 'yaml',
-                     'sympy', 'click', 'h5py', 'matplotlib']
+                     'sympy', 'click', 'h5py', 'matplotlib', 'microbenthos']
         library_versions = {}
         for name in libraries:
             try:

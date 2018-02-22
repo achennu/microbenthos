@@ -13,7 +13,7 @@ class ModelDataExporter(BaseExporter):
     committed to disk, reducing risk of data corruption. It uses :func:`save_snapshot` internally.
     """
     _exports_ = 'model_data'
-    __version__ = '1.0'
+    __version__ = '2.0'
 
     def __init__(self, overwrite = False, filename = 'simulation_data.h5', compression = 6,
                  **kwargs):
