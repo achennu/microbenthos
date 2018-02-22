@@ -1,7 +1,8 @@
 import logging
-from collections import Mapping
+from collections import Mapping, namedtuple
 
-from fipy import TransientTerm, ImplicitDiffusionTerm, ImplicitSourceTerm, CellVariable, Variable, \
+import fipy.tools.numerix as np
+from fipy import TransientTerm, ImplicitDiffusionTerm, CellVariable, Variable, \
     PhysicalField
 from sympy import Lambda, symbols
 
@@ -155,7 +156,7 @@ class MicroBenthosModel(CreateMixin):
 
         eqndef = definition.get('equations')
         if eqndef:
-            self.logger.warning('Creating equations')
+            self.logger.debug('Creating equations')
             for eqnname, eqndef in eqndef.items():
                 self.add_equation(eqnname, **eqndef)
 
@@ -163,27 +164,6 @@ class MicroBenthosModel(CreateMixin):
             self.create_full_equation()
 
         self.logger.info('Model setup done')
-
-    # @classmethod
-    # def from_yaml(cls, stream, **kwargs):
-    #     """
-    #     Load definition from YAML stream and create instance. See :meth:`from_yaml` for arguments.
-    #     """
-    #     if kwargs.get('schema') is None:
-    #         kwargs['key'] = 'model'
-    #     return MicroBenthosModel._from_definition(
-    #         from_yaml(stream, **kwargs))
-    #
-    # @classmethod
-    # def from_dict(cls, mdict, **kwargs):
-    #     """
-    #     Load definition from dict and create instance. See :meth:`from_dict` for
-    #             arguments.
-    #             """
-    #     if kwargs.get('schema') is None:
-    #         kwargs['key'] = 'model'
-    #     return MicroBenthosModel._from_definition(
-    #         from_dict(mdict, **kwargs))
 
     def entities_setup(self):
         """
@@ -226,12 +206,12 @@ class MicroBenthosModel(CreateMixin):
         state['domain'] = self.domain.snapshot(base=base)
 
         env = state['env'] = {}
-        microbes = state['microbes'] = {}
         for name, obj in self.env.items():
             self.logger.debug('Snapshotting: {} --> {}'.format(name, obj))
             ostate = obj.snapshot(base=base)
             env[name] = ostate
 
+        microbes = state['microbes'] = {}
         for name, obj in self.microbes.items():
             self.logger.debug('Snapshotting: {} --> {}'.format(name, obj))
             ostate = obj.snapshot(base=base)
@@ -282,7 +262,7 @@ class MicroBenthosModel(CreateMixin):
         if not is_pair_tuple(transient):
             raise ValueError('Transient term must be a (path, coeff) tuple!')
 
-        if not (diffusion) and not (sources):
+        if not diffusion and not sources:
             raise ValueError('One or both of diffusion and source terms must be given.')
 
         if diffusion:
@@ -295,6 +275,7 @@ class MicroBenthosModel(CreateMixin):
                 raise ValueError('Source terms not (path, coeff) tuples: {}'.format(improper))
 
         eqn = ModelEquation(self, *transient)
+
         if diffusion:
             eqn.add_diffusion_term_from(*diffusion)
 
@@ -395,7 +376,8 @@ class MicroBenthosModel(CreateMixin):
         Update all stored variables which have an `hasOld` setting. This is used while sweeping
         for solutions.
         """
-        self.logger.debug('Updating model variables with hasOld')
+
+        self.logger.debug('Updating model variables. Current time: {}'.format(self.clock))
         updated = []
         for name, obj in self.env.items():
             path = 'env.{}'.format(name)
@@ -403,6 +385,12 @@ class MicroBenthosModel(CreateMixin):
                 try:
                     obj.var.updateOld()
                     self.logger.debug("Updated old: {}".format(path))
+
+                    if obj.clip_min is not None or obj.clip_max is not None:
+                        obj.var.value = np.clip(obj.var.value, obj.clip_min, obj.clip_max)
+                        self.logger.info('Clipped {} between {} and {}'.format(
+                            obj, obj.clip_min, obj.clip_max
+                            ))
                     updated.append(path)
                 except AssertionError:
                     self.logger.debug('{} = {!r}.var.updateOld failed'.format(path, obj))
@@ -426,6 +414,18 @@ class MicroBenthosModel(CreateMixin):
 
         return updated
 
+    def update_equations(self, dt):
+        """
+        Update the equations
+
+        Args:
+            dt (PhysicalField): the time step duration
+        """
+        self.logger.debug('Updating model equations. Current time: {}'.format(self.clock))
+
+        for eqn in self.equations.values():
+            eqn.update_tracked_budget(dt)
+
 
 class ModelEquation(object):
     """
@@ -433,12 +433,12 @@ class ModelEquation(object):
     the model
     """
 
-    def __init__(self, model, varpath, coeff = 1):
+    def __init__(self, model, varpath, coeff = 1, track_budget = True):
         """
         Initialize the model equation for a given variable
 
         Args:
-            model (object): an instance of :class:`MicroBenthosModel`
+            model (MicroBenthosModel): an instance of :class:`MicroBenthosModel`
             varpath (str): Model path of the equation variable
             coeff (int, float): the coefficient for the transient term
         """
@@ -468,6 +468,7 @@ class ModelEquation(object):
         self.source_exprs = {}
         self.source_terms = {}
         self.source_coeffs = {}
+        self.sources_total = None
 
         self.diffusion_def = ()
 
@@ -477,6 +478,15 @@ class ModelEquation(object):
         term = TransientTerm(var=self.var, coeff=coeff)
         self.logger.debug('Created transient term with coeff: {}'.format(coeff))
         self.term_transient = term
+
+        self.Tracked = namedtuple('tracked_budget',
+                                  ('time_step', 'var_expected', 'var_actual', 'sources_change',
+                                   'transport_change')
+                                  )
+        self.tracked = self.Tracked(0.0, 0.0, 0.0, 0.0, 0.0)
+
+        self._track_budget = None
+        self.track_budget = track_budget
 
     def __repr__(self):
         return 'TransientEqn({})'.format(self.varname)
@@ -499,6 +509,9 @@ class ModelEquation(object):
         if not RHS_terms:
             raise RuntimeError('Cannot finalize equation without right-hand side terms')
 
+        self.sources_total = sum(self.source_exprs.values())
+        #: the additive sum of all the sources
+
         self.obj = self.term_transient == sum(self.RHS_terms)
         self.finalized = True
         self.logger.info('Final equation: {}'.format(self.obj))
@@ -520,6 +533,28 @@ class ModelEquation(object):
 
         self._term_transient = term
         self.logger.info('Transient term set: {}'.format(term))
+
+    def _get_term_obj(self, path):
+        """
+        Get the model object at the path and return a usable fipy type
+
+        Args:
+            path (str): dotted path in the model store
+
+        Returns:
+            Variable | :class:`fipy.terms.binaryTerm._BinaryTerm`
+
+        """
+
+        obj = self.model.get_object(path)
+        if isinstance(obj, ExprProcess):
+            expr = obj.evaluate()
+        elif isinstance(obj, mVariable):
+            expr = obj.var
+        elif isinstance(obj, Variable):
+            expr = obj
+
+        return expr
 
     def _add_diffusion_term(self, coeff):
         """
@@ -553,8 +588,8 @@ class ModelEquation(object):
         """
         self.logger.debug('Adding diffusion term from {!r}'.format(path))
 
-        obj = self.model.get_object(path)
-        expr = obj.evaluate()
+        expr = self._get_term_obj(path)
+
         self._add_diffusion_term(coeff=expr * coeff)
         self.diffusion_def = (path, coeff)
 
@@ -599,10 +634,7 @@ class ModelEquation(object):
             raise ValueError('Source coeff should be int or float, not {}'.format(type(coeff)))
 
         obj = self.model.get_object(path)
-        # this is an ExprProcess instance
-
-        # if not isinstance(obj, ExprProcess):
-        #     raise NotImplementedError('Source term from type: {!r}'.format(type(obj)))
+        """:type: ExprProcess"""
 
         expr = obj.evaluate()
         self.logger.debug('Created source expr: {!r}'.format(expr))
@@ -614,15 +646,20 @@ class ModelEquation(object):
 
         # check if it should be an implicit source
 
-        dvars = obj.dependent_vars()
-        ovars = dvars.difference({self.varname})
-        is_implicit = bool(ovars)
-        if is_implicit:
-            self.logger.debug('Making implicit because of other vars: {}'.format(ovars))
-            term = ImplicitSourceTerm(coeff=coeff * expr, var=self.var)
+        # dvars = obj.dependent_vars()
+        # ovars = dvars.difference({self.varname})
+        # is_implicit = bool(ovars)
+        # if is_implicit:
+        #   self.logger.debug('Making implicit because of other vars: {}'.format(ovars))
 
-        else:
-            term = coeff * expr
+        # is_implicit = obj.implicit_source
+        #
+        # if is_implicit:
+        #     term = ImplicitSourceTerm(coeff=coeff * expr, var=self.var)
+        # else:
+        #     term = coeff * expr
+
+        term = coeff * expr
 
         self.source_terms[path] = term
         self.source_coeffs[path] = coeff
@@ -643,25 +680,215 @@ class ModelEquation(object):
         terms.extend(self.source_terms.values())
         return terms
 
-    def snapshot(self):
+    def snapshot(self, base = False):
         """
         Return a state dictionary of the equation
 
-        This only includes the equation sources as metadata
+        The following information is exported:
+
+            * sources:
+                * metadata: source paths and coefficients
+                * data: the net rate of the combined sources
+
+            * diffusion:
+                * metadata: diffusion coefficient and definition
+
+            * transient:
+                * metadata: transient term coeff and equation variable name
+
+            * tracked_budget:
+                * var_expected: data: integrated density of variable from tracked changes
+                * var_actual: data: integrated density of variable
+                * time_step: data: the time step duration
+                * sources_change: data: integrated rate of combined sources over the time step
+                * transport_change: data: change in variable quantity due to mass transport
+
+            metadata:
+                * variable: the path in the model store
 
         Returns:
-            A dictionary of the equation state
+            dict: A dictionary of the equation state
         """
         self.logger.debug('Snapshot of {!r}'.format(self))
+
+        if self.diffusion_def:
+            diff_def = dict([self.diffusion_def])
+        else:
+            diff_def = dict()
+
         state = dict(
-            sources=dict(metadata=self.source_coeffs),
-            diffusion=dict(metadata=dict([self.diffusion_def])),
+            sources=dict(
+                metadata=self.source_coeffs,
+                data=snapshot_var(self.sources_total, base=base)
+                ),
+
+            diffusion=dict(metadata=diff_def),
+
             transient=dict(metadata={self.varpath: self.term_transient.coeff}),
+
+            metadata=dict(
+                variable=self.varpath,
+                )
             )
+
+        if self.track_budget:
+            tracked_state = {k: dict(data=snapshot_var(v, base=base)) for \
+                             (k, v) in self.tracked._asdict().items()
+                             }
+            # tracked_state['var_actual'] = dict(data=snapshot_var(self.var_quantity(), base=base))
+            state['tracked_budget'] = tracked_state
+
         return state
+
+    def sources_rate(self):
+        """
+        Estimate the rate of change of the variable quantity caused by source
+        terms.
+
+        Returns:
+            PhysicalField: The integrated quantity of the sources
+
+        """
+        self.logger.debug('Estimating rate from {} sources '.format(len(self.source_terms)))
+
+        # the total sources contribution
+
+        if self.sources_total is not None:
+            depths = self.model.domain.depths
+            sources_rate = np.trapz(self.sources_total.numericValue, depths.numericValue)
+            # the trapz function removes all units, so figure out the unit
+            source_total_unit = (self.sources_total[0] * depths[0]).inBaseUnits().unit
+            sources_rate = PhysicalField(sources_rate, source_total_unit)
+            self.logger.debug('Calculated source rate: {}'.format(sources_rate))
+        else:
+            sources_rate = 0.0
+
+        return sources_rate
+
+    def transport_rate(self):
+        """
+        Estimate the rate of change of the variable quantity caused by transport
+        at the domain boundaries
+
+        Returns:
+            PhysicalField: The integrated quantity of the transport rate
+
+        """
+        self.logger.debug('Estimating transport rate at boundaries')
+
+        # the total transport at the boundaries
+        # from Fick's law: J = -D dC/dx
+
+        if self.term_diffusion:
+            depths = self.model.domain.depths
+
+            D = self.term_diffusion.coeff[0]
+
+            top = -D[0] * (self.var[0] - self.var[1]) / (depths[0] - depths[1])
+            bottom = -D[-1] * (self.var[-1] - self.var[-2]) / (depths[-1] - depths[-2])
+            transport_rate = (top + bottom).inBaseUnits()
+            # self.logger.debug('Calculated transport rate: {}'.format(transport_rate))
+
+        else:
+            transport_rate = 0.0
+
+        return transport_rate
+
+    def var_quantity(self):
+        """
+        Calculate the integral quantity of the variable in the domain
+
+        Returns:
+            PhysicalField: depth integrated amount
+        """
+        # self.logger.debug('Calculating actual var quantity')
+        q = np.trapz(self.var.numericValue, self.model.domain.depths.numericValue)
+        unit = (self.var[0] * self.model.domain.depths[0]).inBaseUnits().unit
+        return PhysicalField(q, unit)
+
+    def update_tracked_budget(self, dt):
+        """
+        Update the tracked quantities for the variable, sources and transport
+
+        Args:
+            dt (PhysicalField): the time step
+
+        """
+        if not self.track_budget:
+            return
+
+        self.logger.debug("{}: Updating tracked budget".format(self))
+
+        # the change in the domain for this time step is then:
+        # (source - transport) * dt
+        sources_change = dt * self.sources_rate()
+        transport_change = dt * self.transport_rate()
+
+        self.logger.debug('source change: {}  transport_change: {}'.format(
+            sources_change, transport_change
+            ))
+        net_change = sources_change + transport_change
+        var_expected = self.tracked.var_expected + net_change
+
+        self.tracked = self.tracked._replace(
+            time_step=dt,
+            var_expected=var_expected,
+            var_actual=self.var_quantity(),
+            sources_change=sources_change,
+            transport_change=transport_change
+            )
+
+        self.logger.debug('{}: Updated tracked: {}'.format(self, self.tracked))
+
+    @property
+    def track_budget(self):
+        """
+        Flag to indicate if the variable quantity should be tracked.
+
+        When this is set, the variable quantity in the domain is updated in
+        :attr:`tracked_var_`.
+
+        Returns:
+            bool: Flag state
+
+        """
+        return self._track_budget
+
+    @track_budget.setter
+    def track_budget(self, b):
+        b = bool(b)
+        if b and self.track_budget:
+            self.logger.debug('track_budget already set. Doing nothing.')
+            return
+
+        elif b and not self.track_budget:
+            self.logger.debug("track_budget being set. Estimating quantities.")
+
+            self.tracked = self.Tracked(
+                time_step=0.0,
+                var_expected=self.var_quantity(),
+                var_actual=self.var_quantity(),
+                sources_change=self.sources_rate(),
+                transport_change=self.transport_rate()
+                )
+
+            self.logger.debug('Started tracking budget: {}'.format(self.tracked))
+
+            self._track_budget = b
+
+        elif not b:
+            self.logger.debug('Resetting track budget')
+
+            self.tracked = self.Tracked(0.0, 0.0, 0.0, 0.0, 0.0)
+
+            self._track_budget = b
 
 
 class ModelClock(Variable):
+    """
+    Subclass of :class:`Variable` to implement time incrementing as clock of the model.
+    """
+
     def __init__(self, model, **kwargs):
         self.model = model
         super(ModelClock, self).__init__(**kwargs)

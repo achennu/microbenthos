@@ -1,10 +1,12 @@
+import itertools
 import logging
 from collections import defaultdict, OrderedDict
 from decimal import Decimal
 
 import matplotlib.pyplot as plt
-import numpy as np
 from cycler import cycler
+from fipy.tools import numerix as np
+from mpl_toolkits.axes_grid1 import Grid
 
 from . import ModelData
 
@@ -38,7 +40,9 @@ class ModelPlotter(object):
                  dpi = 100,
                  unit_env = 'mol/l',
                  unit_microbes = 'mg/cm**3',
-                 unit_process = 'mol/l/h'
+                 unit_sources = 'mol/l/h',
+                 unit_process = 'mol/l/h',
+                 track_budget = False,
                  ):
         self.logger = logging.getLogger(__name__)
         self.logger.debug('Initializing model plotter')
@@ -48,19 +52,24 @@ class ModelPlotter(object):
 
         self.fig = None
         self._depths = None
-        self.axes = []
-        self.axes_linked = {}
+        self.axes_depth = []
+        self.axes_time = []
+        self.axes_depth_linked = defaultdict(list)
+        self.axes_time_linked = defaultdict(list)
         self.artist_paths = OrderedDict()
 
         self.unit_env = unit_env
         self.unit_microbes = unit_microbes
         self.unit_process = unit_process
+        self.unit_sources = unit_sources
+
+        self.track_budget = track_budget
 
         style = style or 'seaborn-colorblind'
 
         plt.style.use((style, {'axes.grid': False}))
-        # with plt.style.context(style):
-        self.create_figure(figsize=figsize, dpi=dpi)
+
+        self._fig_kwds = dict(figsize=figsize, dpi=dpi)
         if model:
             self.model = model
 
@@ -74,51 +83,268 @@ class ModelPlotter(object):
         self._model = m
         self.setup_model()
 
-    def create_figure(self, **kwargs):
-        self.logger.debug('Creating figure with params: {}'.format(kwargs))
-        self.fig, axes = plt.subplots(nrows=1, ncols=4, sharey=True, **kwargs)
+    def _create_figure(self, **kwargs):
+        """
+        Create the figure based on the model data structure.
 
-        assert isinstance(self.fig, plt.Figure)
-        self.axEnv, self.axMicrobes, self.axProc, self.axProcNorm = axes
-        # self.axEnvB = plt.twiny(self.axEnv)
+        The following vs-depth axes are created by default:
+            * Microbes (for microbial features & irradiance distribution)
+            * Environment (for  eqn variable distribution)
+            * Sources (eqn source totals distribution)
+            * Processes (eqn process expression distribution)
+
+        If :attr:`track_budget` is True and corresponding data is available in model, then the
+        `time_vars` axes is created.
+
+        Returns:
+
+        """
+        self.logger.debug('Determining axes for model {}'.format(self.model))
+
+        # if track_budget is True and there are tracked quantities in the model store, then add a
+        # time panel for the estimated budget error on variables
+        assert isinstance(self.model, ModelData)
+
+        vars_panel = len(self.model.eqn_var_actual) and bool(self.track_budget)
+
+        self.logger.debug('Creating figure: {}'.format(self._fig_kwds))
+
+        self.fig = plt.figure(**kwargs)
+
+        # grid_shape = (6, 4)
+        # depth_rowspan = grid_shape[0] - int(vars_panel) - int(error_panel)
+        # depth_colspan = 1
+        # vars_rowspan = 1 if error_panel else 2
+        # errors_rowspan = 1 if vars_panel else 2
+        # vars_loc = (depth_rowspan, 0)
+        # errors_loc = (depth_rowspan + int(vars_panel), 0)
+        # self.logger.warning('depth_rowspan: {} colspan: {}'.format(depth_rowspan, depth_colspan))
+        # self.logger.warning('vars loc: {} rowspan: {}'.format(vars_loc, vars_rowspan))
+        # self.logger.warning('errors loc: {} rowspan: {}'.format(errors_loc, errors_rowspan))
+
+        axes_depth = self.axes_depth
+        axes_time = self.axes_time
+
+        xMIN = 0.05
+        xMAX = 0.93 + 0.05
+        yMIN = 0.08
+        yMAX = 0.92
+        yPAD = 0.04
+
+        if vars_panel:
+            # time axes are required
+            num_time_axis = int(vars_panel)  # + int(error_panel)
+            ySPACE = 0.15 * num_time_axis  # 15% per time axis
+            depth_xspan = xMAX - xMIN
+            depth_yspan = yMAX - (yMIN + ySPACE)
+            depth_ymin = yMIN + ySPACE
+            depth_rect = [xMIN, depth_ymin + yPAD, depth_xspan, depth_yspan]
+
+            time_rect = [xMIN, yMIN, depth_xspan, ySPACE- yPAD]
+            time_nrows_ncols = (num_time_axis, 1)
+
+        else:
+            depth_rect = [0.05, 0.1, 0.93, 0.8]
+            time_rect = []
+
+        axgrid_depths = Grid(fig=self.fig, rect=depth_rect, nrows_ncols=(1, 4), share_y=True,
+                             axes_pad=0.08)
+
+        if time_rect:
+            axgrid_time = Grid(fig=self.fig, rect=time_rect,
+                               nrows_ncols=time_nrows_ncols,
+                               share_x=True,
+                               )
+            self.axError = axgrid_time.axes_all[0]
 
 
-        for ax, title, unit in zip(
-            (self.axEnv, self.axMicrobes, self.axProc, self.axProcNorm),
-            ('Environment', 'Microbes', 'Processes', 'Processes(norm)'),
-            (self.unit_env, self.unit_microbes, self.unit_process, self.unit_process)
-            ):
+        self.axMicrobes, self.axEnv, self.axSources, self.axProcesses = axgrid_depths.axes_all
+
+        # self.axMicrobes = ax = plt.subplot2grid(grid_shape, (0, 0),
+        #                                         rowspan=depth_rowspan,
+        #                                         colspan=depth_colspan,
+        #                                         )
+        ax = self.axMicrobes
+        ax.name = 'Microbes'
+        ax.invert_yaxis()
+        ax.data_unit_ = self.unit_microbes
+        ax.data_normed_ = False
+        axes_depth.append(ax)
+
+        # self.axEnv = ax = plt.subplot2grid(grid_shape, (0, 1),
+        #                                    rowspan=depth_rowspan,
+        #                                    colspan=depth_colspan,
+        #                                    sharey=self.axMicrobes
+        #                                    )
+        ax = self.axEnv
+        ax.name = 'Environment'
+        ax.data_unit_ = self.unit_env
+        ax.data_normed_ = True
+        axes_depth.append(ax)
+
+        # self.axSources = ax = plt.subplot2grid(grid_shape, (0, 2),
+        #                                        rowspan=depth_rowspan,
+        #                                        colspan=depth_colspan,
+        #                                        sharey=self.axMicrobes
+        #                                        )
+        ax = self.axSources
+        ax.name = 'Sources'
+        ax.data_unit_ = self.unit_sources
+        ax.data_normed_ = True
+        axes_depth.append(ax)
+
+        # self.axProcesses = ax = plt.subplot2grid(grid_shape, (0, 3),
+        #                                          rowspan=depth_rowspan,
+        #                                          colspan=depth_colspan,
+        #                                          sharey=self.axMicrobes
+        #                                          )
+        ax = self.axProcesses
+        ax.name = 'Processes'
+        ax.data_unit_ = self.unit_process
+        ax.data_normed_ = True
+        axes_depth.append(ax)
+
+        self.axIrrad = ax = plt.twiny(self.axMicrobes)
+        self.axes_depth_linked[self.axMicrobes] = ax
+        ax.name = 'Irradiance'
+        ax.data_normed_ = False
+        ax.set_xscale('log')
+        ax.set_xlim(0.01, 100)
+        ax.skip_legend_ = True
+
+        if vars_panel:
+            # self.axVars = ax = plt.subplot2grid(grid_shape, vars_loc,
+            #                                     rowspan=vars_rowspan,
+            #                                     colspan=grid_shape[1],
+            #                                     sharey=self.axMicrobes
+            #                                     )
+
+            ax = self.axError
+            ax.name = 'BudgetError'
+            # unit will be determined from data
+            ax.data_unit_ = None
+            ax.data_normed_ = False
+            axes_time.append(ax)
+        else:
+            self.axError = None
+
+        # if error_panel:
+        #     # linked_ = self.axVars
+        #     # self.axError = ax = plt.subplot2grid(grid_shape, errors_loc,
+        #     #                                      rowspan=errors_rowspan,
+        #     #                                      colspan=grid_shape[1],
+        #     #                                      sharex=linked_
+        #     #                                      )
+        #     ax = self.axError
+        #     ax.name = 'Error'
+        #     # unit will be determined from data
+        #     ax.data_unit_ = None
+        #     ax.data_normed_ = True
+        #     axes_time.append(ax)
+
+        linked_axes = self.axes_depth_linked.values()
+
+        for ax in self.axes_depth:
+            # assert isinstance(ax, plt.Axes)
+            # if ax is not self.axes_depth[0]:
+            #     # ax.set_sharey(self.axes_depth[0])
+            #     ax.yaxis.set_tick_params(which='both',
+            #                              labelleft=False, labelright=False)
+            #     ax.yaxis.offsetText.set_visible(False)
+
             # on top left of axis dict(xy=(-0.1, 0.98) ha=right, rotation=90)
             # on top within axis dict(xy=(0.5, 0.95), ha=center)
-            ax.annotate(title, xycoords='axes fraction', size='small',
+            ax.annotate(ax.name, xycoords='axes fraction', size='small',
                         xy=(0.5, 0.97), ha='center')
-            ax.name = title
-            ax.data_unit_ = unit
-            ax.set_xlabel(unit)
+
+            if ax.data_unit_:
+                ax.set_xlabel(ax.data_unit_)
+            ax.skip_legend_ = False
             ax.autoscale(tight=True, axis='y')
             ax.autoscale(tight=False, axis='x')
+            try:
+                ax.ticklabel_format(axis='x', style='sci', scilimits=(-2, 2),
+                                    useMathText=True)
+            except:
+                self.logger.debug('Could not set {} axes to scientific notation'.format(ax.name))
 
-        self.axEnv.invert_yaxis()
-        self.axEnv.set_ylabel('Depth (mm)')
+        for ax in self.axes_time:
+            # if ax is not self.axes_time[-1]:
+            #     # ax.set_sharex(self.axes_time[0])
+            #     ax.xaxis.set_tick_params(which='both',
+            #                              labeltop=False, labelbottom=False)
+            #     ax.xaxis.offsetText.set_visible(False)
+            #
+            #     ax.skip_legend_ = True
+            # else:
+            #     ax.skip_legend_ = False
 
-        self.axIrrad = plt.twiny(self.axMicrobes)
-        self.axes_linked[self.axMicrobes] = self.axIrrad
-        self.axIrrad.name = 'Irradiance'
-        self.axIrrad.set_xscale('log')
-        self.axIrrad.set_xlim(0.01, 100)
-        self.axIrrad.skip_legend_ = True
+            if ax is self.axes_time[-1]:
+                ax.set_xlabel('Time (h)')
+                ax.set_ylabel(r'$\frac{actual-expected}{expected}$')
 
-        self.axProc.skip_legend_ = True
+            ax.skip_legend_ = False
+            ax.annotate(ax.name, xycoords='axes fraction', size='small',
+                        xy=(1.05, 0.5), ha='center', va='center', rotation=90)
+            # defer ylabel setting till first data access
 
-        self.axEnv.data_normed_ = True
-        self.axProcNorm.data_normed_ = True
+            ax.autoscale(True)
 
-        self.axes.extend(axes)
-        self.logger.debug('Created {} panels'.format(len(self.axes) + len(self.axes_linked)))
+            try:
+                ax.ticklabel_format(axis='y', style='sci', scilimits=(-2, 2),
+                                    useMathText=True)
+            except:
+                self.logger.debug('Could not set {} axes to scientific notation'.format(ax.name))
+
+        self.logger.debug('Created figure with {} panels'.format(len(self.axes_all)))
+
+    # def create_figure(self, **kwargs):
+    #     self.logger.debug('Creating figure with params: {}'.format(kwargs))
+    #     self.fig, axes = plt.subplots(nrows=1, ncols=4, sharey=True, **kwargs)
+    #
+    #     assert isinstance(self.fig, plt.Figure)
+    #     self.axEnv, self.axMicrobes, self.axProc, self.axProcNorm = axes
+    #     # self.axEnvB = plt.twiny(self.axEnv)
+    #
+    #
+    #     for ax, title, unit in zip(
+    #         (self.axEnv, self.axMicrobes, self.axProc, self.axProcNorm),
+    #         ('Environment', 'Microbes', 'Processes', 'Processes(norm)'),
+    #         (self.unit_env, self.unit_microbes, self.unit_process, self.unit_process)
+    #         ):
+    #         # on top left of axis dict(xy=(-0.1, 0.98) ha=right, rotation=90)
+    #         # on top within axis dict(xy=(0.5, 0.95), ha=center)
+    #         ax.annotate(title, xycoords='axes fraction', size='small',
+    #                     xy=(0.5, 0.97), ha='center')
+    #         ax.name = title
+    #         ax.data_unit_ = unit
+    #         ax.set_xlabel(unit)
+    #         ax.autoscale(tight=True, axis='y')
+    #         ax.autoscale(tight=False, axis='x')
+    #
+    #     self.axEnv.invert_yaxis()
+    #     self.axEnv.set_ylabel('Depth (mm)')
+    #
+    #     self.axIrrad = plt.twiny(self.axMicrobes)
+    #     self.axes_depth_linked[self.axMicrobes].append(self.axIrrad)
+    #     self.axIrrad.name = 'Irradiance'
+    #     self.axIrrad.set_xscale('log')
+    #     self.axIrrad.set_xlim(0.01, 100)
+    #     self.axIrrad.skip_legend_ = True
+    #
+    #     self.axProc.skip_legend_ = True
+    #
+    #     self.axEnv.data_normed_ = True
+    #     self.axProcNorm.data_normed_ = True
+    #
+    #     self.axes.extend(axes)
+    #     self.logger.debug('Created {} panels'.format(len(self.axes) + len(
+    # self.axes_depth_linked)))
 
     @property
     def axes_all(self):
-        return self.axes + self.axes_linked.values()
+        return self.axes_depth + self.axes_time + list(
+            itertools.chain(self.axes_depth_linked.values()))
 
     def setup_model(self):
         self.logger.debug('Setting model data: {}'.format(self.model))
@@ -127,21 +353,15 @@ class ModelPlotter(object):
             self.logger.debug('Cannot setup model, since store is empty')
             return
 
+        if self.fig is None:
+            self._create_figure(**self._fig_kwds)
+
         depth_unit = 'mm'
         self.depths = D = np.array(self.model.depths.inUnitsOf(depth_unit).value)
 
-        for ax in self.axes:
+        for ax in self.axes_depth:
             ax.axhspan(min(D), 0, color='aquamarine', alpha=0.4, zorder=0)
             ax.axhspan(0, max(D), color='xkcd:brown', alpha=0.4, zorder=0)
-
-        for ax in self.axes:
-            self.logger.debug('Setting scientific notation on {}'.format(ax.name))
-            try:
-                ax.ticklabel_format(axis='x', style='sci', scilimits=(-2, 2),
-                                    useMathText=True)
-                # self.format_exponent(ax, axis='y')
-            except:
-                self.logger.debug('Could not set {} axes to scientific notation'.format(ax.name))
 
         self._init_artist_styles()
 
@@ -150,7 +370,7 @@ class ModelPlotter(object):
         self.update_legends()
 
         self.update_artists(tidx=0)
-        self.fig.tight_layout()
+        # self.fig.tight_layout()
 
     def _get_label(self, path):
         """
@@ -161,13 +381,16 @@ class ModelPlotter(object):
         Returns:
             A string that can be used as the label
         """
-        self.logger.debug('Getting label for {}'.format(path))
+        # self.logger.debug('Getting label for {}'.format(path))
         parts = path.split('/')
         assert len(parts) >= 2
 
         if parts[0] == 'env':
             if parts[1] == 'irradiance':
                 label = 'env.{}'.format(parts[3])
+
+            elif parts[-1] in ('sources_total', 'actual', 'expected', 'difference', 'error'):
+                label = '{}.{}'.format(parts[1], parts[-1])
 
             else:
                 label = parts[1]
@@ -187,10 +410,16 @@ class ModelPlotter(object):
         else:
             label = path.replace('/', '.')
 
+        self.logger.debug('Got label for {} --> {}'.format(path, label))
         return label
 
     def _init_artist_styles(self):
-        # prepare color cycle so that entities from a group only get the same color
+        """
+        Create the styles for the artists
+
+        Prepare color cycle and line styles so that entities from the same group get the same color
+
+        """
         colcycler = plt.rcParams['axes.prop_cycle']
         mcycler = cycler('marker', ['s', '^', 'o', 'd', 'v', ])
         lwcycler = cycler('lw', [1.25])
@@ -210,16 +439,23 @@ class ModelPlotter(object):
         self.artist_style = {}
 
     def create_artists(self):
+        """
+        Create the artists for the model plotter, and store it in :attr:`.artists`
+        """
 
         self.create_clock_artist()
 
         artist_sets = [
             (self.model.microbe_features, self.axMicrobes),
             (self.model.eqn_vars, self.axEnv),
-            (self.model.eqn_sources, self.axProc),
-            (self.model.eqn_sources, self.axProcNorm),
+            (self.model.eqn_source_totals, self.axSources),
+            (self.model.eqn_processes, self.axProcesses),
             (self.model.irradiance_intensities, self.axIrrad),
             ]
+
+        if self.axes_time:
+            # artist_sets.append((self.model.eqn_var_actual, self.axVars))
+            artist_sets.append((self.model.eqn_var_difference, self.axError))
 
         for data_paths, ax in artist_sets:
             self.create_line_artists(data_paths, ax)
@@ -240,6 +476,8 @@ class ModelPlotter(object):
         self.logger.debug('Plot order for {} ax: {}'.format(ax.name, plot_order))
 
         zeros = np.zeros_like(self.model.depths)
+        all_depth_axes = self.axes_depth + self.axes_depth_linked.values()
+        all_time_axes = self.axes_time + self.axes_time_linked.values()
 
         for label in plot_order:
             path = label_paths[label]
@@ -258,7 +496,14 @@ class ModelPlotter(object):
                 assert label not in self.artist_style
                 self.artist_style[label] = style
 
-            artist = ax.plot(zeros, self.depths, label=label, **self.artist_style[label])[0]
+            if ax in all_depth_axes:
+                artist = ax.plot(zeros, self.depths, label=label, **self.artist_style[label])[0]
+            elif ax in all_time_axes:
+                artist = ax.plot([], [], label=label, **self.artist_style[label])[0]
+
+            else:
+                raise ValueError('Unknown artist axes {}: {}'.format(ax, ax.name))
+
             self.artist_paths[artist] = path
             self.logger.debug('Created artist for {}: {} from {}'.format(label, artist, path))
 
@@ -267,7 +512,7 @@ class ModelPlotter(object):
         legkwds = dict(loc='lower center', framealpha=0, fontsize='x-small')
 
         if axes is None:
-            axes = self.axes
+            axes = self.axes_all
 
         for ax in axes:
             if ax.legend_ is None or getattr(ax, 'data_normed_', False):
@@ -275,7 +520,7 @@ class ModelPlotter(object):
                 if getattr(ax, 'skip_legend_', False):
                     continue
 
-                axlink = self.axes_linked.get(ax)
+                axlink = self.axes_depth_linked.get(ax)
                 H, L = ax.get_legend_handles_labels()
                 if axlink:
                     h, l = axlink.get_legend_handles_labels()
@@ -301,30 +546,41 @@ class ModelPlotter(object):
         self.clock_artist.set_text(hmstr)
         self.logger.debug('Time: {}'.format(hmstr))
 
+        all_depth_axes = self.axes_depth + self.axes_depth_linked.values()
+        all_time_axes = self.axes_time + self.axes_time_linked.values()
+
         for artist, dpath in self.artist_paths.items():
 
             ax = artist.axes
-            self.logger.debug('Updating {} artist {} from {}'.format(ax.name, artist, dpath))
+            self.logger.info('Updating {} artist {} from {}'.format(ax.name, artist, dpath))
 
             # get the data
             data = self.model.get_data(dpath, tidx=tidx)
             data_unit = data.unit.name()
-            self.logger.debug('Got data {} of unit: {!r}'.format(data.shape, data_unit))
+            self.logger.info('Got data {} {} of unit: {!r}'.format(type(data), data.shape,
+                                                                   data_unit))
 
             # cast to units
-            if not hasattr(ax, 'data_unit_'):
+            if not getattr(ax, 'data_unit_', None):
                 ax.data_unit_ = data.unit.name()
+                self.logger.debug('Set axes {} to unit: {}'.format(ax.name, ax.data_unit_))
+                # if ax in all_time_axes:
+                #     ax.set_ylabel(ax.data_unit_)
             ax_unit = ax.data_unit_
 
             try:
                 D = data.inUnitsOf(ax_unit).value
+                self.logger.debug('Got data {} of shape {} dtype {}'.format(type(D),
+                                                                            D.shape,
+                                                                            D.dtype)
+                                  )
             except TypeError:
                 self.logger.error("Error casting {} units from {} to {}".format(
                     dpath, data_unit, ax_unit
                     ))
                 raise
 
-            # now data is a numpy array
+            # now data D is a numpy array
 
             label_base = self._get_label(dpath)
 
@@ -336,28 +592,52 @@ class ModelPlotter(object):
                 Dabsmax = float(Dabs.max())
                 Dabsmin = float(Dabs.min())
                 Drange = Dabsmax - Dabsmin
-                if Drange == 0:
-                    if Dabsmax == 0:
+                if Drange <= 1e-15:
+                    self.logger.debug('abs(data) max = min = {:.2g}'.format(Dabsmax, Dabsmin))
+                    if Dabsmax == 0.0:
                         Drange = 1.0
+                        self.logger.debug('all data is zero, normalizing by 1.0')
                     else:
                         Drange = Dabsmax
+                        self.logger.debug('normalizing by abs(data).max = {:.2g}'.format(Dabsmax))
+                else:
+                    self.logger.debug('abs(data) range {:.2g} --> {:.2g}'.format(Dabsmin, Dabsmax))
+                    Drange = Dabsmax
 
                 D = D / Drange
-                self.logger.debug('Normalized {} data by {:.2g}: {:.2g} --> {:.2g}'.format(
+
+                self.logger.info('Normalized {} data by {:.3g}: {:.3g} --> {:.3g}'.format(
                     label_base, Drange, D.min(), D.max()))
+
                 label = label_base + flabel(Drange)
+
+                if D.max() > 1.01:
+                    self.logger.error('data max {} is not <=1.01'.format(D.max()))
+                    self.logger.warning(D)
+                    self.logger.warning('Drange: {}'.format(Drange))
+                    self.logger.warning('Original data: {}'.format(data.inUnitsOf(ax_unit).value))
+                    raise RuntimeError('Data normalization of {} failed!'.format(dpath))
 
             else:
                 label = label_base
 
             # now ready to set data and label
-            artist.set_xdata(D)
-            artist.set_label(label)
+            if ax in all_depth_axes:
+                artist.set_xdata(D)
+                artist.set_label(label)
+
+            elif ax in all_time_axes:
+                xdata, ydata = artist.get_data()
+                t = self.model.get_data('/time', tidx=tidx)
+                artist.set_xdata(np.append(xdata, t.inUnitsOf('h').value))
+                artist.set_ydata(np.append(ydata, D))
+                artist.set_label(label + ' {}'.format(ax.data_unit_))
+
             self.logger.debug('{} updated'.format(artist))
 
         self.update_legends()
 
-        for ax in self.axes:
+        for ax in self.axes_depth + self.axes_time:
             ax.relim()
             ax.autoscale_view(scalex=True, scaley=True)
 
@@ -366,6 +646,8 @@ class ModelPlotter(object):
         Draw the changes on to the canvas. This is meant to be called after each
         :meth:`update_artists`
         """
+        if not self.fig:
+            return
         try:
             self.fig.canvas.draw_idle()
             self.fig.canvas.flush_events()
@@ -374,7 +656,11 @@ class ModelPlotter(object):
             raise
 
     def show(self, block = False):
+        if not self.fig:
+            return
         plt.show(block=block)
 
     def close(self):
+        if not self.fig:
+            return
         plt.close(self.fig)

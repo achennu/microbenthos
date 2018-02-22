@@ -54,6 +54,16 @@ variables: &var_schema
                 minlength: 2
                 required: true
 
+            clip_min:
+                type: [float, integer, physical_unit]
+                nullable: true
+                default: null
+
+            clip_min:
+                type: [float, integer, physical_unit]
+                nullable: true
+                default: null
+
             create:
                 type: dict
                 required: true
@@ -199,6 +209,10 @@ processbase: &procbase
                     expected_unit:
                         type: unit_name
                         nullable: true
+
+                    implicit_source:
+                        type: boolean
+                        default: false
 
 
 process: &process_schema

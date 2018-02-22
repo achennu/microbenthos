@@ -12,7 +12,6 @@ with open('HISTORY.rst') as history_file:
 requirements = [
     'click>=6.0',
     'scipy>=1.0.0',
-    'numpy',
     'fipy',
     'logutils',
     'sympy',
@@ -31,7 +30,7 @@ test_requirements = [
 
 setup(
     name='microbenthos',
-    version='0.3.3',
+    version='0.4',
     description="In silico microbenthic simulations for studies of biogeochemistry and microbial ecology",
     long_description=readme + '\n\n' + history,
     author="Arjun Chennu",

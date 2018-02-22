@@ -9,6 +9,7 @@ import time
 
 from fipy import PhysicalField
 
+from .model import MicroBenthosModel
 from ..utils import CreateMixin
 
 
@@ -24,7 +25,7 @@ class Simulation(CreateMixin):
     def __init__(self,
                  simtime_total = 6,
                  simtime_step = 120,
-                 simtime_days = 1,
+                 simtime_days = None,
                  residual_lim = 1e-8,
                  max_sweeps = 25,
                  fipy_solver = 'scipy'
@@ -55,7 +56,7 @@ class Simulation(CreateMixin):
 
         self._simtime_total = None
         self._simtime_step = None
-        self.simtime_days = 0
+        self.simtime_days = None
 
         if simtime_days:
             simtime_days = float(simtime_days)
@@ -173,20 +174,27 @@ class Simulation(CreateMixin):
     @property
     def model(self):
         """
-                The model to run the simulation on. This is typically an instance of
-                :class:`~microbenthos.MicroBenthosModel` or its subclasses. The interface it must
-                provide is:
+        The model to run the simulation on. This is typically an instance of
+        :class:`~microbenthos.MicroBenthosModel` or its subclasses. The interface it must
+        provide is:
 
-                * a method :meth:`create_full_equation()`
-                * an attribute :attr:`full_eqn` created by above method, which is a
-                :class:`~fipy.terms.binaryTerm._BinaryTerm` that has a :meth:`sweep()` method.
-                * method :meth:`update_vars()` which is called before each timestep
-                * method :meth:`model.clock.increment_time(dt)` which is called after each timestep
-                """
+        * a method :meth:`create_full_equation()`
+        * an attribute :attr:`full_eqn` created by above method, which is a
+        :class:`~fipy.terms.binaryTerm._BinaryTerm` that has a :meth:`sweep()` method.
+        * method :meth:`update_vars()` which is called before each timestep
+        * method :meth:`model.clock.increment_time(dt)` which is called after each timestep
+        """
         return self._model
 
     @model.setter
     def model(self, m):
+        """
+        The model to operate the simulation on
+
+        Args:
+            m (MicroBenthosModel): The model instance
+
+        """
 
         if self.model:
             raise RuntimeError('Model already set')
@@ -277,10 +285,6 @@ class Simulation(CreateMixin):
     def run_timestep(self):
         """
         Evolve the model through a single timestep
-        Args:
-            dt:
-
-        Returns:
         """
         if not self.started:
             raise RuntimeError('Simulation timestep cannot be run since started=False')
@@ -293,9 +297,8 @@ class Simulation(CreateMixin):
 
         EQN = self.model.full_eqn
 
-        self.model.update_vars()
-
         while (res > self.residual_lim) and (num_sweeps < self.max_sweeps):
+
             res = EQN.sweep(
                 solver=self._solver,
                 dt=float(dt.numericValue)
@@ -309,16 +312,33 @@ class Simulation(CreateMixin):
             if res > 0.1:
                 raise RuntimeError('Residual {:.2g} too high to continue'.format(res))
 
-        self.model.clock.increment_time(dt)
+        self.model.update_vars()
+        self.model.update_equations(dt)
 
         return res
 
     def evolution(self):
+        """
+        Evolves the model clock through the time steps for the simulation.
+
+        This yields the initial model state, followed by a snapshot for every time step. Along
+        with the model state, some metrics of the simulation run are injected into the state
+        dictionary.
+
+        Yields:
+            `(step, state)` tuple of step number and model state
+
+        """
+
+        # TODO: uncouple state yield time from time step, esp for small time steps
+
         self.logger.info('Simulation evolution starting')
+        self.logger.debug('Solving: {}'.format(self.model.full_eqn))
         self.start()
 
         # yield the initial condition first
         self.model.update_vars()
+
         yield (0, self.model.snapshot())
 
         for step in range(1, self.total_steps + 1):
@@ -340,5 +360,7 @@ class Simulation(CreateMixin):
                 )
 
             yield (step, state)
+
+            self.model.clock.increment_time(self.simtime_step)
 
         self.logger.info('Simulation evolution completed')
