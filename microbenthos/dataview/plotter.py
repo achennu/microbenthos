@@ -39,8 +39,8 @@ def flabel(number):
 class ModelPlotter(object):
     def __init__(self, model = None,
                  style = None,
-                 figsize = (9.6, 5.4),
-                 dpi = 100,
+                 figsize = None,
+                 dpi = None,
                  unit_env = 'mol/l',
                  unit_microbes = 'mg/cm**3',
                  unit_sources = 'mol/l/h',
@@ -71,6 +71,9 @@ class ModelPlotter(object):
         style = style or 'seaborn-colorblind'
 
         plt.style.use((style, {'axes.grid': False}))
+
+        figsize = figsize or (16, 9)
+        dpi = dpi or 100
 
         self._fig_kwds = dict(figsize=figsize, dpi=dpi)
         if model:
@@ -113,17 +116,6 @@ class ModelPlotter(object):
         self.logger.debug('Creating figure: {}'.format(self._fig_kwds))
 
         self.fig = plt.figure(**kwargs)
-
-        # grid_shape = (6, 4)
-        # depth_rowspan = grid_shape[0] - int(vars_panel) - int(error_panel)
-        # depth_colspan = 1
-        # vars_rowspan = 1 if error_panel else 2
-        # errors_rowspan = 1 if vars_panel else 2
-        # vars_loc = (depth_rowspan, 0)
-        # errors_loc = (depth_rowspan + int(vars_panel), 0)
-        # self.logger.warning('depth_rowspan: {} colspan: {}'.format(depth_rowspan, depth_colspan))
-        # self.logger.warning('vars loc: {} rowspan: {}'.format(vars_loc, vars_rowspan))
-        # self.logger.warning('errors loc: {} rowspan: {}'.format(errors_loc, errors_rowspan))
 
         axes_depth = self.axes_depth
         axes_time = self.axes_time
@@ -173,37 +165,24 @@ class ModelPlotter(object):
         ax.data_normed_ = False
         axes_depth.append(ax)
 
-        # self.axEnv = ax = plt.subplot2grid(grid_shape, (0, 1),
-        #                                    rowspan=depth_rowspan,
-        #                                    colspan=depth_colspan,
-        #                                    sharey=self.axMicrobes
-        #                                    )
         ax = self.axEnv
         ax.name = 'Environment'
         ax.data_unit_ = self.unit_env
         ax.data_normed_ = True
         axes_depth.append(ax)
 
-        # self.axSources = ax = plt.subplot2grid(grid_shape, (0, 2),
-        #                                        rowspan=depth_rowspan,
-        #                                        colspan=depth_colspan,
-        #                                        sharey=self.axMicrobes
-        #                                        )
         ax = self.axSources
         ax.name = 'Sources'
         ax.data_unit_ = self.unit_sources
         ax.data_normed_ = True
+        ax.set_xlim(-1, 1)
         axes_depth.append(ax)
 
-        # self.axProcesses = ax = plt.subplot2grid(grid_shape, (0, 3),
-        #                                          rowspan=depth_rowspan,
-        #                                          colspan=depth_colspan,
-        #                                          sharey=self.axMicrobes
-        #                                          )
         ax = self.axProcesses
         ax.name = 'Processes'
         ax.data_unit_ = self.unit_process
         ax.data_normed_ = True
+        ax.set_xlim(-1, 1)
         axes_depth.append(ax)
 
         self.axIrrad = ax = plt.twiny(self.axMicrobes)
@@ -215,11 +194,6 @@ class ModelPlotter(object):
         ax.skip_legend_ = True
 
         if vars_panel:
-            # self.axVars = ax = plt.subplot2grid(grid_shape, vars_loc,
-            #                                     rowspan=vars_rowspan,
-            #                                     colspan=grid_shape[1],
-            #                                     sharey=self.axMicrobes
-            #                                     )
 
             ax = self.axError
             ax.name = 'BudgetError'
@@ -227,32 +201,14 @@ class ModelPlotter(object):
             ax.data_unit_ = None
             ax.data_normed_ = False
             axes_time.append(ax)
+            ax.set_xlim(0)
+
         else:
             self.axError = None
-
-        # if error_panel:
-        #     # linked_ = self.axVars
-        #     # self.axError = ax = plt.subplot2grid(grid_shape, errors_loc,
-        #     #                                      rowspan=errors_rowspan,
-        #     #                                      colspan=grid_shape[1],
-        #     #                                      sharex=linked_
-        #     #                                      )
-        #     ax = self.axError
-        #     ax.name = 'Error'
-        #     # unit will be determined from data
-        #     ax.data_unit_ = None
-        #     ax.data_normed_ = True
-        #     axes_time.append(ax)
 
         linked_axes = self.axes_depth_linked.values()
 
         for ax in self.axes_depth:
-            # assert isinstance(ax, plt.Axes)
-            # if ax is not self.axes_depth[0]:
-            #     # ax.set_sharey(self.axes_depth[0])
-            #     ax.yaxis.set_tick_params(which='both',
-            #                              labelleft=False, labelright=False)
-            #     ax.yaxis.offsetText.set_visible(False)
 
             # on top left of axis dict(xy=(-0.1, 0.98) ha=right, rotation=90)
             # on top within axis dict(xy=(0.5, 0.95), ha=center)
@@ -271,22 +227,14 @@ class ModelPlotter(object):
                 self.logger.debug('Could not set {} axes to scientific notation'.format(ax.name))
 
         for ax in self.axes_time:
-            # if ax is not self.axes_time[-1]:
-            #     # ax.set_sharex(self.axes_time[0])
-            #     ax.xaxis.set_tick_params(which='both',
-            #                              labeltop=False, labelbottom=False)
-            #     ax.xaxis.offsetText.set_visible(False)
-            #
-            #     ax.skip_legend_ = True
-            # else:
-            #     ax.skip_legend_ = False
 
             if ax is self.axes_time[-1]:
                 ax.set_xlabel('Time (h)')
-                ax.set_ylabel(r'$\frac{actual-expected}{expected}$')
+                # ax.set_ylabel(r'$\frac{actual-expected}{expected}$')
+                ax.set_ylabel('Budget Error')
 
             ax.skip_legend_ = False
-            ax.annotate(ax.name, xycoords='axes fraction', size='small',
+            ax.annotate(ax.name, xycoords='axes fraction', size='medium',
                         xy=(1.05, 0.5), ha='center', va='center', rotation=90)
             # defer ylabel setting till first data access
 
@@ -299,49 +247,6 @@ class ModelPlotter(object):
                 self.logger.debug('Could not set {} axes to scientific notation'.format(ax.name))
 
         self.logger.debug('Created figure with {} panels'.format(len(self.axes_all)))
-
-    # def create_figure(self, **kwargs):
-    #     self.logger.debug('Creating figure with params: {}'.format(kwargs))
-    #     self.fig, axes = plt.subplots(nrows=1, ncols=4, sharey=True, **kwargs)
-    #
-    #     assert isinstance(self.fig, plt.Figure)
-    #     self.axEnv, self.axMicrobes, self.axProc, self.axProcNorm = axes
-    #     # self.axEnvB = plt.twiny(self.axEnv)
-    #
-    #
-    #     for ax, title, unit in zip(
-    #         (self.axEnv, self.axMicrobes, self.axProc, self.axProcNorm),
-    #         ('Environment', 'Microbes', 'Processes', 'Processes(norm)'),
-    #         (self.unit_env, self.unit_microbes, self.unit_process, self.unit_process)
-    #         ):
-    #         # on top left of axis dict(xy=(-0.1, 0.98) ha=right, rotation=90)
-    #         # on top within axis dict(xy=(0.5, 0.95), ha=center)
-    #         ax.annotate(title, xycoords='axes fraction', size='small',
-    #                     xy=(0.5, 0.97), ha='center')
-    #         ax.name = title
-    #         ax.data_unit_ = unit
-    #         ax.set_xlabel(unit)
-    #         ax.autoscale(tight=True, axis='y')
-    #         ax.autoscale(tight=False, axis='x')
-    #
-    #     self.axEnv.invert_yaxis()
-    #     self.axEnv.set_ylabel('Depth (mm)')
-    #
-    #     self.axIrrad = plt.twiny(self.axMicrobes)
-    #     self.axes_depth_linked[self.axMicrobes].append(self.axIrrad)
-    #     self.axIrrad.name = 'Irradiance'
-    #     self.axIrrad.set_xscale('log')
-    #     self.axIrrad.set_xlim(0.01, 100)
-    #     self.axIrrad.skip_legend_ = True
-    #
-    #     self.axProc.skip_legend_ = True
-    #
-    #     self.axEnv.data_normed_ = True
-    #     self.axProcNorm.data_normed_ = True
-    #
-    #     self.axes.extend(axes)
-    #     self.logger.debug('Created {} panels'.format(len(self.axes) + len(
-    # self.axes_depth_linked)))
 
     @property
     def axes_all(self):
@@ -426,7 +331,7 @@ class ModelPlotter(object):
         mcycler = cycler('marker', ['s', '^', 'o', 'd', 'v', ])
         lwcycler = cycler('lw', [1.25])
         lscycler = cycler('ls', ['-', '--', ':'])
-        mscycler = cycler('ms', [3])
+        mscycler = cycler('ms', [5])
         mevery = cycler('markevery', [len(self.depths) // 20])
         # animcycler = cycler('animated', [True])
 
@@ -464,8 +369,8 @@ class ModelPlotter(object):
 
     def create_clock_artist(self):
 
-        self.clockstr = '{0:02d}h {1:02d}min'
-        self.clock_artist = plt.annotate(self.clockstr.format(0, 0),
+        self.clockstr = '{0:02d}h {1:02d}m {2:02d}s'
+        self.clock_artist = plt.annotate(self.clockstr.format(0, 0, 0),
                                          xy=(0.01, 0.01),
                                          xycoords='figure fraction',
                                          size='medium',
@@ -511,7 +416,7 @@ class ModelPlotter(object):
 
     def update_legends(self, axes = None):
 
-        legkwds = dict(loc='lower center', framealpha=0, fontsize='x-small')
+        legkwds = dict(loc='lower center', framealpha=0, fontsize='small')
 
         if axes is None:
             axes = self.axes_all
@@ -544,7 +449,7 @@ class ModelPlotter(object):
 
         clocktime = self.model.times[tidx]
         H, M, S = [int(s.value) for s in clocktime.inUnitsOf('h', 'min', 's')]
-        hmstr = self.clockstr.format(H, M)
+        hmstr = self.clockstr.format(H, M, S)
         self.clock_artist.set_text(hmstr)
         self.logger.debug('Time: {}'.format(hmstr))
 

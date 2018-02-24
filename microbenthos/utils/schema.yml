@@ -429,6 +429,12 @@ simulation:
         default: 1e-8
         coerce: float
 
+    residual_break:
+        type: float
+        min: 0
+        default: 0.1
+        coerce: float
+
     max_sweeps:
         type: integer
         min: 2
