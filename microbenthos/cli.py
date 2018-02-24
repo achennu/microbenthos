@@ -13,16 +13,15 @@ except ImportError:
 
 
 def _matplotlib_style_callback(ctx, param, value):
-    if value is None:
+    if not value:
         return
 
     try:
         from matplotlib import style
-
         STYLES = style.available
-
     except ImportError:
-        STYLES = []
+        click.secho('Feature not available. Install "matplotlib" package first.', fg='red')
+        raise click.Abort()
 
     if value in STYLES:
         return value
@@ -38,6 +37,22 @@ def _fipy_solver_callback(ctx, param, value):
         else:
             raise click.BadParameter(
                 'FiPy solver {!r} not in known: {}'.format(value, Simulation.FIPY_SOLVERS))
+
+
+def _completion_shell_callback(ctx, param, value):
+    try:
+        import click_completion
+    except ImportError:
+        click.secho('Feature not available. Run "pip install click-completion" to enable.',
+                    fg='red')
+        raise click.Abort
+
+    if value:
+        if value in click_completion.shells:
+            return value
+        else:
+            raise click.BadParameter('{!r} not in known shells: {}'.format(value,
+                                                                           click_completion.shells))
 
 
 def _figsize_callback(ctx, param, value):
@@ -84,7 +99,7 @@ def setup():
 
 
 @setup.command('completion')
-@click.option('--shell', type=click.Choice(click_completion.shells),
+@click.option('--shell', callback=_completion_shell_callback,
               default='bash', help='The shell to install completion',
               required=True)
 @click.option('--show-code', is_flag=True,
