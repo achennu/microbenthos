@@ -4,21 +4,51 @@ import os
 
 import click
 
-from microbenthos.model import Simulation
-
-SOLVERS = Simulation.FIPY_SOLVERS
-
-from microbenthos.utils import find_subclasses_recursive
-from microbenthos.exporters import BaseExporter
-
-_exporters = {e._exports_: e for e in find_subclasses_recursive(BaseExporter)}
-
 try:
-    from matplotlib import style
+    import click_completion
 
-    STYLES = style.available
+    click_completion.init()
 except ImportError:
-    STYLES = []
+    pass
+
+
+def _matplotlib_style_callback(ctx, param, value):
+    if value is None:
+        return
+
+    try:
+        from matplotlib import style
+
+        STYLES = style.available
+
+    except ImportError:
+        STYLES = []
+
+    if value in STYLES:
+        return value
+    else:
+        raise click.BadParameter('Plot style {!r} not in known: {}'.format(value, STYLES))
+
+
+def _fipy_solver_callback(ctx, param, value):
+    if value:
+        from microbenthos.model import Simulation
+        if value in Simulation.FIPY_SOLVERS:
+            return value
+        else:
+            raise click.BadParameter(
+                'FiPy solver {!r} not in known: {}'.format(value, Simulation.FIPY_SOLVERS))
+
+
+def _figsize_callback(ctx, param, value):
+    if value:
+        try:
+            w, h = [float(_) for _ in value.split('x')]
+            assert w > 0
+            assert h > 0
+            return (w, h)
+        except:
+            raise click.BadParameter('Input not of type "WxH", for example "15x8"')
 
 
 @click.group('microbenthos')
@@ -48,6 +78,29 @@ def cli(verbosity, logger):
             setup_console_logging(name=name, level=level)
 
 
+@cli.group('setup')
+def setup():
+    """Setup configuration"""
+
+
+@setup.command('completion')
+@click.option('--shell', type=click.Choice(click_completion.shells),
+              default='bash', help='The shell to install completion',
+              required=True)
+@click.option('--show-code', is_flag=True,
+              help='Show the installed code')
+def setup_completion(shell, show_code):
+    """Setup CLI completion for shell"""
+    click.echo('Setup completion for shell {!r}'.format(shell))
+
+    if show_code:
+        code = click_completion.get_code(shell=shell)
+        click.echo('Installing code: \n{}'.format(code))
+
+    shell_, path = click_completion.install(shell=shell)
+    click.secho('Installed completion in path {!r}'.format(path))
+
+
 @cli.command('simulate')
 @click.option('-o', '--output-dir', type=click.Path(file_okay=False), default=os.getcwd(),
               help='Output directory for simulation')
@@ -56,7 +109,7 @@ def cli(verbosity, logger):
               help="Add an exporter to run. Form: -x <name> <export_type>")
 @click.option('-T', '--simtime_total', type=str, help='Total simulation time. Example: "10h"')
 @click.option('-dt', '--simtime_step', type=str, help='Total simulation time. Example: "10s"')
-@click.option('--solver', help='Solver type to use from fipy', type=click.Choice(SOLVERS))
+@click.option('--solver', help='Solver type to use from fipy', callback=_fipy_solver_callback)
 @click.option('-O', '--overwrite', help='Overwrite file, if exists', is_flag=True)
 @click.option('-c', '--compression', type=click.IntRange(0, 9), default=6,
               help='Compression level for data (default: 6)')
@@ -112,6 +165,11 @@ def cli_simulate(model_file, output_dir, export, overwrite, compression, confirm
         click.echo('Setting fipy_solver to {!r}'.format(solver))
         runner.simulation.fipy_solver = solver
 
+    from microbenthos.utils import find_subclasses_recursive
+    from microbenthos.exporters import BaseExporter
+
+    _exporters = {e._exports_: e for e in find_subclasses_recursive(BaseExporter)}
+
     runner._exporter_classes = _exporters
 
     runner.add_exporter('model_data', compression=compression, overwrite=overwrite)
@@ -125,7 +183,11 @@ def cli_simulate(model_file, output_dir, export, overwrite, compression, confirm
     for name, exptype in export:
         runner.add_exporter(exptype=exptype, name=name)
 
-    click.secho('Full equation: {}'.format(runner.model.full_eqn), fg='red')
+    click.secho('Solving the equation(s):', fg='red')
+    for neqn, eqn in runner.model.equations.items():
+        click.secho('{} :: {}'.format(neqn, eqn.obj), fg='red')
+
+    # click.secho('Full equation: {}'.format(runner.model.full_eqn), fg='red')
 
     click.secho(
         'Simulation setup: solver={0.fipy_solver} total={0.simtime_total} step={0.simtime_step} '
@@ -153,23 +215,28 @@ def export():
 @click.option('-o', '--outfile', type=click.Path(dir_okay=False),
               help='Name of the output file')
 @click.option('-O', '--overwrite', help='Overwrite file, if exists', is_flag=True)
-@click.option('--style', type=click.Choice(STYLES),
-              help='Matplotlib style name')
-@click.option('--figsize', type=(float, float), default=(9.6, 5.4),
-              help='Figure size in inches (default: 9.6, 5.4)')
-@click.option('--dpi', type=click.IntRange(100, 300), default=200,
-              help='Dots per inch for figure export (default: 200)')
+@click.option('--style', callback=_matplotlib_style_callback,
+              help='Plot style name from matplotlib')
+@click.option('--figsize', callback=_figsize_callback,
+              help='Figure size in inches (example: "9.6x5.4")')
+@click.option('--dpi', type=click.IntRange(100, 400),
+              help='Dots per inch for figure export')
 @click.option('--show', is_flag=True, help='Show figure on screen during export')
 @click.option('--budget', is_flag=True, help='Show temporal budget error of variables',
               default=False)
-def export_video(datafile, outfile, overwrite, style, figsize, dpi, show, budget):
+@click.option('--fps', help='Frames per second for export (default: 10)',
+              default=10, type=click.IntRange(10, 100))
+@click.option('--bitrate', help='Bitrate for video encoding (default: 1400)',
+              type=click.IntRange(800, 4000), default=1400)
+@click.option('--artist-tag', help='Artist tag in metadata')
+def export_video(datafile, outfile, overwrite, style, dpi, show, budget, fps, bitrate,
+                 artist_tag, figsize = None):
     """
     Export video from model data
     """
     from microbenthos.dataview import HDFModelData, ModelPlotter
     from matplotlib import animation
     from tqdm import tqdm
-    import h5py as hdf
 
     if outfile:
         if os.path.exists(outfile) and not overwrite:
@@ -188,8 +255,12 @@ def export_video(datafile, outfile, overwrite, style, figsize, dpi, show, budget
         click.secho('Animation writer ffmpeg not available. Is it installed?', fg='red')
         click.Abort()
 
-    writer = Writer(fps=15, bitrate=1800,
-                    metadata=dict(artist='Microbenthos - Arjun Chennu', copyright='2018'))
+    artist_tag = artist_tag or 'MicroBenthos - Arjun Chennu'
+    from datetime import datetime
+    year = datetime.today().year
+
+    writer = Writer(fps=fps, bitrate=bitrate,
+                    metadata=dict(artist=artist_tag, copyright=str(year)))
 
     with hdf.File(datafile, 'r') as hf:
         dm = HDFModelData(store=hf)
@@ -209,6 +280,7 @@ def export_video(datafile, outfile, overwrite, style, figsize, dpi, show, budget
                 writer.grab_frame()
 
         click.secho('Video export completed', fg='green')
+
 
 @export.command('model')
 @click.argument('model_file', type=click.File())
@@ -242,10 +314,6 @@ def export_model(model_file, key, verbose):
     finally:
         if verbose:
             click.secho('Model export done', fg='green')
-
-
-
-
 
 
 if __name__ == "__main__":

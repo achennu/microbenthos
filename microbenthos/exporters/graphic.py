@@ -16,7 +16,7 @@ class GraphicExporter(BaseExporter):
     _exports_ = 'graphic'
     __version__ = '2.1'
 
-    def __init__(self, show = False, write_video = False, video_dpi = 200, filename =
+    def __init__(self, show = False, write_video = False, video_dpi = 100, filename =
     'simulation.mp4', track_budget = False, **kwargs):
         self.logger = kwargs.get('logger') or logging.getLogger(__name__)
         self.logger.debug('Init in {}'.format(self.__class__.__name__))
