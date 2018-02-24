@@ -35,9 +35,11 @@ seed_linear: &seed_linear
 
         start:
             type: [integer, float, physical_unit]
+            nullable: true
 
         stop:
             type: [integer, float, physical_unit]
+            nullable: true
 
 variables: &var_schema
     cls:

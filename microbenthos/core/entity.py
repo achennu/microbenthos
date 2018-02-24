@@ -324,7 +324,7 @@ class Variable(DomainEntity):
         self.create(**self.create_params)
 
         if self.seed_params:
-            self.seed(profile=self.seed_params['profile'], **self.seed_params['params'])
+            self.seed(profile=self.seed_params['profile'], **self.seed_params.get('params', {}))
             if self.create_params.get('hasOld'):
                 self.var.updateOld()
 
@@ -465,8 +465,25 @@ class Variable(DomainEntity):
             self.var.value = val
 
         elif profile == 'linear':
-            start = kwargs['start']
-            stop = kwargs['stop']
+            start = kwargs.get('start')
+            stop = kwargs.get('stop')
+
+            if start is None:
+                start = self.constraints.get('top')
+                if start is None:
+                    raise ValueError('Seed linear has no "start" or "top" constraint')
+                else:
+                    start = PhysicalField(start, self.var.unit)
+                    self.logger.warning('Linear seed using start as top value: {}'.format(start))
+
+            if stop is None:
+                stop = self.constraints.get('bottom')
+                if stop is None:
+                    raise ValueError('Seed linear has no "stop" or "bottom" constraint')
+                else:
+                    stop = PhysicalField(stop, self.var.unit)
+                    self.logger.warning('Linear seed using stop as bottom value: {}'.format(stop))
+
             N = self.var.shape[0]
 
             if hasattr(start, 'unit'):
