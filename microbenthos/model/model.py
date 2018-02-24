@@ -461,7 +461,7 @@ class ModelEquation(object):
         self.varpath = varpath
         self.var = var
         self.varname = var.name
-        self.logger.debug('Found variable: {}'.format(self.var))
+        self.logger.debug('Found variable: {!r}'.format(self.var))
 
         self._term_transient = None
         self._term_diffusion = None

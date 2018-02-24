@@ -27,6 +27,7 @@ class Simulation(CreateMixin):
                  simtime_step = 120,
                  simtime_days = None,
                  residual_lim = 1e-8,
+                 residual_break = 0.1,
                  max_sweeps = 25,
                  fipy_solver = 'scipy'
                  ):
@@ -41,6 +42,8 @@ class Simulation(CreateMixin):
             will override the given `simtime_total` when the :attr:`.model` is supplied.
             residual_lim (float): The max residual limit below which the timestep is considered
             to be numerically accurate
+            residual_break (float): Residual at a time step above this value will cause the
+            simulation to abort
             max_sweeps (int): Number of sweeps to use within the timestep
             fipy_solver (str): Name of the fipy solver to use
         """
@@ -69,6 +72,8 @@ class Simulation(CreateMixin):
 
         self._residual_lim = None
         self.residual_lim = residual_lim
+        self.residual_break = float(residual_break)
+        assert self.residual_break > 0
 
         self._max_sweeps = None
         self.max_sweeps = max_sweeps
@@ -309,8 +314,12 @@ class Simulation(CreateMixin):
         if res > self.residual_lim:
             self.logger.warning('Timestep residual {:.2g} > limit {:.2g}'.format(
                 res, self.residual_lim))
-            if res > 0.1:
-                raise RuntimeError('Residual {:.2g} too high to continue'.format(res))
+
+            if res > self.residual_break:
+                raise RuntimeError('Residual {:.2g} too high (>{:.2g}) to continue'.format(
+                    res,
+                    self.residual_break
+                    ))
 
         self.model.update_vars()
         self.model.update_equations(dt)

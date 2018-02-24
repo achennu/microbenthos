@@ -119,8 +119,8 @@ class ExprProcess(Process):
         self.implicit_source = implicit_source
 
     def __repr__(self):
-        return 'Process[{},{}]:responses[{}]'.format(self.expr, self.vars,
-                                                     ','.join(self.responses.keys()))
+        return 'Process[{}]:responses[{}]'.format(self.vars,
+                                                  ','.join(self.responses.keys()))
 
     def check_names(self, names):
         """
@@ -288,7 +288,7 @@ class ExprProcess(Process):
         args = varargs + pargs
         # follow the same order of the params ordered dict
 
-        self.logger.debug('Evaluating {} with args: {}'.format(self.expr, args))
+        self.logger.debug('Evaulation args: {}'.format(zip(self.argnames, args)))
         evaled = self.expr_func(*args)
 
         resp_evals = []
