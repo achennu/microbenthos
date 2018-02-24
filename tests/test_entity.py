@@ -1,10 +1,12 @@
+import mock
 import pytest
 from fipy import PhysicalField
-from fipy import Variable as Var_
 from fipy.tools import numerix
+
 from microbenthos import Entity, SedimentDBLDomain, DomainEntity, Variable
 
 PF = PhysicalField
+
 
 class TestEntity:
     def test_init(self):
@@ -224,16 +226,16 @@ class TestVariable:
     def test_seed(self):
         v = Variable(name='myvar',
                      create=dict(unit='mol/l'),
-            seed = None)
+                     seed=None)
         assert True
 
     @pytest.mark.parametrize(
         'unit,loc,scale,coeff,error',
         [
             (None, 3, 2, 1, None),
-            (None, PF(3,'mm'), PF(2, 'mm'), 1, None),
-            ('mol/l', PF(3,'mm'), PF(2, 'mm'), PF(1, "mol/m**3"), None),
-            ('mol/l', PF(3,'mm'), PF(2, 'mm'), PF(1, "mol/s"), ValueError),
+            (None, PF(3, 'mm'), PF(2, 'mm'), 1, None),
+            ('mol/l', PF(3, 'mm'), PF(2, 'mm'), PF(1, "mol/m**3"), None),
+            ('mol/l', PF(3, 'mm'), PF(2, 'mm'), PF(1, "mol/s"), ValueError),
             ]
         )
     def test_seed_normal(self, unit, loc, scale, coeff, error):
@@ -243,9 +245,9 @@ class TestVariable:
         seed = dict(
             profile='normal',
             params=dict(
-            loc=loc,
-            scale=scale,
-            coeff=coeff)
+                loc=loc,
+                scale=scale,
+                coeff=coeff)
             )
         v = Variable(name=name, create=create, seed=seed)
 
@@ -290,3 +292,73 @@ class TestVariable:
                 val = val.numericValue
 
             assert numerix.allclose(v.var.numericValue, val)
+
+    @pytest.mark.xfail(reason='Not implemented')
+    def test_seed_linear(self, seed, error):
+
+        create = dict(value=3., unit='m**2')
+
+        d = dict(profile='linear', params=seed)
+        v = Variable(name='mvar', create=create, seed=d)
+        domain = mock.Mock(SedimentDBLDomain)
+        v.domain = domain
+        v.var = mock.Mock()
+        raise NotImplementedError()
+
+    @pytest.mark.parametrize(
+        'params,constraints,error',
+        [
+
+            (None, None, ValueError),  # no profile params nor constraints given
+            (None, dict(top=13, bottom=34), None),
+            (dict(start=14), dict(bottom=18), None),
+            (dict(stop=19), dict(top=3), None),
+            (dict(stop=PhysicalField(19, 'km/kg')), dict(top=3), None),
+            (dict(stop=PhysicalField(19, 'km/kg')), dict(top=PhysicalField(3, 'km/kg')), None),
+            (dict(stop=19), dict(top=PhysicalField(3, 'km/kg')), None),
+            (None, dict(top=PhysicalField(3, 'km/kg'), bottom=PhysicalField(17, 'km/kg')), None),
+            (None, dict(top=PhysicalField(3, 'm/g'), bottom=PhysicalField(17, 'km/kg')), None),
+            (None, dict(top=PhysicalField(3, 'm/g'), bottom=PhysicalField(17, 'm/kg')), None),
+            (None, dict(top=PhysicalField(3, 'm'), bottom=PhysicalField(17, 'm/kg')), TypeError),
+            # wrong units
+            ]
+        )
+    def test_seed_linear_from_constraints(self, params, constraints, error):
+
+        seed = dict(profile='linear')
+        if params:
+            seed['params'] = params
+
+        unit = 'km/kg'
+        N = 10
+
+        v = Variable(name='mvar', create=dict(value=3.2, unit=unit),
+                     seed=seed, constraints=constraints,
+                     )
+        v.domain = mock.Mock(SedimentDBLDomain)
+        v.domain.create_var.return_value = PhysicalField([34] * N, unit)
+        v.domain.mesh = mock.Mock()
+        v.domain.idx_surface = mock.Mock()
+        v.constrain = mock.Mock()
+
+        if error:
+            with pytest.raises(error):
+                v.setup()
+
+        else:
+            v.setup()
+
+            if params is None:
+                params = {}
+
+            if constraints is None:
+                constraints = {}
+
+            startval = PhysicalField(params.get('start', constraints.get('top')), unit).inUnitsOf(
+                unit).value
+            stopval = PhysicalField(params.get('stop', constraints.get('bottom')), unit).inUnitsOf(
+                unit).value
+
+            expected = PhysicalField(numerix.linspace(startval, stopval, N), unit)
+
+            assert numerix.array_equal(v.var, expected)

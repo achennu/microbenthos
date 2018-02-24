@@ -13,16 +13,15 @@ except ImportError:
 
 
 def _matplotlib_style_callback(ctx, param, value):
-    if value is None:
+    if not value:
         return
 
     try:
         from matplotlib import style
-
         STYLES = style.available
-
     except ImportError:
-        STYLES = []
+        click.secho('Feature not available. Install "matplotlib" package first.', fg='red')
+        raise click.Abort()
 
     if value in STYLES:
         return value
