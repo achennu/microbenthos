@@ -249,9 +249,9 @@ def export_video(datafile, outfile, overwrite, style, dpi, show, budget, fps, bi
     """
     Export video from model data
     """
-    from microbenthos.dataview import HDFModelData, ModelPlotter
+
     from matplotlib import animation
-    from tqdm import tqdm
+
 
     if outfile:
         if os.path.exists(outfile) and not overwrite:
@@ -277,6 +277,10 @@ def export_video(datafile, outfile, overwrite, style, dpi, show, budget, fps, bi
     writer = Writer(fps=fps, bitrate=bitrate,
                     metadata=dict(artist=artist_tag, copyright=str(year)))
 
+    from microbenthos.dataview import HDFModelData, ModelPlotter
+    from tqdm import tqdm
+    import h5py as hdf
+
     with hdf.File(datafile, 'r') as hf:
         dm = HDFModelData(store=hf)
 
@@ -284,8 +288,8 @@ def export_video(datafile, outfile, overwrite, style, dpi, show, budget, fps, bi
         if show:
             plot.show(block=False)
 
-        click.secho('Exporting video to {} with size {} and dpi {}'.format(outfile, figsize,
-                                                                           dpi), fg='green')
+        click.secho('Exporting video to {} (size={}, dpi={})'.format(outfile, figsize,
+                                                                     dpi), fg='green')
 
         with writer.saving(plot.fig, outfile, dpi=dpi):
 

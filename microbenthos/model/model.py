@@ -510,7 +510,8 @@ class ModelEquation(object):
             raise RuntimeError('Cannot finalize equation without right-hand side terms')
 
         if self.source_exprs:
-            self.sources_total = sum(self.source_exprs.values())
+            self.sources_total = sum(
+                self.source_exprs[k] * self.source_coeffs[k] for k in self.source_exprs)
             #: the additive sum of all the sources
         else:
             self.sources_total = PhysicalField(np.zeros_like(self.var), self.var.unit.name() + '/s')
