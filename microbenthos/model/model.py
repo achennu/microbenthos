@@ -307,21 +307,21 @@ class MicroBenthosModel(CreateMixin):
 
         self.full_eqn = full_eqn
 
-        self.logger.debug('Collecting unique source term expressions')
-        for eqn in self.equations.values():
-
-            for name, expr in eqn.source_exprs.items():
-
-                if name not in self.source_exprs:
-                    self.source_exprs[name] = expr
-
-                else:
-                    old = self.source_exprs[name]
-                    if old is not expr:
-                        raise RuntimeError(
-                            'Another source with same name {!r} exists from different '
-                            'equation!'.format(
-                                name))
+        # self.logger.debug('Collecting unique source term expressions')
+        # for eqn in self.equations.values():
+        #
+        #     for name, expr in eqn.source_exprs.items():
+        #
+        #         if name not in self.source_exprs:
+        #             self.source_exprs[name] = expr
+        #
+        #         else:
+        #             old = self.source_exprs[name]
+        #             if old is not expr:
+        #                 raise RuntimeError(
+        #                     'Another source with same name {!r} exists from different '
+        #                     'equation!'.format(
+        #                         name))
 
     def get_object(self, path):
         """
@@ -465,6 +465,7 @@ class ModelEquation(object):
 
         self._term_transient = None
         self._term_diffusion = None
+        self.source_formulae = {}
         self.source_exprs = {}
         self.source_terms = {}
         self.source_coeffs = {}
@@ -510,8 +511,7 @@ class ModelEquation(object):
             raise RuntimeError('Cannot finalize equation without right-hand side terms')
 
         if self.source_exprs:
-            self.sources_total = sum(
-                self.source_exprs[k] * self.source_coeffs[k] for k in self.source_exprs)
+            self.sources_total = sum(self.source_exprs.values())
             #: the additive sum of all the sources
         else:
             self.sources_total = PhysicalField(np.zeros_like(self.var), self.var.unit.name() + '/s')
@@ -637,16 +637,17 @@ class ModelEquation(object):
         if not isinstance(coeff, (int, float)):
             raise ValueError('Source coeff should be int or float, not {}'.format(type(coeff)))
 
-        obj = self.model.get_object(path)
-        """:type: ExprProcess"""
-
-        expr = obj.evaluate()
-        self.logger.debug('Created source expr: {!r}'.format(expr))
-
         if path in self.source_exprs:
             raise RuntimeError('Source term path already exists: {!r}'.format(path))
 
-        self.source_exprs[path] = expr
+        obj = self.model.get_object(path)
+        """:type: ExprProcess"""
+
+        # expr = obj.evaluate()
+        # self.logger.debug('Created source expr: {!r}'.format(expr))
+
+        self.source_formulae[path] = coeff * obj.expr_full() * obj.masks_as_expr()
+        self.source_exprs[path] = obj.evaluate_expr(coeff * obj.expr_full())
 
         # check if it should be an implicit source
 
@@ -663,11 +664,23 @@ class ModelEquation(object):
         # else:
         #     term = coeff * expr
 
-        term = coeff * expr
+        term = obj.source_term_for_var(self.varname, coeff=coeff)
 
         self.source_terms[path] = term
         self.source_coeffs[path] = coeff
-        self.logger.info('Created source {!r}: {!r}'.format(path, term))
+        self.logger.warning('Created source {!r}: {!r}'.format(path, term))
+
+    def pretty_string(self):
+        import sympy as sp
+        var = sp.var(self.varname)
+        t, z = sp.var('t z')
+        Dcoeff = sp.sympify(self.diffusion_def[1])
+
+        transient = sp.Derivative(var, t)
+        diffusive = sp.Derivative(Dcoeff * var, z, 2)
+        sources = sum(self.source_formulae.values())
+        eqn = u'{} = {} + {}'.format(*[sp.pretty(_) for _ in (transient, diffusive, sources)])
+        return eqn
 
     @property
     def RHS_terms(self):

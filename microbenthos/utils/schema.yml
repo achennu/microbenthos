@@ -228,6 +228,7 @@ process: &process_schema
                 schema:
                     <<: *procbase_initschema
                     responses:  *procbase
+                    masks: *procbase
 
 
 microbes: &microbes_schema

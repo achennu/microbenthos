@@ -1,8 +1,9 @@
 import logging
 import operator
-from abc import ABCMeta, abstractmethod
+# from abc import ABCMeta, abstractmethod
 from collections import Mapping, OrderedDict
 
+from fipy import ImplicitSourceTerm
 from fipy.tools import numerix
 from sympy import sympify, symbols, lambdify, Symbol, SympifyError
 
@@ -10,33 +11,33 @@ from .entity import DomainEntity
 from ..utils.snapshotters import snapshot_var
 
 
-class Process(DomainEntity):
-    """
-    Class to represent a process occurring in the benthic domain.
-    """
+# class Process(DomainEntity):
+#     """
+#     Class to represent a process occurring in the benthic domain.
+#     """
+#
+#     __metaclass__ = ABCMeta
+#
+#     def __init__(self, **kwargs):
+#         self.logger = kwargs.get('logger') or logging.getLogger(__name__)
+#         self.logger.debug('Init in Process')
+#         kwargs['logger'] = self.logger
+#         super(Process, self).__init__(**kwargs)
+#
+#     @abstractmethod
+#     def dependent_vars(self):
+#         raise NotImplementedError
 
-    __metaclass__ = ABCMeta
-
-    def __init__(self, **kwargs):
-        self.logger = kwargs.get('logger') or logging.getLogger(__name__)
-        self.logger.debug('Init in Process')
-        kwargs['logger'] = self.logger
-        super(Process, self).__init__(**kwargs)
-
-    @abstractmethod
-    def dependent_vars(self):
-        raise NotImplementedError
-
-    @abstractmethod
-    def add_response(self):
-        pass
-
-    @abstractmethod
-    def evaluate(self, D, P = None, full = True):
-        pass
+# @abstractmethod
+# def add_response(self):
+#     pass
+#
+# @abstractmethod
+# def evaluate(self, D, P = None, full = True):
+#     pass
 
 
-class ExprProcess(Process):
+class ExprProcess(DomainEntity):
     """
     Class to represent a process occurring in the benthic domain. This class helps to formulate
     an expression of the relationships between variables as well as update specific features with
@@ -47,7 +48,7 @@ class ExprProcess(Process):
     _sympy_ns = {}
 
     def __init__(self, formula, varnames, params = None, responses = None, expected_unit = None,
-                 implicit_source = False,
+                 implicit_source = 'auto', masks = None,
                  **kwargs):
         """
         Create a process expressed by the formula, possibly containing subprocesses.
@@ -68,16 +69,25 @@ class ExprProcess(Process):
             varsnames (list): Names of the variables in the formula
             params (dict): Names and values for parameters in the formula. The names matching the
             symbols in the formula will be replaced during evaluation.
-            responses: A mapping of {`name`: `params`} for any subprocesses of this process. The
-            `params` must be a dict of the init arguments, for the same class.
+            responses: A mapping of {`name`: `process_def`} for any subprocesses of this process.
+            The
+            `process_def` must be a dict of the init arguments, for the same class.
+            masks: A mapping of {`name`: `process_def`} for any subprocess masks of this process.
+            The `process_def` must be a dict of the init arguments for the same class.
             expected_unit (str): The units the evaluation results should be compatible with
-            sympy_ns: A namespace dict for sympification (see: :meth:`sympify` arg `locals`)
+            implicit_source (bool, str): If this is True or `"auto"`, then source expressions
+            will be tried to be cast as implicit sources. If False, then no such effort is made.
+            (default: `"auto"`).
             **kwargs: passed to superclass
         """
+        self.logger = kwargs.get('logger') or logging.getLogger(__name__)
+        self.logger.debug('Init in {}'.format(self.__class__.__name__))
+        kwargs['logger'] = self.logger
         super(ExprProcess, self).__init__(**kwargs)
 
         self._formula = None
         self.responses = OrderedDict()
+        self.masks = OrderedDict()
         #: mapping of process name (str) to an instance of the Process
 
         if params is None:
@@ -90,6 +100,11 @@ class ExprProcess(Process):
         params = OrderedDict(params)
         self.check_names(params)
         self.params = params
+        for p in self.params:
+            try:
+                self.params[p] = self.params[p].inBaseUnits()
+            except AttributeError:
+                pass
         self.logger.debug('Stored params: {}'.format(self.params))
 
         self.check_names(varnames)
@@ -102,15 +117,21 @@ class ExprProcess(Process):
         expr = self.parse_formula(formula)
         self.expr = expr
 
-        responses = responses or {}
-        self.check_names(responses)
-        for k, v in responses.iteritems():
-            self.add_response_from(k, **v)
+        # responses = responses or {}
+        # self.check_names(responses)
+        # for k, v in responses.iteritems():
+        #     # self.add_response_from(k, **v)
+        #     self.add_subprocess_from('responses', k, **v)
+
+        masks = masks or {}
+        self.check_names(masks)
+        for k, v in masks.iteritems():
+            self.add_subprocess_from('masks', k, **v)
 
         self.expected_unit = expected_unit
 
-        argsyms = [sympify(_) for _ in self.argnames]
-        self.expr_func = self._lambdify(self.expr, argsyms)
+        # argsyms = [sympify(_) for _ in self.argnames]
+        # self.expr_func = self._lambdify(self.expr, argsyms)
 
         self._evaled_domain = None
         self._evaled_params = None
@@ -121,6 +142,129 @@ class ExprProcess(Process):
     def __repr__(self):
         return 'Process[{}]:responses[{}]'.format(self.vars,
                                                   ','.join(self.responses.keys()))
+
+    def expr_full(self):
+        if self.responses:
+            resp_expr = reduce(operator.mul, [r.expr for r in self.responses.values()])
+        else:
+            resp_expr = 1.0
+        return self.expr * resp_expr
+
+    def source_expr_for_var(self, varname, coeff = 1):
+
+        self.logger.debug('Creating source expr for {}'.format(varname))
+
+        if varname not in self.varnames:
+            return (self.expr_full() * coeff,)
+
+        else:
+            # making S = S0 + S1 * v  #v is the var
+            # S1 = dS/dv
+            # S0 = S - dS/dv * v
+            var = symbols(varname)
+            S = self.expr_full() * coeff
+            S1 = S.diff(var)
+            S0 = S - S1 * var
+            self.logger.warning('S0: {}'.format(S0))
+            self.logger.warning('S1: {}'.format(S1))
+
+            if S0 == 0:
+                self.logger.warning('Source expr depends on {!r} but linearly'.format(varname))
+                return (S,)
+
+            else:
+                self.logger.warning('Source has nonlinear dependence, sending implicit pair')
+                return (S0, S1)
+
+    def masks_as_term(self):
+
+        if not self.masks:
+            return 1
+
+        masks = []
+        for mask_name in self.masks:
+            mask = self.masks[mask_name]
+
+            mask_expr = mask.evaluate()
+            #
+            # mask_formula = sympify(mask['formula'])
+            # mask_expr = self.evaluate_expr(mask_formula, varnames=mask['varnames'],
+            #                                params=mask['params'])
+            self.logger.debug('Rendered mask {!r}: {!r}'.format(mask_name, mask_expr))
+            masks.append(mask_expr)
+
+        full_mask = reduce(operator.mul, masks)
+        self.logger.debug('Full mask expr: {!r}'.format(full_mask))
+        return full_mask
+
+    def masks_as_expr(self):
+        if not self.masks:
+            return 1
+
+        masks = []
+        for name, mask in self.masks.items():
+            mask_expr = mask.expr
+            masks.append(mask_expr)
+
+        full_mask = reduce(operator.mul, masks)
+        return full_mask
+
+    def source_term_for_var(self, varname, coeff = 1):
+
+        sexpr = self.source_expr_for_var(varname, coeff=coeff)
+
+        mask = self.masks_as_term()
+
+        if not self.implicit_source:
+            term = self.evaluate_expr(self.expr_full() * coeff) * mask
+
+        elif self.implicit_source in (True, 'auto'):
+
+            if len(sexpr) == 1:  # single expr, explicit source
+                term = self.evaluate_expr(sexpr[0]) * mask
+
+            elif len(sexpr) == 2:  # implicit source term present
+                self.logger.debug('Casting as implicit source term: {}'.format(self))
+
+                S0 = self.evaluate_expr(sexpr[0]) * mask
+
+                S1 = self.evaluate_expr(sexpr[1]) * mask
+
+                var = self.evaluate_expr(symbols(varname))
+
+                term = S0 + ImplicitSourceTerm(coeff=S1, var=var)
+
+            else:
+                raise RuntimeError(
+                    'Source expr should have 1 or 2 elements, but got {}'.format(len(sexpr)))
+
+        self.logger.debug('Created source term: {!r}'.format(term))
+        return term
+
+    def evaluate_expr(self, expr, domain = None, params = None, varnames = None):
+
+        if not domain:
+            self.check_domain()
+            domain = self.domain
+
+        if not params:
+            params = self.params
+
+        if not varnames:
+            varnames = self.varnames
+
+        # collect the arguments
+        varargs = [domain[_] for _ in varnames]
+        pargs = [params[_] for _ in params]
+
+        from fipy import PhysicalField
+        pargs = [_.inBaseUnits() if isinstance(_, PhysicalField) else _ for _ in pargs]
+        args = varargs + pargs
+
+        argsyms = [sympify(_) for _ in tuple(varnames) + tuple(params)]
+
+        expr_func = self._lambdify(expr, argsyms)
+        return expr_func(*args)
 
     def check_names(self, names):
         """
@@ -193,38 +337,61 @@ class ExprProcess(Process):
 
         return expr
 
-    def add_response(self, name, process):
-        """
-        Add a response function to this process
+    def add_subprocess(self, ptype, name, process):
 
-        Args:
-            name: Name to refer to the object
-            process: The instance of the Process
+        holder = getattr(self, ptype)
 
-        Returns:
-            None
-
-        """
-
-        self.check_names([name])
-
-        if name in self.responses:
+        if name in holder:
             self.logger.warning('Process {!r} already exists. Over-writing with {}'.format(name,
                                                                                            process))
 
-        self.responses[name] = process
-        self.logger.debug('Added response {!r}: {}'.format(name, process))
+        holder[name] = process
+        self.logger.debug('Added to {}: {!r} --> {}'.format(ptype, name, process))
 
-    def add_response_from(self, name, **params):
-        self.logger.debug('Adding response: {}:: {}'.format(name, params))
+    def add_subprocess_from(self, ptype, name, **params):
 
-        response = self.from_params(**params)
+        process = self.from_params(**params)
+        self.add_subprocess(ptype, name, process)
 
-        self.add_response(name, response)
+    # def add_response(self, name, process):
+    #     """
+    #     Add a response function to this process
+    #
+    #     Args:
+    #         name: Name to refer to the object
+    #         process: The instance of the Process
+    #
+    #     Returns:
+    #         None
+    #
+    #     """
+    #
+    #     self.check_names([name])
+    #
+    #     if name in self.responses:
+    #         self.logger.warning('Process {!r} already exists. Over-writing with {}'.format(name,
+    #
+    # process))
+    #
+    #     self.responses[name] = process
+    #     self.logger.debug('Added response {!r}: {}'.format(name, process))
+
+    # def add_response_from(self, name, **params):
+    #     self.logger.debug('Adding response: {}:: {}'.format(name, params))
+    #
+    #     process = self.from_params(**params)
+    #
+    #     self.add_subprocess('responses', name, process)
+    #
+    # def add_mask_from(self, name, **params):
+    #     self.logger.debug('Adding mask: {}:: {}'.format(name, params))
+    #
+    #     process = self.from_params(**params)
+    #     self.add_subprocess('masks', name, process)
 
     def on_domain_set(self):
-        for resp in self.responses.values():
-            resp.set_domain(self.domain)
+        for proc in self.responses.values() + self.masks.values():
+            proc.set_domain(self.domain)
 
     def _lambdify(self, expr, args):
         """
@@ -277,36 +444,38 @@ class ExprProcess(Process):
             self.logger.debug('Returning cached evaluation in {}'.format(self))
             return self._evaled
 
-        self.logger.debug('Evaluating {!r} on {!r}'.format(self.expr, domain))
+        expr = self.expr_full()
+        self.logger.debug('Evaluating {!r} on {!r}'.format(expr, domain))
+        return self.evaluate_expr(expr, domain=domain, params=params, varnames=self.varnames)
 
-        # collect the arguments
-        varargs = [domain[_] for _ in self.varnames]
-        pargs = [params[_] for _ in self.params]
-        from fipy import PhysicalField
-        pargs = [_.inBaseUnits() if isinstance(_, PhysicalField) else _ for _ in pargs]
-
-        args = varargs + pargs
-        # follow the same order of the params ordered dict
-
-        self.logger.debug('Evaulation args: {}'.format(zip(self.argnames, args)))
-        evaled = self.expr_func(*args)
-
-        resp_evals = []
-        if full:
-            # evaluate the subprocesses
-            for resp_name, response in self.responses.items():
-                self.logger.debug('Evaluating response {}'.format(resp_name))
-                resp_evals.append(response.evaluate(domain, params.get(resp_name, None)))
-
-        if resp_evals:
-            evaled *= reduce(operator.mul, resp_evals)
-
-        self.logger.debug("Caching evaluate results")
-        self._evaled = evaled
-        self._evaled_domain = domain
-        self._evaled_params = params.copy()
-
-        return evaled
+        # # collect the arguments
+        # varargs = [domain[_] for _ in self.varnames]
+        # pargs = [params[_] for _ in self.params]
+        # from fipy import PhysicalField
+        # pargs = [_.inBaseUnits() if isinstance(_, PhysicalField) else _ for _ in pargs]
+        #
+        # args = varargs + pargs
+        # # follow the same order of the params ordered dict
+        #
+        # self.logger.debug('Evaulation args: {}'.format(zip(self.argnames, args)))
+        # evaled = self.expr_func(*args)
+        #
+        # resp_evals = []
+        # if full:
+        #     # evaluate the subprocesses
+        #     for resp_name, response in self.responses.items():
+        #         self.logger.debug('Evaluating response {}'.format(resp_name))
+        #         resp_evals.append(response.evaluate(domain, params.get(resp_name, None)))
+        #
+        # if resp_evals:
+        #     evaled *= reduce(operator.mul, resp_evals)
+        #
+        # self.logger.debug("Caching evaluate results")
+        # self._evaled = evaled
+        # self._evaled_domain = domain
+        # self._evaled_params = params.copy()
+        #
+        # return evaled
 
     def snapshot(self, base = False):
         """
@@ -351,5 +520,9 @@ class ExprProcess(Process):
         responses = state['responses'] = {}
         for resp, respobj in self.responses.items():
             responses[resp] = respobj.snapshot()
+
+        masks = state['masks'] = {}
+        for mask, maskobj in self.masks.items():
+            masks[mask] = maskobj.snapshot()
 
         return state

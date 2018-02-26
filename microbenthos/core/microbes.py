@@ -1,7 +1,7 @@
 import logging
 
 from .entity import DomainEntity, Variable
-from .process import Process
+# from .process import Process
 
 
 class MicrobialGroup(DomainEntity):
