@@ -243,6 +243,8 @@ class ExprProcess(DomainEntity):
 
     def evaluate_expr(self, expr, domain = None, params = None, varnames = None):
 
+        self.logger.debug('Evaluating expr: {}'.format(expr))
+
         if not domain:
             self.check_domain()
             domain = self.domain
@@ -410,8 +412,6 @@ class ExprProcess(DomainEntity):
             exprfunc_vars (tuple): the order of arguments (as symbols) to call the function with.
 
         """
-        if not expr:
-            raise ValueError('No expression to lambdify!')
 
         eatoms = {_ for _ in expr.atoms() if isinstance(_, Symbol)}
         # a set of the atoms (symbols) in the expr

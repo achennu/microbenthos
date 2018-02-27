@@ -106,8 +106,8 @@ class MicroBenthosModel(CreateMixin):
         if name in tdict:
             self.logger.warning("Entity {!r} exists in {}! Overwriting!".format(name, target))
         entity = self.create_entity_from(defdict)
-        self.logger.info('Adding {} entity {} = {}'.format(target, name, entity))
         tdict[name] = entity
+        self.logger.info('Added {} entity {} = {}'.format(target, name, entity))
 
     # @classmethod
     # def _from_definition(cls, definition):
@@ -351,7 +351,7 @@ class MicroBenthosModel(CreateMixin):
                     S = S[p]
                 except (KeyError, TypeError):
                     raise ValueError(
-                        'Unknown model path {!r}'.format('.'.join(parts[:parts.index(p)])))
+                        'Unknown model path {!r}'.format('.'.join(parts[:parts.index(p)+1])))
             else:
                 S = S_
 

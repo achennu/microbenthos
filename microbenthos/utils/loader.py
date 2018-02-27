@@ -98,8 +98,11 @@ class MicroBenthosSchemaValidator(cerberus.Validator):
         A string that can be run through sympify
         """
         self.logger.debug('Validating sympifyable: {}'.format(value))
+        if not isinstance(value, (basestring, int, float)):
+            return False
         try:
             e = sympify(value)
+            self.logger.debug('Sympified: {}'.format(e))
             return True
         except:
             return False

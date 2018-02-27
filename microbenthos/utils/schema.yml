@@ -92,7 +92,6 @@ variables: &var_schema
                         type: string
                         allowed: [linear, normal]
                     params:
-#                        allow_unknown: true
                         type: dict
                         oneof:
                             - *seed_normal
@@ -272,8 +271,81 @@ eqn_term: &eqn_term_schema
             default: 1
 
 
+expression_schema: &Expr_schema
+    type: dict
+    schema:
+        cls:
+            <<: *cls_schema
+            allowed: [Expression, microbenthos.Expression]
+            default: Expression
+
+        init_params: &Expr_initschema
+            formula:
+                required: true
+                oneof:
+                    - type: sympifyable
+                    - type: dict
+                      schema:
+                        base:
+                            type: sympifyable
+                        pieces:
+                            type: list
+                            schema:
+                                type: dict
+                                schema:
+                                    expr:
+                                        type: sympifyable
+                                    where:
+                                        type: sympifyable
+
+            derived:
+                type: dict
+                keyschema:
+                    type: symbolable
+                valueschema:
+                    type: sympifyable
+
+            namespace:
+                type: dict
+                keyschema:
+                    type: sympifyable
+                valueschema:
+                    type: dict
+                    schema:
+                        vars:
+                            type: list
+                            schema:
+                                type: symbolable
+                        expr:
+                            type: sympifyable
 
 
+procSchema:
+    type: dict
+    schema: &Proc_schema
+        cls:
+            <<: *cls_schema
+            allowed: [Process, microbenthos.Process]
+            default: Process
+
+        init_params:
+            type: dict
+            schema:
+                expr:
+                    required: true
+                    schema:
+                        <<: *Expr_initschema
+
+                params:
+                    type: dict
+                    keyschema:
+                        type: symbolable
+                    valueschema:
+                        type: [integer, float, physical_unit]
+
+                implicit:
+                    type: boolean
+                    default: true
 
 ### MAIN MODEL SCHEMA HERE ###
 
@@ -349,6 +421,7 @@ model:
                 - schema: *process_valueschema
                 - schema: *var_schema
                 - schema: *irradiance_schema
+                - schema: *Proc_schema
 
 
     microbes:

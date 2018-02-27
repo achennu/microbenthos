@@ -104,7 +104,6 @@ class MicrobialGroup(DomainEntity):
         """
         self.logger.debug('Dispatch init of process {!r}'.format(name, params))
         instance = self.from_params(**params)
-        assert isinstance(instance, Process), '{} not an instance of Process'
 
         if name in self.processes:
             self.logger.warning('Overwriting process {!r} with {}'.format(name, instance))
