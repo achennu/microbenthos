@@ -26,7 +26,7 @@ class Simulation(CreateMixin):
                  simtime_total = 6,
                  simtime_step = 120,
                  simtime_days = None,
-                 residual_lim = 1e-8,
+                 residual_target = 1e-9,
                  residual_break = 0.1,
                  max_sweeps = 25,
                  fipy_solver = 'scipy'
@@ -40,7 +40,7 @@ class Simulation(CreateMixin):
             simtime_days (float): The number of days (in terms of the
             model's irradiance cycle) the simulation should run for. Note that specifying this
             will override the given `simtime_total` when the :attr:`.model` is supplied.
-            residual_lim (float): The max residual limit below which the timestep is considered
+            residual_target (float): The max residual limit below which the timestep is considered
             to be numerically accurate
             residual_break (float): Residual at a time step above this value will cause the
             simulation to abort
@@ -70,8 +70,8 @@ class Simulation(CreateMixin):
         self.simtime_total = simtime_total
         self.simtime_step = simtime_step
 
-        self._residual_lim = None
-        self.residual_lim = residual_lim
+        self._residual_target = None
+        self.residual_target = residual_target
         self.residual_break = float(residual_break)
         assert self.residual_break > 0
 
@@ -151,17 +151,17 @@ class Simulation(CreateMixin):
                     self.simtime_total, self.simtime_step))
 
     @property
-    def residual_lim(self):
-        return self._residual_lim
+    def residual_target(self):
+        return self._residual_target
 
-    @residual_lim.setter
-    def residual_lim(self, val):
+    @residual_target.setter
+    def residual_target(self, val):
         try:
             val = float(val)
             assert val <= 1e-6
-            self._residual_lim = val
+            self._residual_target = val
         except:
-            raise ValueError('residual_lim {} should be <= 1e-6'.format(val))
+            raise ValueError('residual_target {} should be <= 1e-6'.format(val))
 
     @property
     def max_sweeps(self):
@@ -274,8 +274,8 @@ class Simulation(CreateMixin):
 
         self.logger.info('Starting simulation')
         self.logger.debug(
-            'simtime_total={o.simtime_total} simtime_step={o.simtime_step}, residual_lim='
-            '{o.residual_lim} max_sweeps={o.max_sweeps}'.format(
+            'simtime_total={o.simtime_total} simtime_step={o.simtime_step}, residual_target='
+            '{o.residual_target} max_sweeps={o.max_sweeps}'.format(
                 o=self))
 
         solver_module = importlib.import_module('fipy.solvers.{}'.format(self.fipy_solver))
@@ -302,7 +302,7 @@ class Simulation(CreateMixin):
 
         EQN = self.model.full_eqn
 
-        while (res > self.residual_lim) and (num_sweeps < self.max_sweeps):
+        while (res > self.residual_target) and (num_sweeps < self.max_sweeps):
 
             res = EQN.sweep(
                 solver=self._solver,
@@ -311,9 +311,9 @@ class Simulation(CreateMixin):
             num_sweeps += 1
             self.logger.debug('Sweeps: {}  residual: {:.2g}'.format(num_sweeps, float(res)))
 
-        if res > self.residual_lim:
+        if res > self.residual_target:
             self.logger.warning('Timestep residual {:.2g} > limit {:.2g}'.format(
-                res, self.residual_lim))
+                res, self.residual_target))
 
             if res > self.residual_break:
                 raise RuntimeError('Residual {:.2g} too high (>{:.2g}) to continue'.format(

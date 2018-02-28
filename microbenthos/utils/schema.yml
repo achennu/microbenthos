@@ -506,7 +506,7 @@ simulation:
         min: 0
         nullable: true
 
-    residual_lim:
+    residual_target:
         type: float
         max: 1e-6
         default: 1e-8
