@@ -6,6 +6,7 @@ from fipy.tools import numerix as np
 
 from .expression import Expression
 from ..core import DomainEntity
+from ..utils import snapshot_var
 
 
 class Process(DomainEntity):
@@ -18,14 +19,12 @@ class Process(DomainEntity):
 
     def __init__(self, expr,
                  params = None,
-                 implicit = False,
+                 implicit = True,
                  **kwargs):
         self.logger = kwargs.get('logger') or logging.getLogger(__name__)
         self.logger.debug('Init in {}'.format(self.__class__.__name__))
         kwargs['logger'] = self.logger
         super(Process, self).__init__(**kwargs)
-
-
 
         self.expr = expr
         assert isinstance(self.expr, Expression)
@@ -44,7 +43,7 @@ class Process(DomainEntity):
     def expr(self, e):
         if isinstance(e, Mapping):
             self.logger.debug('Creating expression instance from dict: {}'.format(e))
-            e = Expression(**e)
+            e = Expression(name=self.name, **e)
 
         if not isinstance(e, Expression):
             raise ValueError('Need an Expression but got {}'.format(type(e)))
@@ -71,7 +70,7 @@ class Process(DomainEntity):
             The evaluated expression. This is typically an array or fipy binOp term
 
         """
-        self.logger.debug('Evaluating expr {}'.format(expr))
+        self.logger.debug('Evaluating expr {!r}'.format(expr))
 
         if not domain:
             self.check_domain()
@@ -83,8 +82,8 @@ class Process(DomainEntity):
         expr_symbols = filter(lambda a: isinstance(a, sp.Symbol), expr.atoms())
         param_symbols = tuple(sp.symbols(params.keys()))
         var_symbols = tuple(set(expr_symbols).difference(set(param_symbols)))
-        self.logger.debug('Params available: {}'.format(param_symbols))
-        self.logger.debug('Vars to come from domain: {}'.format(var_symbols))
+        # self.logger.debug('Params available: {}'.format(param_symbols))
+        # self.logger.debug('Vars to come from domain: {}'.format(var_symbols))
         allsymbs = tuple(var_symbols + param_symbols)
 
         args = []
@@ -103,7 +102,7 @@ class Process(DomainEntity):
             else:
                 raise RuntimeError('Unknown symbol {!r} in args list'.format(symbol))
 
-        self.logger.debug('Lambdifying with args: {}'.format(allsymbs))
+        # self.logger.debug('Lambdifying with args: {}'.format(allsymbs))
         expr_func = sp.lambdify(allsymbs, expr, modules=self._lambdify_modules)
 
         self.logger.debug('Evaluating with {}'.format(zip(allsymbs, args)))
@@ -134,19 +133,21 @@ class Process(DomainEntity):
         self.logger.debug('{}: creating as source for variable {!r}'.format(self, varname))
 
         var = sp.symbols(varname)
+        varobj = self.evaluate(var, **kwargs)
 
         if var not in self.expr.symbols():
             S0 = self.expr.expr()
             S1 = 0
-            varobj = None
 
         else:
             S = self.expr.expr()
-            varobj = self.evaluate(var, **kwargs)
+
 
             if self.implicit:
+                self.logger.debug('Attempting to split into implicit component')
                 S1 = self.expr.diff(var)
                 S0 = S - S1 * var
+                self.logger.debug('Got S1 {}: {}'.format(type(S1), S1))
 
                 if var in S1.atoms():
                     self.logger.debug('S1 dependent on {}, so should be implicit term'.format(var))
@@ -177,3 +178,39 @@ class Process(DomainEntity):
     def repr_pretty(self):
         e = self.expr.expr()
         return sp.pretty(e)
+
+    def snapshot(self, base = False):
+        """
+        Returns a snapshot of the Process state
+
+        Args:
+            base (bool): Convert to base units?
+
+        Returns:
+            Dictionary with structure:
+                * `metadata`:
+                    * `expr`: str(:attr:`.expr.expr()`)
+                    * `param_names`: tuple of :attr:`.param.keys()`
+                    * `params`: (name, val) of :attr:`.params`
+                * `data`: (array of :meth:`.evaluate()`, dict(unit=unit)
+
+        """
+        self.check_domain()
+        self.logger.debug('Snapshot: {}'.format(self))
+
+        state = dict()
+        meta = state['metadata'] = {}
+        meta['expr'] = str(self.expr.expr())
+        meta['param_names'] = tuple(self.params.keys())
+        for p, pval in self.params.items():
+            meta[p] = str(pval)
+
+        evaled = self.as_term()
+
+        if hasattr(evaled, 'unit'):
+            state['data'] = snapshot_var(evaled, base=base)
+
+        else:
+            state['data'] = snapshot_var(evaled, base=base)
+
+        return state

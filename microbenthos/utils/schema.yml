@@ -229,48 +229,6 @@ process: &process_schema
                     responses:  *procbase
                     masks: *procbase
 
-
-microbes: &microbes_schema
-    schema:
-        cls:
-            <<: *cls_schema
-            allowed: [microbenthos.microbes.MicrobialGroup, MicrobialGroup]
-            default: MicrobialGroup
-
-        init_params:
-            type: dict
-            schema:
-                name:
-                    type: symbolable
-                    minlength: 2
-                    required: true
-
-                features:
-                    type: dict
-                    required: true
-                    dependencies: [features.biomass]
-                    keyschema:
-                        type: symbolable
-                        minlength: 2
-
-
-                    valueschema:
-                         schema: *var_schema
-
-                processes: *process_schema
-
-eqn_term: &eqn_term_schema
-    type: dict
-    schema:
-        store:
-            type: string
-            model_store: store
-            required: true
-        coeff:
-            type: [integer, float]
-            default: 1
-
-
 expression_schema: &Expr_schema
     type: dict
     schema:
@@ -345,7 +303,56 @@ procSchema:
 
                 implicit:
                     type: boolean
-                    default: true
+
+
+microbes: &microbes_schema
+    schema:
+        cls:
+            <<: *cls_schema
+            allowed: [microbenthos.microbes.MicrobialGroup, MicrobialGroup]
+            default: MicrobialGroup
+
+        init_params:
+            type: dict
+            schema:
+                name:
+                    type: symbolable
+                    minlength: 2
+                    required: true
+
+                features:
+                    type: dict
+                    required: true
+                    dependencies: [features.biomass]
+                    keyschema:
+                        type: symbolable
+                        minlength: 2
+
+
+                    valueschema:
+                         schema: *var_schema
+
+                processes:
+                    anyof:
+                        - schema: *process_schema
+                        - type: dict
+                          valueschema:
+                            type: dict
+                            schema: *Proc_schema
+
+eqn_term: &eqn_term_schema
+    type: dict
+    schema:
+        store:
+            type: string
+            model_store: store
+            required: true
+        coeff:
+            type: [integer, float]
+            default: 1
+
+
+
 
 ### MAIN MODEL SCHEMA HERE ###
 
@@ -398,7 +405,7 @@ model:
             type: sympifyable
         valueschema:
             schema:
-                variables:
+                vars:
                     type: list
                     required: true
                     schema:

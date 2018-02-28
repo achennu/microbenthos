@@ -118,6 +118,10 @@ class Expression(object):
             return self.base
 
     def diff(self, *args):
-        return sum((self.base*e).diff(*args) * c for e, c in self._pieces).simplify()
+        if self._pieces:
+            ret = sum((self.base * e).diff(*args) * c for e, c in self._pieces)
+        else:
+            ret = self.base.diff(*args)
+        return ret
 
     __call__ = expr

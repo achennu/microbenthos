@@ -8,13 +8,20 @@ from microbenthos.utils.snapshotters import snapshot_var
 
 
 class Entity(object):
-    def __init__(self, logger = None):
+    def __init__(self, name = None, logger = None):
 
         if not logger:
             self.logger = logging.getLogger(__name__)
             self.logger.warning('No logger supplied, creating in base class: {}'.format(__name__))
         else:
             self.logger = logger
+
+        self.name = name or 'unnamed'
+
+    def __repr__(self):
+        return '{}({})'.format(
+            self.__class__.__name__,
+            self.name)
 
     @classmethod
     def from_params(cls_, cls, init_params, post_params = None):
@@ -176,6 +183,7 @@ class DomainEntity(Entity):
 
     def set_domain(self, domain):
         self.domain = domain
+        self.logger.debug('{} domain set: {}'.format(self, domain))
 
     def check_domain(self):
         if not self.has_domain:

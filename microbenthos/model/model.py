@@ -2,9 +2,12 @@ import logging
 from collections import Mapping, namedtuple
 
 import fipy.tools.numerix as np
+import sympy as sp
 from fipy import TransientTerm, ImplicitDiffusionTerm, CellVariable, Variable, \
     PhysicalField, ImplicitSourceTerm
 from sympy import Lambda, symbols
+
+sp.init_printing()
 
 from ..core import Entity, ExprProcess, Expression, Process, SedimentDBLDomain
 from ..core import Variable as mVariable
@@ -37,7 +40,7 @@ class MicroBenthosModel(CreateMixin):
 
         self._setup(**kwargs)
 
-    def add_formula(self, name, variables, expr):
+    def add_formula(self, name, vars, expr):
         """
         Add a formula to the model namespace
 
@@ -48,7 +51,7 @@ class MicroBenthosModel(CreateMixin):
 
         Args:
             name (str): Name of the formula
-            variables (list): Variables in the formula expression
+            vars (list): Variables in the formula expression
             expr (str): The expression to be parsed by sympy
 
         Returns:
@@ -56,7 +59,7 @@ class MicroBenthosModel(CreateMixin):
         """
         self.logger.info('Adding formula {!r}: {}'.format(name, expr))
 
-        func = Lambda(symbols(variables), expr)
+        func = Lambda(symbols(vars), expr)
         self.logger.debug('Formula {!r}: {}'.format(name, func))
         ExprProcess._sympy_ns[name] = func
         Expression._sympy_ns[name] = func
@@ -106,6 +109,7 @@ class MicroBenthosModel(CreateMixin):
         tdict = getattr(self, target)
         if name in tdict:
             self.logger.warning("Entity {!r} exists in {}! Overwriting!".format(name, target))
+        defdict['init_params']['name'] = name
         entity = self.create_entity_from(defdict)
         tdict[name] = entity
         self.logger.info('Added {} entity {} = {}'.format(target, name, entity))
@@ -636,7 +640,7 @@ class ModelEquation(object):
         if self.finalized:
             raise RuntimeError('Equation already finalized, cannot add terms')
 
-        self.logger.info('Adding source term from {!r}'.format(path))
+        self.logger.info('{} Adding source term from {!r}'.format(self, path))
 
         if not isinstance(coeff, (int, float)):
             raise ValueError('Source coeff should be int or float, not {}'.format(type(coeff)))
@@ -676,8 +680,7 @@ class ModelEquation(object):
 
         self.logger.debug('Created source {!r}: {!r}'.format(path, term))
 
-    def pretty_string(self):
-        import sympy as sp
+    def as_symbolic(self):
         var = sp.var(self.varname)
         t, z = sp.var('t z')
         Dcoeff = sp.sympify(self.diffusion_def[1])
@@ -685,8 +688,11 @@ class ModelEquation(object):
         transient = sp.Derivative(var, t)
         diffusive = sp.Derivative(Dcoeff * var, z, 2)
         sources = sum(self.source_formulae.values())
-        eqn = u'{} = {} + {}'.format(*[sp.pretty(_) for _ in (transient, diffusive, sources)])
-        return eqn
+
+        return sp.Eq(transient, diffusive + sources)
+
+    def as_pretty_string(self):
+        return sp.pretty(self.as_symbolic())
 
     @property
     def RHS_terms(self):
@@ -806,8 +812,8 @@ class ModelEquation(object):
 
             D = self.term_diffusion.coeff[0]
 
-            top = -D[0] * (self.var[0] - self.var[1]) / (depths[0] - depths[1])
-            bottom = -D[-1] * (self.var[-1] - self.var[-2]) / (depths[-1] - depths[-2])
+            top = -D[1] * (self.var[0] - self.var[1]) / (depths[1] - depths[0])
+            bottom = -D[-2] * (self.var[-1] - self.var[-2]) / (depths[-1] - depths[-2])
             transport_rate = (top + bottom).inBaseUnits()
             # self.logger.debug('Calculated transport rate: {}'.format(transport_rate))
 
