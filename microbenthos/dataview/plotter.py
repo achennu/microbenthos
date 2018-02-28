@@ -43,8 +43,8 @@ class ModelPlotter(object):
                  dpi = None,
                  unit_env = 'mol/l',
                  unit_microbes = 'mg/cm**3',
-                 unit_sources = 'mol/l/h',
-                 unit_process = 'mol/l/h',
+                 unit_sources = 'mol/l/min',
+                 unit_process = 'mol/l/min',
                  track_budget = False,
                  ):
         self.logger = logging.getLogger(__name__)

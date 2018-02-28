@@ -2,11 +2,14 @@ import logging
 from collections import Mapping, namedtuple
 
 import fipy.tools.numerix as np
+import sympy as sp
 from fipy import TransientTerm, ImplicitDiffusionTerm, CellVariable, Variable, \
-    PhysicalField
+    PhysicalField, ImplicitSourceTerm
 from sympy import Lambda, symbols
 
-from ..core import Entity, ExprProcess, SedimentDBLDomain
+sp.init_printing()
+
+from ..core import Entity, ExprProcess, Expression, Process, SedimentDBLDomain
 from ..core import Variable as mVariable
 from ..utils import snapshot_var, CreateMixin
 
@@ -37,7 +40,7 @@ class MicroBenthosModel(CreateMixin):
 
         self._setup(**kwargs)
 
-    def add_formula(self, name, variables, expr):
+    def add_formula(self, name, vars, expr):
         """
         Add a formula to the model namespace
 
@@ -48,7 +51,7 @@ class MicroBenthosModel(CreateMixin):
 
         Args:
             name (str): Name of the formula
-            variables (list): Variables in the formula expression
+            vars (list): Variables in the formula expression
             expr (str): The expression to be parsed by sympy
 
         Returns:
@@ -56,9 +59,10 @@ class MicroBenthosModel(CreateMixin):
         """
         self.logger.info('Adding formula {!r}: {}'.format(name, expr))
 
-        func = Lambda(symbols(variables), expr)
+        func = Lambda(symbols(vars), expr)
         self.logger.debug('Formula {!r}: {}'.format(name, func))
         ExprProcess._sympy_ns[name] = func
+        Expression._sympy_ns[name] = func
 
     @property
     def domain(self):
@@ -105,9 +109,10 @@ class MicroBenthosModel(CreateMixin):
         tdict = getattr(self, target)
         if name in tdict:
             self.logger.warning("Entity {!r} exists in {}! Overwriting!".format(name, target))
+        defdict['init_params']['name'] = name
         entity = self.create_entity_from(defdict)
-        self.logger.info('Adding {} entity {} = {}'.format(target, name, entity))
         tdict[name] = entity
+        self.logger.info('Added {} entity {} = {}'.format(target, name, entity))
 
     # @classmethod
     # def _from_definition(cls, definition):
@@ -307,21 +312,21 @@ class MicroBenthosModel(CreateMixin):
 
         self.full_eqn = full_eqn
 
-        self.logger.debug('Collecting unique source term expressions')
-        for eqn in self.equations.values():
-
-            for name, expr in eqn.source_exprs.items():
-
-                if name not in self.source_exprs:
-                    self.source_exprs[name] = expr
-
-                else:
-                    old = self.source_exprs[name]
-                    if old is not expr:
-                        raise RuntimeError(
-                            'Another source with same name {!r} exists from different '
-                            'equation!'.format(
-                                name))
+        # self.logger.debug('Collecting unique source term expressions')
+        # for eqn in self.equations.values():
+        #
+        #     for name, expr in eqn.source_exprs.items():
+        #
+        #         if name not in self.source_exprs:
+        #             self.source_exprs[name] = expr
+        #
+        #         else:
+        #             old = self.source_exprs[name]
+        #             if old is not expr:
+        #                 raise RuntimeError(
+        #                     'Another source with same name {!r} exists from different '
+        #                     'equation!'.format(
+        #                         name))
 
     def get_object(self, path):
         """
@@ -351,7 +356,7 @@ class MicroBenthosModel(CreateMixin):
                     S = S[p]
                 except (KeyError, TypeError):
                     raise ValueError(
-                        'Unknown model path {!r}'.format('.'.join(parts[:parts.index(p)])))
+                        'Unknown model path {!r}'.format('.'.join(parts[:parts.index(p) + 1])))
             else:
                 S = S_
 
@@ -465,6 +470,7 @@ class ModelEquation(object):
 
         self._term_transient = None
         self._term_diffusion = None
+        self.source_formulae = {}
         self.source_exprs = {}
         self.source_terms = {}
         self.source_coeffs = {}
@@ -510,8 +516,7 @@ class ModelEquation(object):
             raise RuntimeError('Cannot finalize equation without right-hand side terms')
 
         if self.source_exprs:
-            self.sources_total = sum(
-                self.source_exprs[k] * self.source_coeffs[k] for k in self.source_exprs)
+            self.sources_total = sum(self.source_exprs.values())
             #: the additive sum of all the sources
         else:
             self.sources_total = PhysicalField(np.zeros_like(self.var), self.var.unit.name() + '/s')
@@ -557,6 +562,8 @@ class ModelEquation(object):
             expr = obj.var
         elif isinstance(obj, Variable):
             expr = obj
+        elif isinstance(obj, Process):
+            expr = obj
 
         return expr
 
@@ -592,9 +599,10 @@ class ModelEquation(object):
         """
         self.logger.debug('Adding diffusion term from {!r}'.format(path))
 
-        expr = self._get_term_obj(path)
+        obj = self._get_term_obj(path)
+        term = obj.as_term()
 
-        self._add_diffusion_term(coeff=expr * coeff)
+        self._add_diffusion_term(coeff=term * coeff)
         self.diffusion_def = (path, coeff)
 
     @property
@@ -632,42 +640,59 @@ class ModelEquation(object):
         if self.finalized:
             raise RuntimeError('Equation already finalized, cannot add terms')
 
-        self.logger.info('Adding source term from {!r}'.format(path))
+        self.logger.info('{} Adding source term from {!r}'.format(self, path))
 
         if not isinstance(coeff, (int, float)):
             raise ValueError('Source coeff should be int or float, not {}'.format(type(coeff)))
 
-        obj = self.model.get_object(path)
-        """:type: ExprProcess"""
-
-        expr = obj.evaluate()
-        self.logger.debug('Created source expr: {!r}'.format(expr))
-
         if path in self.source_exprs:
             raise RuntimeError('Source term path already exists: {!r}'.format(path))
 
-        self.source_exprs[path] = expr
+        obj = self.model.get_object(path)
+        """:type: Process"""
 
-        # check if it should be an implicit source
-
-        # dvars = obj.dependent_vars()
-        # ovars = dvars.difference({self.varname})
-        # is_implicit = bool(ovars)
-        # if is_implicit:
-        #   self.logger.debug('Making implicit because of other vars: {}'.format(ovars))
-
-        # is_implicit = obj.implicit_source
-        #
-        # if is_implicit:
-        #     term = ImplicitSourceTerm(coeff=coeff * expr, var=self.var)
-        # else:
-        #     term = coeff * expr
-
-        term = coeff * expr
-
-        self.source_terms[path] = term
+        # expr = obj.evaluate()
+        # self.logger.debug('Created source expr: {!r}'.format(expr))
         self.source_coeffs[path] = coeff
-        self.logger.info('Created source {!r}: {!r}'.format(path, term))
+
+        if isinstance(obj, ExprProcess):
+
+            self.source_formulae[path] = coeff * obj.expr_full() * obj.masks_as_expr()
+            self.source_exprs[path] = obj.evaluate_expr(coeff * obj.expr_full())
+
+            term = obj.source_term_for_var(self.varname, coeff=coeff)
+
+            self.source_terms[path] = term
+
+        elif isinstance(obj, Process):
+            full_expr = obj.as_term()
+            self.source_exprs[path] = coeff * full_expr
+            self.source_formulae[path] = coeff * obj.expr()
+            var, S0, S1 = obj.as_source_for(self.varname)
+            assert var is self.var, 'Got var: {!r} and self.var: {!r}'.format(var, self.var)
+            if S1 is not 0:
+                S1 = ImplicitSourceTerm(coeff=S1, var=self.var)
+                term = S0 + S1
+            else:
+                term = S0
+
+            self.source_terms[path] = term
+
+        self.logger.debug('Created source {!r}: {!r}'.format(path, term))
+
+    def as_symbolic(self):
+        var = sp.var(self.varname)
+        t, z = sp.var('t z')
+        Dcoeff = sp.sympify(self.diffusion_def[1])
+
+        transient = sp.Derivative(var, t)
+        diffusive = sp.Derivative(Dcoeff * var, z, 2)
+        sources = sum(self.source_formulae.values())
+
+        return sp.Eq(transient, diffusive + sources)
+
+    def as_pretty_string(self):
+        return sp.pretty(self.as_symbolic())
 
     @property
     def RHS_terms(self):
@@ -729,7 +754,7 @@ class ModelEquation(object):
                 variable=self.varpath,
                 ),
 
-            sources = dict(
+            sources=dict(
                 metadata=self.source_coeffs,
                 data=snapshot_var(self.sources_total, base=base)
                 ),
@@ -787,8 +812,8 @@ class ModelEquation(object):
 
             D = self.term_diffusion.coeff[0]
 
-            top = -D[0] * (self.var[0] - self.var[1]) / (depths[0] - depths[1])
-            bottom = -D[-1] * (self.var[-1] - self.var[-2]) / (depths[-1] - depths[-2])
+            top = -D[1] * (self.var[0] - self.var[1]) / (depths[1] - depths[0])
+            bottom = -D[-2] * (self.var[-1] - self.var[-2]) / (depths[-1] - depths[-2])
             transport_rate = (top + bottom).inBaseUnits()
             # self.logger.debug('Calculated transport rate: {}'.format(transport_rate))
 
