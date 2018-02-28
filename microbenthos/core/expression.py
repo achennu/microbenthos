@@ -14,11 +14,9 @@ class Expression(object):
 
     def __init__(self, formula = None, name = None, namespace = None,
                  derived = None,
-                 **kwargs):
-        self.logger = kwargs.get('logger') or logging.getLogger(__name__)
+                 ):
+        self.logger = logging.getLogger(__name__)
         self.logger.debug('Init in {}'.format(self.__class__.__name__))
-        # kwargs['logger'] = self.logger
-        # super(Expression, self).__init__(**kwargs)
 
         self.name = name or 'unnamed'
         self._sympy_ns = self._sympy_ns.copy()
@@ -34,25 +32,22 @@ class Expression(object):
             self.logger.debug('Derived {!r}: {}'.format(name, dexpr))
             self._sympy_ns[name] = dexpr
 
-        self.symbols = set()
         self._pieces = []
         self.base = None
 
 
         if formula:
             base, pieces = self.parse_formula(formula)
-            base_symbols = {_ for _ in base.atoms() if isinstance(_, sp.Symbol)}
-            self.symbols.update(base_symbols)
             self.base = base
 
-            self.logger.debug('Added base expr {!r} with symbols: {}'.format(base, base_symbols))
+            self.logger.debug('Added base expr {!r}'.format(base))
 
             for expr in pieces:
                 self.add_piece(*expr)
 
         self.logger.debug(
-            '{} created with base {!r} and {} pieces and symbols: {}'.format(
-                self, self.base, len(self._pieces), self.symbols))
+            '{} created with base {!r} and {} pieces'.format(
+                self, self.base, len(self._pieces)))
 
     def __repr__(self):
         return 'Expr({})'.format(self.name)
@@ -68,22 +63,7 @@ class Expression(object):
         expressions = []
 
         if isinstance(formula, basestring):
-            # expr = self._sympify(formula)
-            # cond_ = sp.sympify(1)
-            # expressions.append((expr, cond_))
             base = self._sympify(formula)
-
-        elif isinstance(formula, (tuple, list)):
-            # each item should be a (formula, condition) pair
-            ok = all(len(item) == 2 for item in formula)
-            if not ok:
-                self.logger.error('Formula list improper: {}'.format(formula))
-                raise ValueError('Formula as list should be pairs of (formula, condition)!')
-
-            for form, condition in formula:
-                expr = self._sympify(form)
-                cond_ = self._sympify(condition)
-                expressions.append((expr, cond_))
 
         elif isinstance(formula, Mapping):
             # keys are "base" expr, "pieces" with list of (expr, where) pairs
@@ -125,18 +105,19 @@ class Expression(object):
             raise ValueError('condition {!r} not a sympy Expr, but {}'.format(condition,
                                                                               type(condition)))
 
-        for s in (expr, condition):
-            symbols = {_ for _ in s.atoms() if isinstance(_, sp.Symbol)}
-            self.symbols.update(symbols)
-
         self._pieces.append((expr, condition))
 
     def symbols(self):
-        return {_ for _ in self.expr().atoms() if isinstance(_, sp.Expr)}
+        return {_ for _ in self.expr().atoms() if isinstance(_, sp.Symbol)}
 
     def expr(self):
-        full = self.base * sum(e * c for e, c in self._pieces)
-        return full#.simplify()
+        pieces = sum(e * c for e, c in self._pieces)
+        if pieces:
+            return self.base * pieces
+        else:
+            return self.base
 
     def diff(self, *args):
         return sum((self.base*e).diff(*args) * c for e, c in self._pieces).simplify()
+
+    __call__ = expr

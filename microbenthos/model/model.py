@@ -3,10 +3,10 @@ from collections import Mapping, namedtuple
 
 import fipy.tools.numerix as np
 from fipy import TransientTerm, ImplicitDiffusionTerm, CellVariable, Variable, \
-    PhysicalField
+    PhysicalField, ImplicitSourceTerm
 from sympy import Lambda, symbols
 
-from ..core import Entity, ExprProcess, SedimentDBLDomain
+from ..core import Entity, ExprProcess, Expression, Process, SedimentDBLDomain
 from ..core import Variable as mVariable
 from ..utils import snapshot_var, CreateMixin
 
@@ -59,6 +59,7 @@ class MicroBenthosModel(CreateMixin):
         func = Lambda(symbols(variables), expr)
         self.logger.debug('Formula {!r}: {}'.format(name, func))
         ExprProcess._sympy_ns[name] = func
+        Expression._sympy_ns[name] = func
 
     @property
     def domain(self):
@@ -351,7 +352,7 @@ class MicroBenthosModel(CreateMixin):
                     S = S[p]
                 except (KeyError, TypeError):
                     raise ValueError(
-                        'Unknown model path {!r}'.format('.'.join(parts[:parts.index(p)+1])))
+                        'Unknown model path {!r}'.format('.'.join(parts[:parts.index(p) + 1])))
             else:
                 S = S_
 
@@ -557,6 +558,8 @@ class ModelEquation(object):
             expr = obj.var
         elif isinstance(obj, Variable):
             expr = obj
+        elif isinstance(obj, Process):
+            expr = obj
 
         return expr
 
@@ -592,9 +595,10 @@ class ModelEquation(object):
         """
         self.logger.debug('Adding diffusion term from {!r}'.format(path))
 
-        expr = self._get_term_obj(path)
+        obj = self._get_term_obj(path)
+        term = obj.as_term()
 
-        self._add_diffusion_term(coeff=expr * coeff)
+        self._add_diffusion_term(coeff=term * coeff)
         self.diffusion_def = (path, coeff)
 
     @property
@@ -641,34 +645,36 @@ class ModelEquation(object):
             raise RuntimeError('Source term path already exists: {!r}'.format(path))
 
         obj = self.model.get_object(path)
-        """:type: ExprProcess"""
+        """:type: Process"""
 
         # expr = obj.evaluate()
         # self.logger.debug('Created source expr: {!r}'.format(expr))
-
-        self.source_formulae[path] = coeff * obj.expr_full() * obj.masks_as_expr()
-        self.source_exprs[path] = obj.evaluate_expr(coeff * obj.expr_full())
-
-        # check if it should be an implicit source
-
-        # dvars = obj.dependent_vars()
-        # ovars = dvars.difference({self.varname})
-        # is_implicit = bool(ovars)
-        # if is_implicit:
-        #   self.logger.debug('Making implicit because of other vars: {}'.format(ovars))
-
-        # is_implicit = obj.implicit_source
-        #
-        # if is_implicit:
-        #     term = ImplicitSourceTerm(coeff=coeff * expr, var=self.var)
-        # else:
-        #     term = coeff * expr
-
-        term = obj.source_term_for_var(self.varname, coeff=coeff)
-
-        self.source_terms[path] = term
         self.source_coeffs[path] = coeff
-        self.logger.warning('Created source {!r}: {!r}'.format(path, term))
+
+        if isinstance(obj, ExprProcess):
+
+            self.source_formulae[path] = coeff * obj.expr_full() * obj.masks_as_expr()
+            self.source_exprs[path] = obj.evaluate_expr(coeff * obj.expr_full())
+
+            term = obj.source_term_for_var(self.varname, coeff=coeff)
+
+            self.source_terms[path] = term
+
+        elif isinstance(obj, Process):
+            full_expr = obj.as_term()
+            self.source_exprs[path] = coeff * full_expr
+            self.source_formulae[path] = coeff * obj.expr()
+            var, S0, S1 = obj.as_source_for(self.varname)
+            assert var is self.var, 'Got var: {!r} and self.var: {!r}'.format(var, self.var)
+            if S1 is not 0:
+                S1 = ImplicitSourceTerm(coeff=S1, var=self.var)
+                term = S0 + S1
+            else:
+                term = S0
+
+            self.source_terms[path] = term
+
+        self.logger.debug('Created source {!r}: {!r}'.format(path, term))
 
     def pretty_string(self):
         import sympy as sp
@@ -742,7 +748,7 @@ class ModelEquation(object):
                 variable=self.varpath,
                 ),
 
-            sources = dict(
+            sources=dict(
                 metadata=self.source_coeffs,
                 data=snapshot_var(self.sources_total, base=base)
                 ),
