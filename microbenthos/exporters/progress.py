@@ -12,7 +12,7 @@ from .exporter import BaseExporter
 
 class ProgressExporter(BaseExporter):
     _exports_ = 'progress'
-    __version__ = '1.0'
+    __version__ = '1.1'
 
     def __init__(self, desc='evolution', **kwargs):
         self.logger = kwargs.get('logger') or logging.getLogger(__name__)
