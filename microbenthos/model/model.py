@@ -9,7 +9,7 @@ from sympy import Lambda, symbols
 
 sp.init_printing()
 
-from ..core import Entity, ExprProcess, Expression, Process, SedimentDBLDomain
+from ..core import Entity, Expression, Process, SedimentDBLDomain
 from ..core import Variable as mVariable
 from ..utils import snapshot_var, CreateMixin
 
@@ -61,7 +61,6 @@ class MicroBenthosModel(CreateMixin):
 
         func = Lambda(symbols(vars), expr)
         self.logger.debug('Formula {!r}: {}'.format(name, func))
-        ExprProcess._sympy_ns[name] = func
         Expression._sympy_ns[name] = func
 
     @property
@@ -556,9 +555,7 @@ class ModelEquation(object):
         """
 
         obj = self.model.get_object(path)
-        if isinstance(obj, ExprProcess):
-            expr = obj.evaluate()
-        elif isinstance(obj, mVariable):
+        if isinstance(obj, mVariable):
             expr = obj.var
         elif isinstance(obj, Variable):
             expr = obj
@@ -655,28 +652,18 @@ class ModelEquation(object):
         # self.logger.debug('Created source expr: {!r}'.format(expr))
         self.source_coeffs[path] = coeff
 
-        if isinstance(obj, ExprProcess):
+        full_expr = obj.as_term()
+        self.source_exprs[path] = coeff * full_expr
+        self.source_formulae[path] = coeff * obj.expr()
+        var, S0, S1 = obj.as_source_for(self.varname)
+        assert var is self.var, 'Got var: {!r} and self.var: {!r}'.format(var, self.var)
+        if S1 is not 0:
+            S1 = ImplicitSourceTerm(coeff=S1, var=self.var)
+            term = S0 + S1
+        else:
+            term = S0
 
-            self.source_formulae[path] = coeff * obj.expr_full() * obj.masks_as_expr()
-            self.source_exprs[path] = obj.evaluate_expr(coeff * obj.expr_full())
-
-            term = obj.source_term_for_var(self.varname, coeff=coeff)
-
-            self.source_terms[path] = term
-
-        elif isinstance(obj, Process):
-            full_expr = obj.as_term()
-            self.source_exprs[path] = coeff * full_expr
-            self.source_formulae[path] = coeff * obj.expr()
-            var, S0, S1 = obj.as_source_for(self.varname)
-            assert var is self.var, 'Got var: {!r} and self.var: {!r}'.format(var, self.var)
-            if S1 is not 0:
-                S1 = ImplicitSourceTerm(coeff=S1, var=self.var)
-                term = S0 + S1
-            else:
-                term = S0
-
-            self.source_terms[path] = term
+        self.source_terms[path] = term
 
         self.logger.debug('Created source {!r}: {!r}'.format(path, term))
 

@@ -27,7 +27,7 @@ class Simulation(CreateMixin):
                  simtime_step = 60,
                  simtime_days = None,
                  simtime_lims = (10, 600),
-                 simtime_adaptive = False,
+                 simtime_adaptive = True,
                  residual_target = 1e-12,
                  residual_break = 1e-3,
                  max_sweeps = 8,
