@@ -206,8 +206,8 @@ def cli_simulate(model_file, output_dir, export, overwrite, compression, confirm
 
     click.secho(
         'Simulation setup: solver={0.fipy_solver} total={0.simtime_total} step={0.simtime_step} '
-        'steps={0.total_steps}'.format(
-            runner.simulation))
+        'adaptive={0.simtime_adaptive}'.format(runner.simulation)
+        )
 
     if confirm:
         click.confirm('Proceed with simulation run?',
@@ -279,6 +279,7 @@ def export_video(datafile, outfile, overwrite, style, dpi, show, budget, fps, bi
 
     from microbenthos.dataview import HDFModelData, ModelPlotter
     from tqdm import tqdm
+    import h5py as hdf
 
     with hdf.File(datafile, 'r') as hf:
         dm = HDFModelData(store=hf)

@@ -506,23 +506,30 @@ simulation:
         min: 0
         nullable: true
 
-    residual_lim:
+    residual_target:
         type: float
-        max: 1e-6
-        default: 1e-8
+        max: 1e-10
+        default: 1e-15
         coerce: float
 
     residual_break:
         type: float
         min: 0
-        default: 0.1
+        default: 1e-3
         coerce: float
+
+    simtime_lims:
+        type: list
+        items: [float, float]
+
+    simtime_adaptive:
+        type: boolean
 
     max_sweeps:
         type: integer
-        min: 2
+        min: 3
         max: 100
-        default: 15
+        default: 8
 
     fipy_solver:
         type: string

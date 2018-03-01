@@ -28,7 +28,7 @@ def model_with_eqn(model):
 SIMULATION_DEF = """
 simtime_total: !unit 1 h
 simtime_step: !unit 120 s
-residual_lim: 1e-6
+residual_target: 1e-6
 max_sweeps: 15
 fipy_solver: scipy
 """
@@ -100,10 +100,10 @@ class TestSimulation:
     def test_residual_lim(self, res, error):
         if error:
             with pytest.raises(error):
-                sim = Simulation(residual_lim=res)
+                sim = Simulation(residual_target=res)
 
         else:
-            sim = Simulation(residual_lim=res)
+            sim = Simulation(residual_target=res)
             assert sim
 
     @pytest.mark.parametrize('sweeps, error', [
@@ -172,7 +172,7 @@ class TestSimulation:
         sim.start()
         assert sim.started
 
-        RES = sim.residual_lim / 10
+        RES = sim.residual_target / 10
         model.full_eqn.sweep.return_value = RES
 
         dt = sim.simtime_step

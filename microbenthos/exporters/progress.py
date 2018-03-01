@@ -3,8 +3,12 @@ Exporter that shows the  simulation progress bar on the console
 """
 
 import logging
+
 import tqdm
+from fipy import PhysicalField
+
 from .exporter import BaseExporter
+
 
 class ProgressExporter(BaseExporter):
     _exports_ = 'progress'
@@ -26,10 +30,14 @@ class ProgressExporter(BaseExporter):
         self.logger.debug('Preparing progressbar for simulation: {} {} {}'.format(
             sim.simtime_total, sim.simtime_step, sim.total_steps
             ))
-        self._pbar = tqdm.tqdm(total=sim.total_steps, desc=self._desc)
+        self._pbar = tqdm.tqdm(total=int(sim.simtime_total.numericValue), desc=self._desc,
+                               unit='time')
+        # self._pbar = tqdm.tqdm(total=sim.total_steps, desc=self._desc)
 
     def process(self, num, state):
-        self._pbar.update()
+        time, tdict = state['time']['data']
+        curr = int(PhysicalField(time, tdict['unit']).numericValue)
+        self._pbar.update(curr - self._pbar.n)
 
     def finish(self):
         self._pbar.close()
