@@ -2,7 +2,7 @@
 
 __author__ = """Arjun Chennu"""
 __email__ = 'achennu@mpi-bremen.de'
-__version__ = '0.4.4'
+__version__ = '0.5'
 
 import logging
 
