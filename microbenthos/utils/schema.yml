@@ -178,57 +178,6 @@ irradiance: &irradiance_schema
                                       like_unit: cm**2/g
 
 
-processbase: &procbase
-    type: dict
-    keyschema:
-        type: sympifyable
-    valueschema: &procbase_value
-        schema: &procbase_valueschema
-            cls:
-                <<: *cls_schema
-                allowed: [ExprProcess, microbenthos.process.ExprProcess]
-                default: ExprProcess
-
-            init_params: &procbase_init
-                type: dict
-
-                schema: &procbase_initschema
-                    formula:
-                        type: sympifyable
-                        required: true
-
-                    varnames:
-                        type: list
-                        schema:
-                            type: symbolable
-
-                    params:
-                        type: dict
-                        keyschema:
-                            type: symbolable
-
-                    expected_unit:
-                        type: unit_name
-                        nullable: true
-
-                    implicit_source:
-                        type: boolean
-                        default: false
-
-
-process: &process_schema
-    <<: *procbase
-    valueschema:
-        <<: *procbase_value
-        schema: &process_valueschema
-            <<: *procbase_valueschema
-            init_params:
-                <<: *procbase_init
-                schema:
-                    <<: *procbase_initschema
-                    responses:  *procbase
-                    masks: *procbase
-
 expression_schema: &Expr_schema
     type: dict
     schema:
@@ -334,7 +283,6 @@ microbes: &microbes_schema
 
                 processes:
                     anyof:
-                        - schema: *process_schema
                         - type: dict
                           valueschema:
                             type: dict
@@ -425,7 +373,6 @@ model:
 
         valueschema:
             anyof:
-                - schema: *process_valueschema
                 - schema: *var_schema
                 - schema: *irradiance_schema
                 - schema: *Proc_schema

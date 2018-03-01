@@ -13,10 +13,10 @@ VARdict2 = copy.deepcopy(VARdict)
 VARdict2['init_params']['name'] = 'abcd'
 
 PROCdict = dict(
-    cls='ExprProcess',
+    cls='Process',
     init_params=dict(
-        formula='a**2 * biomass',
-        varnames=['biomass'],
+        expr=dict(
+            formula='a**2 * biomass', ),
         params = dict(a=3)
         )
     )
