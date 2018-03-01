@@ -26,7 +26,7 @@ class Simulation(CreateMixin):
                  simtime_total = 6,
                  simtime_step = 60,
                  simtime_days = None,
-                 simtime_lims = (10, 600),
+                 simtime_lims = (60, 600),
                  simtime_adaptive = True,
                  residual_target = 1e-12,
                  residual_break = 1e-3,
@@ -348,8 +348,8 @@ class Simulation(CreateMixin):
             self.logger.debug('Sweeps: {}  residual: {:.2g}'.format(num_sweeps, float(res)))
 
         if res > self.residual_target:
-            self.logger.warning('Timestep residual {:.2g} > limit {:.2g}'.format(
-                res, self.residual_target))
+            self.logger.info('Timestep residual {:.2g} > limit {:.2g} sweeps={}'.format(
+                res, self.residual_target, num_sweeps))
 
             if res > self.residual_break:
                 raise RuntimeError('Residual {:.2g} too high (>{:.2g}) to continue'.format(
@@ -441,7 +441,7 @@ class Simulation(CreateMixin):
         if residual <= self.residual_target:
 
             # if self.simtime_step < self.simtime_lims[1]:
-            mult = 1.0 + math.log10(0.75 * (self.max_sweeps) / num_sweeps) + residual_factor
+            mult = 1.0 + math.log10(0.5 * (self.max_sweeps) / num_sweeps) + residual_factor
             self.logger.debug(
                 'Residual ok. Multiplier: {:.4f} '.format(mult))
 

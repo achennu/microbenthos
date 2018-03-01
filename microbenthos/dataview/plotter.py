@@ -115,7 +115,8 @@ class ModelPlotter(object):
 
         self.logger.debug('Creating figure: {}'.format(self._fig_kwds))
 
-        self.fig = plt.figure(**kwargs)
+        self.fig = plt.figure('MicroBenthos Simulation', **kwargs)
+
 
         axes_depth = self.axes_depth
         axes_time = self.axes_time
@@ -276,8 +277,9 @@ class ModelPlotter(object):
 
         self.update_legends()
 
+        self.logger.propagate = False
+
         self.update_artists(tidx=0)
-        # self.fig.tight_layout()
 
     def _get_label(self, path):
         """
