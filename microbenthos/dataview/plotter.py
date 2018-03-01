@@ -406,6 +406,7 @@ class ModelPlotter(object):
             if ax in all_depth_axes:
                 artist = ax.plot(zeros, self.depths, label=label, **self.artist_style[label])[0]
             elif ax in all_time_axes:
+                self.artist_style[label].update(dict(markevery=1, ls=':', marker='.'))
                 artist = ax.plot([], [], label=label, **self.artist_style[label])[0]
 
             else:
