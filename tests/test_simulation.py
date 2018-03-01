@@ -3,7 +3,6 @@ import tempfile
 
 import mock
 import pytest
-
 from microbenthos.model import Simulation
 from microbenthos.runners import SimulationRunner
 from microbenthos.utils import yaml
@@ -28,7 +27,7 @@ def model_with_eqn(model):
 SIMULATION_DEF = """
 simtime_total: !unit 1 h
 simtime_step: !unit 120 s
-residual_lim: 1e-6
+residual_target: 1e-6
 max_sweeps: 15
 fipy_solver: scipy
 """
@@ -77,7 +76,7 @@ class TestSimulation:
             (-1, None, ValueError),
             (1, 3, None),
             (1, 3600 - 1, None),
-            (1, 3600, ValueError),
+            # (1, 3600, ValueError),
             ]
         )
     def test_simtime(self, total, step, error):
@@ -100,10 +99,10 @@ class TestSimulation:
     def test_residual_lim(self, res, error):
         if error:
             with pytest.raises(error):
-                sim = Simulation(residual_lim=res)
+                sim = Simulation(residual_target=res)
 
         else:
-            sim = Simulation(residual_lim=res)
+            sim = Simulation(residual_target=res)
             assert sim
 
     @pytest.mark.parametrize('sweeps, error', [
@@ -172,7 +171,7 @@ class TestSimulation:
         sim.start()
         assert sim.started
 
-        RES = sim.residual_lim / 10
+        RES = sim.residual_target / 10
         model.full_eqn.sweep.return_value = RES
 
         dt = sim.simtime_step
@@ -183,7 +182,7 @@ class TestSimulation:
         model.update_vars.assert_called_once()
         model.update_equations.assert_called_once_with(dt)
 
-        assert res == RES
+        assert res == (RES, 2)
 
     def test_simulation_evolution(self):
         pytest.xfail('Not implemented!')

@@ -1,7 +1,6 @@
 import copy
 
 import pytest
-
 from microbenthos import MicrobialGroup, SedimentDBLDomain
 
 VARdict = dict(
@@ -25,13 +24,13 @@ PROCdict = dict(
 
 class TestMicrobialGroup:
     def test_init_empty(self):
-        with pytest.raises(TypeError):
-            MicrobialGroup()
+        m = MicrobialGroup()
+        assert m.name == 'unnamed'
 
     @pytest.mark.parametrize(
         'features, err',
-        [(dict(), RuntimeError),
-         (dict(not_biomass=VARdict.copy()), RuntimeError),
+        [(dict(), None),
+         (dict(not_biomass=VARdict.copy()), None),
          (dict(biomass=VARdict.copy()), None),
          (dict(biomass=VARdict.copy(),
                pigment=VARdict.copy()), None),
@@ -39,15 +38,16 @@ class TestMicrobialGroup:
         )
     def test_init_features(self, features, err):
         if err is None:
-            m = MicrobialGroup('bugs', features=features)
+            m = MicrobialGroup(features=features)
             assert m
-            assert m.biomass is not None
+            if 'biomass' in features:
+                assert m.biomass is not None
             for k in features:
                 assert k in m.features
 
         else:
             with pytest.raises(err):
-                m = MicrobialGroup('bugs', features=features)
+                m = MicrobialGroup(features=features)
 
     @pytest.mark.parametrize(
         'processes, err',
@@ -58,14 +58,14 @@ class TestMicrobialGroup:
     def test_init_processes(self, processes, err):
         F = dict(biomass=VARdict)
         if err is None:
-            m = MicrobialGroup('bugs', features=F, processes=processes)
+            m = MicrobialGroup(features=F, processes=processes)
             assert m
             for k in processes:
                 assert k in m.processes
 
         else:
             with pytest.raises(err):
-                m = MicrobialGroup('bugs', features=F, processes=processes)
+                m = MicrobialGroup(features=F, processes=processes)
 
     @pytest.mark.parametrize(
         'features, processes,err',
@@ -91,7 +91,7 @@ class TestMicrobialGroup:
 
         domain = SedimentDBLDomain()
 
-        m = MicrobialGroup('bugs', features=features, processes=processes)
+        m = MicrobialGroup(features=features, processes=processes)
         m.set_domain(domain)
 
         if err is None:
@@ -131,8 +131,7 @@ class TestMicrobialGroup:
         domain = SedimentDBLDomain()
         domain.create_var('biomass', value=1, unit='mg/cm**3')
 
-
-        m = MicrobialGroup('bugs', features=features, processes=processes)
+        m = MicrobialGroup(features=features, processes=processes)
         m.set_domain(domain)
         m.setup()
 

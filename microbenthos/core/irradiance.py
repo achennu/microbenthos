@@ -5,6 +5,7 @@ import logging
 from fipy import PhysicalField, Variable
 from fipy.tools import numerix
 from scipy.stats import cosine
+
 from .entity import DomainEntity
 from ..utils.snapshotters import snapshot_var
 
@@ -21,7 +22,7 @@ class Irradiance(DomainEntity):
             **kwargs: passed to superclass
         """
         self.logger = kwargs.get('logger') or logging.getLogger(__name__)
-        self.logger.debug('Init in Irradiance')
+        self.logger.debug('Init in {}'.format(self.__class__.__name__))
         kwargs['logger'] = self.logger
         super(Irradiance, self).__init__(**kwargs)
         self.channels = {}
@@ -185,7 +186,7 @@ class IrradianceChannel(DomainEntity):
         Returns:
         """
         self.logger = kwargs.get('logger') or logging.getLogger(__name__)
-        self.logger.debug('Init in Irradiance')
+        self.logger.debug('Init in {}'.format(self.__class__.__name__))
         kwargs['logger'] = self.logger
         super(IrradianceChannel, self).__init__(**kwargs)
 

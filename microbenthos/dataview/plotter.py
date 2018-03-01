@@ -43,8 +43,8 @@ class ModelPlotter(object):
                  dpi = None,
                  unit_env = 'mol/l',
                  unit_microbes = 'mg/cm**3',
-                 unit_sources = 'mol/l/h',
-                 unit_process = 'mol/l/h',
+                 unit_sources = 'mol/l/min',
+                 unit_process = 'mol/l/min',
                  track_budget = False,
                  ):
         self.logger = logging.getLogger(__name__)
@@ -406,6 +406,7 @@ class ModelPlotter(object):
             if ax in all_depth_axes:
                 artist = ax.plot(zeros, self.depths, label=label, **self.artist_style[label])[0]
             elif ax in all_time_axes:
+                self.artist_style[label].update(dict(markevery=1, ls=':', marker='.'))
                 artist = ax.plot([], [], label=label, **self.artist_style[label])[0]
 
             else:

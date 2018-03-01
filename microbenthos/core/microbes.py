@@ -1,7 +1,9 @@
 import logging
 
 from .entity import DomainEntity, Variable
-from .process import Process
+
+
+# from .process import Process
 
 
 class MicrobialGroup(DomainEntity):
@@ -12,7 +14,7 @@ class MicrobialGroup(DomainEntity):
     growth or migration.
     """
 
-    def __init__(self, name, features = None, processes = None, **kwargs):
+    def __init__(self, features = None, processes = None, **kwargs):
         """
         Initialize a microbial group with a given name, and instantiate features and processes
         for the microbes..
@@ -24,7 +26,6 @@ class MicrobialGroup(DomainEntity):
 
         super(MicrobialGroup, self).__init__(**kwargs)
 
-        self.name = str(name)
         self._biomass = None
         self.VARS = {}
         self.features = {}
@@ -38,9 +39,10 @@ class MicrobialGroup(DomainEntity):
             for pname, pdict in dict(processes).items():
                 self.add_process_from(pname, **pdict)
 
-        if self.biomass is None:
-            self.logger.error('{} initialized but no biomass feature found!'.format(self))
-            raise RuntimeError('{} needs feature "biomass"'.format(self))
+                # if self.biomass is None:
+                #     self.logger.warning('{} initialized but no biomass feature found!'.format(
+                # self))
+                # raise RuntimeError('{} needs feature "biomass"'.format(self))
 
         self.logger.debug('Initialized {}'.format(self))
 
@@ -103,8 +105,8 @@ class MicrobialGroup(DomainEntity):
             None
         """
         self.logger.debug('Dispatch init of process {!r}'.format(name, params))
+        params['init_params']['name'] = '{}:{}'.format(self.name, name)
         instance = self.from_params(**params)
-        assert isinstance(instance, Process), '{} not an instance of Process'
 
         if name in self.processes:
             self.logger.warning('Overwriting process {!r} with {}'.format(name, instance))

@@ -3,15 +3,11 @@ from sympy import sympify
 import copy
 
 from fipy.tools import numerix
-from microbenthos import Process, ExprProcess, SedimentDBLDomain
+from microbenthos import ExprProcess, SedimentDBLDomain
 
 @pytest.fixture()
 def domain():
     return SedimentDBLDomain()
-
-def test_process_base_init():
-    with pytest.raises(TypeError):
-        Process()
 
 
 class TestExprProcess:
@@ -106,7 +102,7 @@ class TestExprInputs:
             proc.setup()
             state = proc.snapshot()
 
-            statekeys = ('metadata', 'data', 'responses')
+            statekeys = ('metadata', 'data', 'responses', 'masks')
             assert set(statekeys) == set(state)
 
             metakeys = ('formula', 'varnames', 'dependent_vars', 'expected_unit', 'param_names') + \
@@ -116,6 +112,9 @@ class TestExprInputs:
 
             respkeys = proc.responses.keys()
             assert set(respkeys) == set(state['responses'])
+
+            maskkeys = proc.masks.keys()
+            assert set(maskkeys) == set(state['masks'])
 
             assert state['data'][1]['unit'] == proc.evaluate().unit.name()
             assert numerix.allclose(state['data'][0], proc.evaluate(domain=domain))

@@ -198,16 +198,16 @@ def cli_simulate(model_file, output_dir, export, overwrite, compression, confirm
     for name, exptype in export:
         runner.add_exporter(exptype=exptype, name=name)
 
-    click.secho('Solving the equation(s):', fg='red')
+    click.secho('Solving the equation(s):', fg='green')
     for neqn, eqn in runner.model.equations.items():
-        click.secho('{} :: {}'.format(neqn, eqn.obj), fg='red')
+        click.secho(eqn.as_pretty_string(), fg='green')
 
     # click.secho('Full equation: {}'.format(runner.model.full_eqn), fg='red')
 
     click.secho(
         'Simulation setup: solver={0.fipy_solver} total={0.simtime_total} step={0.simtime_step} '
-        'steps={0.total_steps}'.format(
-            runner.simulation), fg='green')
+        'adaptive={0.simtime_adaptive}'.format(runner.simulation)
+        )
 
     if confirm:
         click.confirm('Proceed with simulation run?',
@@ -249,9 +249,9 @@ def export_video(datafile, outfile, overwrite, style, dpi, show, budget, fps, bi
     """
     Export video from model data
     """
-    from microbenthos.dataview import HDFModelData, ModelPlotter
+
     from matplotlib import animation
-    from tqdm import tqdm
+
 
     if outfile:
         if os.path.exists(outfile) and not overwrite:
@@ -277,6 +277,10 @@ def export_video(datafile, outfile, overwrite, style, dpi, show, budget, fps, bi
     writer = Writer(fps=fps, bitrate=bitrate,
                     metadata=dict(artist=artist_tag, copyright=str(year)))
 
+    from microbenthos.dataview import HDFModelData, ModelPlotter
+    from tqdm import tqdm
+    import h5py as hdf
+
     with hdf.File(datafile, 'r') as hf:
         dm = HDFModelData(store=hf)
 
@@ -284,8 +288,8 @@ def export_video(datafile, outfile, overwrite, style, dpi, show, budget, fps, bi
         if show:
             plot.show(block=False)
 
-        click.secho('Exporting video to {} with size {} and dpi {}'.format(outfile, figsize,
-                                                                           dpi), fg='green')
+        click.secho('Exporting video to {} (size={}, dpi={})'.format(outfile, figsize,
+                                                                     dpi), fg='green')
 
         with writer.saving(plot.fig, outfile, dpi=dpi):
 
