@@ -2,6 +2,7 @@ import contextlib
 import importlib
 import logging
 import os
+import time
 from collections import OrderedDict
 
 from ..exporters import BaseExporter
@@ -292,6 +293,7 @@ class SimulationRunner(object):
 
         with self.exporters_activated():
             for step in self.simulation.evolution():
+                time.sleep(1e-4)
                 try:
                     # step is (num, state) is the model snapshot
                     if step:
