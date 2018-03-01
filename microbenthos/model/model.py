@@ -739,6 +739,8 @@ class ModelEquation(object):
             dict: A dictionary of the equation state
         """
         self.logger.debug('Snapshot of {!r}'.format(self))
+        if not self.finalized:
+            raise RuntimeError('{} not finalized. Cannot snapshot!'.format(self))
 
         if self.diffusion_def:
             diff_def = dict([self.diffusion_def])

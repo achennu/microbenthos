@@ -520,7 +520,10 @@ simulation:
 
     simtime_lims:
         type: list
-        items: [float, float]
+        items:
+            - type: float
+              min: 0
+            - type: float
 
     simtime_adaptive:
         type: boolean

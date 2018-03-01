@@ -73,6 +73,9 @@ class Expression(object):
                 cond = piece['where']
                 expressions.append((self._sympify(expr), self._sympify(cond)))
 
+        else:
+            raise ValueError('Improper input for formula: {}'.format(type(formula)))
+
         self.logger.debug('Parsed (expr, cond): {}'.format(expressions))
         return base, expressions
 

@@ -39,9 +39,10 @@ class MicrobialGroup(DomainEntity):
             for pname, pdict in dict(processes).items():
                 self.add_process_from(pname, **pdict)
 
-        if self.biomass is None:
-            self.logger.error('{} initialized but no biomass feature found!'.format(self))
-            raise RuntimeError('{} needs feature "biomass"'.format(self))
+                # if self.biomass is None:
+                #     self.logger.warning('{} initialized but no biomass feature found!'.format(
+                # self))
+                # raise RuntimeError('{} needs feature "biomass"'.format(self))
 
         self.logger.debug('Initialized {}'.format(self))
 

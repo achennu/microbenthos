@@ -3,7 +3,6 @@ import tempfile
 
 import mock
 import pytest
-
 from microbenthos.model import Simulation
 from microbenthos.runners import SimulationRunner
 from microbenthos.utils import yaml
@@ -77,7 +76,7 @@ class TestSimulation:
             (-1, None, ValueError),
             (1, 3, None),
             (1, 3600 - 1, None),
-            (1, 3600, ValueError),
+            # (1, 3600, ValueError),
             ]
         )
     def test_simtime(self, total, step, error):
@@ -183,7 +182,7 @@ class TestSimulation:
         model.update_vars.assert_called_once()
         model.update_equations.assert_called_once_with(dt)
 
-        assert res == RES
+        assert res == (RES, 2)
 
     def test_simulation_evolution(self):
         pytest.xfail('Not implemented!')

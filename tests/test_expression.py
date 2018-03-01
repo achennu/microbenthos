@@ -18,8 +18,8 @@ class TestExpression:
 
     def test__update_namespace(self):
         ns = dict(
-            one=(('x', 'Ks', 'Ki'), 'x+Ks+Ki'),
-            two=(' x Ks Ki', 'x+Ks*Ki'),
+            one=(dict(vars=('x', 'Ks', 'Ki'), expr='x+Ks+Ki')),
+            two=(dict(vars=' x Ks Ki', expr='x+Ks*Ki')),
             )
         e = Expression('a', namespace=ns)
         for n in ns:
@@ -32,13 +32,18 @@ class TestExpression:
         [
             ('a+b', None),
             (('a+b', 1), ValueError),
-            ([('a+b', 1)], None),
+            (dict(base='a+b', ), None),
+            (dict(base='a+b', pieces=('3', 'a>3')), TypeError),
+            (dict(base='a+b', pieces=[('3', 'a>3')]), TypeError),
+            (dict(base='a+b', pieces=[dict(expr='3', where='a>3')]), None),
             ],
         ids=(
             'string',
-            'tuple-pair',
-            'tuple-pairs'
-
+            'tuple',
+            'base-only',
+            'pieces-tuple',
+            'pieces-list-tuple',
+            'pieces-list-dict',
             )
         )
     def test_parse_formula(self, formula, err):
@@ -54,9 +59,8 @@ class TestExpression:
             assert parsed
 
     @pytest.mark.parametrize(
-        'formula',
+        'pieces',
         [
-            'a+b',
             [('a+b', 1)],
             [('a+b', 'b>a')],
             [('a+b', 'b>a'), ('a-b', 'b<a')],
@@ -64,7 +68,6 @@ class TestExpression:
 
             ],
         ids=(
-            'no-condition',
             'int-condition',
             'expr-condition',
             'expr-conditions',
@@ -72,16 +75,10 @@ class TestExpression:
 
             )
         )
-    def test_add_piece(self, formula):
+    def test_add_piece(self, pieces):
 
         e = Expression()
-        items = e.parse_formula(formula)
-        all_symbols = set()
-        for expr, condition in items:
-            e.add_piece(expr, condition)
-            all_symbols.update({_ for _ in expr.atoms() if isinstance(_, sp.Symbol)})
-            all_symbols.update({_ for _ in condition.atoms() if isinstance(_, sp.Symbol)})
+        for piece in pieces:
+            e.add_piece(*[sp.sympify(_) for _ in piece])
 
-        assert len(e._pieces) == len(items)
-
-        assert e.symbols == all_symbols
+        assert len(e._pieces) == len(pieces)
