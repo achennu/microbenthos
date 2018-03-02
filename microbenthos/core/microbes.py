@@ -150,11 +150,16 @@ class MicrobialGroup(DomainEntity):
         if self.check_domain():
             for obj in self.features.values() + self.processes.values():
                 self.logger.debug('Setting up {}'.format(obj))
-                obj.setup()
+                obj.setup(**kwargs)
 
                 if isinstance(obj, Variable):
                     self.VARS[obj.name] = obj.var
                     self.logger.debug('Stored var {!r} into VARS'.format(obj))
+
+    def on_time_updated(self, clocktime):
+        self.logger.debug('Updating {}'.format(self))
+        for obj in self.features.values() + self.processes.values():
+            obj.on_time_updated(clocktime)
 
     def snapshot(self, base=False):
         """

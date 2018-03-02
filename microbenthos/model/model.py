@@ -36,7 +36,7 @@ class MicroBenthosModel(CreateMixin):
 
         # self.domain = domain
 
-        self.clock = ModelClock(self, value=0.0, unit='h', name='time')
+        self.clock = ModelClock(self, value=0.0, unit='h', name='clock')
 
         self._setup(**kwargs)
 
@@ -367,13 +367,15 @@ class MicroBenthosModel(CreateMixin):
         """
         Callback function to update the time on all the stored entities
         """
-        self.logger.info('Updating entities for model clock: {}'.format(self.clock))
+        clock = self.clock()
+        self.logger.warning('Updating entities for model clock: {}'.format(clock))
+
 
         for name, obj in self.env.items():
-            obj.on_time_updated(self.clock)
+            obj.on_time_updated(clock)
 
         for name, obj in self.microbes.items():
-            obj.on_time_updated(self.clock)
+            obj.on_time_updated(clock)
 
     def update_vars(self):
         """
