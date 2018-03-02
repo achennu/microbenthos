@@ -253,6 +253,17 @@ procSchema:
                 implicit:
                     type: boolean
 
+                events:
+                    type: dict
+
+                    keyschema:
+                        type: symbolable
+
+                    valueschema:
+                        schema:
+                            expr:
+                                schema: *Expr_initschema
+
 
 microbes: &microbes_schema
     schema:

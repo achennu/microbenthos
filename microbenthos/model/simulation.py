@@ -385,7 +385,7 @@ class Simulation(CreateMixin):
         self.model.update_vars()
 
         step = 0
-        while self.model.clock < self.simtime_total:
+        while self.model.clock() < self.simtime_total:
             self.logger.debug('Running step #{} {}'.format(step, self.model.clock))
             if step:
                 tic = time.time()
