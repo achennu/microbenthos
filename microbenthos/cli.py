@@ -317,7 +317,13 @@ def export_model(model_file, key, verbose):
 
     defs = yaml.load(model_file)
     if key:
-        defs = defs[key]
+        try:
+            defs = defs[key]
+        except KeyError:
+            click.secho('Could not get key {!r}! Found: {}'.format(
+                key, defs.keys()
+                ))
+            raise click.Abort()
 
     try:
         valid = validate_dict(defs, key='model')

@@ -474,6 +474,7 @@ simulation:
 
     simtime_adaptive:
         type: boolean
+        default: false
 
     max_sweeps:
         type: integer

@@ -48,6 +48,7 @@ class ModelPlotter(object):
                  track_budget = False,
                  ):
         self.logger = logging.getLogger(__name__)
+        self.logger.addHandler(logging.NullHandler())
         self.logger.debug('Initializing model plotter')
 
         self._model = None
