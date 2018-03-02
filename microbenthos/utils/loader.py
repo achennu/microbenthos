@@ -183,7 +183,7 @@ def validate_dict(inp_dict, key, schema = None, schema_stream = None):
 
     logger.info('Loading definition from: {}'.format(inp_dict.keys()))
 
-    logger.debug('Using schema key {} from schema_stream={}'.format(key, schema_stream))
+    logger.debug('Using schema key {!r} from schema_stream={}'.format(key, schema_stream))
     if schema is None:
         schema = get_schema(schema_stream=schema_stream)
     else:

@@ -10,26 +10,12 @@ from ..model import MicroBenthosModel, Simulation
 from ..utils import yaml, find_subclasses_recursive
 from ..utils.log import SIMULATION_DEFAULT_FORMATTER, SIMULATION_DEBUG_FORMATTER
 
-"""
-def run():
-    model = MicroBenthosModel.validate_yaml(model_file)
-    sim = Simulation.validate_yaml(sim_file)
-    sim.model = model
-    sim.start()
-
-    data_file = 'abc.h5'
-    start_logfile()
-    save_model_file()
-    save_simulation_file(with_software_versions=True)
-
-    for step in sim.stepper:
-        sim.run_timestep()
-        snap = sim.model.snapshot()
-        save_snapshot(data_file, snap)
-
-        for exporter in exporters:
-            exporter.process(snap)
-"""
+DUMP_KWARGS = dict(
+    indent=4,
+    explicit_start=True,
+    explicit_end=True,
+    default_flow_style=False
+    )
 
 
 class SimulationRunner(object):
@@ -184,7 +170,7 @@ class SimulationRunner(object):
             yaml.dump(dict(
                 model=self.model.definition_,
                 simulation=self.simulation.definition_
-                ), fp)
+                ), fp, **DUMP_KWARGS)
 
     def save_run_info(self):
         """
@@ -193,7 +179,7 @@ class SimulationRunner(object):
 
         self.logger.info('Saving runner info: runner.yml')
         with open(os.path.join(self.output_dir, 'runner.yml'), 'w') as fp:
-            yaml.dump(self.get_info(), fp)
+            yaml.dump(self.get_info(), fp, **DUMP_KWARGS)
 
     def get_info(self):
         """
