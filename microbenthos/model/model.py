@@ -368,7 +368,7 @@ class MicroBenthosModel(CreateMixin):
         Callback function to update the time on all the stored entities
         """
         clock = self.clock()
-        self.logger.warning('Updating entities for model clock: {}'.format(clock))
+        self.logger.info('Updating entities for model clock: {}'.format(clock))
 
 
         for name, obj in self.env.items():
