@@ -13,6 +13,7 @@ class BaseExporter(object):
     __metaclass__ = abc.ABCMeta
     _exports_ = ''
     __version__ = ''
+    is_eager = False
 
     def __init__(self, name='exp', logger = None):
 

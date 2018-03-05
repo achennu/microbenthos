@@ -277,21 +277,30 @@ class SimulationRunner(object):
         for name, eqn in self.model.equations.items():
             self.logger.info('Equation {}: {!r}'.format(name, eqn.obj))
 
+        # see if a progress exporter is active. This should be triggered each time
+        eager_exporters = [exp for exp in self.exporters.values() if exp._exports_ == 'progress']
+
         with self.exporters_activated():
             for step in self.simulation.evolution():
-                time.sleep(1e-4)
                 try:
+                    time.sleep(1e-5)
                     # step is (num, state) is the model snapshot
                     if step:
                         num, state = step
 
+                        export_due = self.simulation.export_due() or (num == 0)
                         self.logger.info('Step #{}: Exporting model state'.format(num))
+
                         for exporter in self.exporters.values():
-                            exporter.process(num, state)
+                            if export_due:
+                                exporter.process(num, state)
+                            else:
+                                if exporter.is_eager:
+                                    exporter.process(num, state)
 
                         self.logger.info('Step #{}: Export done'.format(num))
                     else:
-                        self.logger.debug('Step #{}: Empty model state received!'.format(num))
+                        self.logger.warning('Step #{}: Empty model state received!'.format(num))
 
                 except KeyboardInterrupt:
                     self.logger.error("Keyboard interrupt on simulation run!")
