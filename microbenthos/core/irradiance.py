@@ -1,5 +1,3 @@
-from __future__ import division
-
 import logging
 
 from fipy import PhysicalField, Variable
@@ -28,7 +26,7 @@ class Irradiance(DomainEntity):
         self.channels = {}
 
         self.hours_total = PhysicalField(hours_total, 'h')
-        if not (2 <= self.hours_total.value <= 48):
+        if not (1 <= self.hours_total.value <= 48):
             raise ValueError('Hours total {} should be between (2, 48)'.format(self.hours_total))
         day_fraction = float(day_fraction)
         if not (0 < day_fraction < 1):
@@ -55,8 +53,6 @@ class Irradiance(DomainEntity):
         self.logger.debug('Created Irradiance: {}'.format(self))
 
     def __repr__(self):
-        # return '{}(total={},day={:.1f},zenith={:.1f)'.format(self.name, self.hours_total,
-        #                                                  self.hours_day, self.zenith_time)
         return 'Irradiance(total={},{})'.format(self.hours_total, '+'.join(self.channels))
 
     def setup(self, **kwargs):
@@ -124,7 +120,7 @@ class Irradiance(DomainEntity):
         # logger.debug('Profile level for clock {}: {}'.format(
         #     clock, self._profile.pdf(clocktime_)))
 
-        surface_value = self.zenith_level * self.hours_day.numericValue / 2 * \
+        surface_value = self.zenith_level * self.hours_day.numericValue / 2.0 * \
                         self._profile.pdf(clocktime_)
 
         self.surface_irrad.value = surface_value

@@ -206,8 +206,8 @@ def cli_simulate(model_file, output_dir, export, overwrite, compression, confirm
 
     click.secho(
         'Simulation setup: solver={0.fipy_solver} total={0.simtime_total} step={0.simtime_step} '
-        'adaptive={0.simtime_adaptive}'.format(runner.simulation)
-        )
+        'adaptive={0.simtime_adaptive}'.format(runner.simulation),
+        fg='yellow')
 
     if confirm:
         click.confirm('Proceed with simulation run?',

@@ -7,10 +7,10 @@ import logging
 import math
 import time
 
-from fipy import PhysicalField
+from fipy import PhysicalField, Variable
 
 from .model import MicroBenthosModel
-from ..utils import CreateMixin
+from ..utils import CreateMixin, snapshot_var
 
 
 class Simulation(CreateMixin):
@@ -24,13 +24,14 @@ class Simulation(CreateMixin):
 
     def __init__(self,
                  simtime_total = 6,
-                 simtime_step = 60,
+                 simtime_step = 30,
                  simtime_days = None,
-                 simtime_lims = (60, 600),
+                 simtime_lims = None,
                  simtime_adaptive = True,
+                 snapshot_interval = 60,
                  residual_target = 1e-12,
                  residual_break = 1e-3,
-                 max_sweeps = 8,
+                 max_sweeps = 10,
                  fipy_solver = 'scipy'
                  ):
         """
@@ -50,6 +51,9 @@ class Simulation(CreateMixin):
 
             simtime_adaptive (bool): If the :attr:`simtime_step` should adapt to the residual of
             the simulation evolution (default: False).
+
+            snapshot_interval (int, float, :class:`PhysicalField`): the duration in seconds between
+            taking snapshots of the model for exporters (default: 60 seconds)
 
             residual_target (float): The max residual limit below which the timestep is considered
             to be numerically accurate
@@ -86,6 +90,8 @@ class Simulation(CreateMixin):
         self.simtime_total = simtime_total
         self.simtime_lims = simtime_lims
         self.simtime_step = simtime_step
+
+        self.snapshot_interval = PhysicalField(snapshot_interval, 's')
 
         self._residual_target = None
         self.residual_target = residual_target
@@ -179,7 +185,8 @@ class Simulation(CreateMixin):
     def simtime_lims(self, vals):
         if vals is None:
             lmin = PhysicalField(1, 's')
-            lmax = (self.simtime_total / 25.0).inUnitsOf('s').floor()
+            # lmax = (self.simtime_total / 25.0).inUnitsOf('s').floor()
+            lmax = PhysicalField(300, 's')
         else:
             lmin, lmax = [PhysicalField(_, 's') for _ in vals]
         assert 0 < lmin < lmax, 'simtime_lims ({}, {}) are not positive and in order'.format(
@@ -321,8 +328,6 @@ class Simulation(CreateMixin):
         self.logger.debug('Created fipy {} solver: {}'.format(self.fipy_solver, self._solver))
 
         self._started = True
-        self.calc_times = []
-        self.residuals = []
 
     def run_timestep(self):
         """
@@ -352,10 +357,14 @@ class Simulation(CreateMixin):
                 res, self.residual_target, num_sweeps))
 
             if res > self.residual_break:
-                raise RuntimeError('Residual {:.2g} too high (>{:.2g}) to continue'.format(
+                self.logger.warning('Residual {:.2g} too high (>{:.2g})'.format(
                     res,
                     self.residual_break
                     ))
+                # raise RuntimeError('Residual {:.2g} too high (>{:.2g}) to continue'.format(
+                #     res,
+                #     self.residual_break
+                #     ))
 
         self.model.update_vars()
         self.model.update_equations(dt)
@@ -381,43 +390,74 @@ class Simulation(CreateMixin):
         self.logger.debug('Solving: {}'.format(self.model.full_eqn))
         self.start()
 
-        # yield the initial condition first
         self.model.update_vars()
 
         step = 0
+
+        # yield the initial condition first
+        state = self.model.snapshot()
+        residual = 0
+        calc_time = 0
+        state['metrics'] = dict(
+            calc_times=dict(data=(calc_time, dict(unit='ms'))),
+            residuals=dict(data=(residual, None)),
+            sweeps=dict(data=(0, None)),
+            )
+        self._prev_snapshot = Variable(self.model.clock, name='prev_snapshot')
+        yield (step, state)
+
         while self.model.clock() < self.simtime_total:
+            step += 1
             self.logger.debug('Running step #{} {}'.format(step, self.model.clock))
-            if step:
-                tic = time.time()
-                residual, num_sweeps = self.run_timestep()
-                toc = time.time()
 
-                if self.simtime_adaptive:
-                    self.update_simtime_step(residual, num_sweeps)
+            tic = time.time()
+            residual, num_sweeps = self.run_timestep()
+            toc = time.time()
 
-                self.residuals.append(residual)
-                calc_time = 1000 * (toc - tic)
-                self.calc_times.append(calc_time)
-                self.logger.debug('Timestep done in {:.2f} msec'.format(calc_time))
+            if self.simtime_adaptive:
+                self.update_simtime_step(residual, num_sweeps)
+
+            calc_time = 1000 * (toc - tic)
+            self.logger.debug('Timestep done in {:.2f} msec'.format(calc_time))
+
+            metrics = dict(
+                calc_times=dict(data=(calc_time, dict(unit='ms'))),
+                residuals=dict(data=(residual, None)),
+                sweeps=dict(data=(num_sweeps, None))
+                )
+
+            if self.export_due():
+
+                self.logger.debug('Snapshot in step #{}'.format(step))
 
                 state = self.model.snapshot()
-                state['metrics'] = dict(
-                    calc_times=dict(data=(calc_time, dict(unit='ms'))),
-                    residuals=dict(data=(residual, None))
-                    )
+                state['metrics'] = metrics
+
+                yield (step, state)
+
+                # now set the prev_snapshot so that export_due() will remain true for processing
+                self._prev_snapshot.setValue(self.model.clock())
+                self.logger.debug('Prev snapshot set: {}'.format(self._prev_snapshot))
+
             else:
-                state = self.model.snapshot()
-                residual = 1
-                num_sweeps = 1
+                # create a minimal state
+                # this is the model clock and current residual
+                state = dict(
+                    time=dict(data=snapshot_var(self.model.clock)),
+                    metrics=metrics
+                    )
 
-            yield (step, state)
+                yield (step, state)
 
             self.model.clock.increment_time(self.simtime_step)
-            step += 1
 
+        # now yield final state
         yield (step, self.model.snapshot())
 
         self.logger.info('Simulation evolution completed')
+
+    def export_due(self):
+        return self.model.clock() - self._prev_snapshot() >= self.snapshot_interval
 
     def update_simtime_step(self, residual, num_sweeps):
         """
@@ -436,7 +476,7 @@ class Simulation(CreateMixin):
             self.simtime_step, num_sweeps, self.max_sweeps, residual, self.residual_target
             ))
 
-        residual_factor = math.log10(self.residual_target / residual) * 0.05
+        residual_factor = math.log10(self.residual_target / (residual + 1e-30)) * 0.05
 
         if residual <= self.residual_target:
 

@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
+from __future__ import division, print_function
 
 __author__ = """Arjun Chennu"""
 __email__ = 'achennu@mpi-bremen.de'
-__version__ = '0.5.4'
+__version__ = '0.6'
 
 import logging
 

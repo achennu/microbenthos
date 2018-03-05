@@ -25,13 +25,17 @@ def frepr(number):
     d = Decimal(number)
     (sign, digits, exponent) = d.as_tuple()
     nexp = len(digits) + exponent - 1
-    nman = digits[0]
-    return nman, nexp
+    # nman = digits[0]
+    if len(digits) > 1:
+        digs = '{}.{}'.format(digits[0], digits[1])
+    else:
+        digs = str(digits[0])
+    return digs, nexp
 
 
 def flabel(number):
     try:
-        return r' ${%d}\times\mathregular{10^{%d}}$' % frepr(number)
+        return r' ${%s}\times\mathregular{10^{%d}}$' % frepr(number)
     except:
         return r' ${%s}\timesERROR' % number
 
@@ -73,7 +77,7 @@ class ModelPlotter(object):
 
         plt.style.use((style, {'axes.grid': False}))
 
-        figsize = figsize or (16, 9)
+        figsize = figsize or (12, 8)
         dpi = dpi or 100
 
         self._fig_kwds = dict(figsize=figsize, dpi=dpi)
@@ -393,8 +397,10 @@ class ModelPlotter(object):
             path = label_paths[label]
 
             style = self.artist_style.get(label)
+
             if style:
                 self.logger.debug('Retrieved style for {}: {}'.format(label, sorted(style.items())))
+
             else:
                 sourcename = label.split('.')[0]
                 style = self.styles_color[sourcename].copy()
@@ -404,6 +410,10 @@ class ModelPlotter(object):
                     'Created style for {} = {}'.format(label, sorted(style.items()))
                     )
                 assert label not in self.artist_style
+
+                if 'irradiance' in path:
+                    style['ls'] = '--'
+
                 self.artist_style[label] = style
 
             if ax in all_depth_axes:
@@ -562,6 +572,8 @@ class ModelPlotter(object):
         try:
             self.fig.canvas.draw_idle()
             self.fig.canvas.flush_events()
+            self.fig.canvas.draw()
+            self.fig.canvas.flush_events()
         except KeyboardInterrupt:
             self.logger.warning('KeyboardInterrupt caught while updating canvas. Re-raising.')
             raise
@@ -570,6 +582,7 @@ class ModelPlotter(object):
         if not self.fig:
             return
         plt.show(block=block)
+        self.draw()
 
     def close(self):
         if not self.fig:
