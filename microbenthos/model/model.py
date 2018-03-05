@@ -673,9 +673,10 @@ class ModelEquation(object):
         var = sp.var(self.varname)
         t, z = sp.var('t z')
         Dcoeff = sp.sympify(self.diffusion_def[1])
+        D = sp.symbols('D{}'.format(self.varname))
 
         transient = sp.Derivative(var, t)
-        diffusive = sp.Derivative(Dcoeff * var, z, 2)
+        diffusive = D * Dcoeff * sp.Derivative(var, z, 2)
         sources = sum(self.source_formulae.values())
 
         return sp.Eq(transient, diffusive + sources)
