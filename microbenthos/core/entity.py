@@ -433,7 +433,7 @@ class Variable(DomainEntity):
         Returns:
             None
         """
-        PROFILES = ('linear', 'normal')
+        PROFILES = ('linear', 'normal', 'lognormal')
 
         if profile not in PROFILES:
             raise ValueError('Unknown profile {!r} not in {}'.format(profile, PROFILES))
@@ -469,6 +469,47 @@ class Variable(DomainEntity):
 
             normrv = norm(loc=loc_, scale=C**2*scale_)
             val = coeff * normrv.pdf(self.domain.depths) * C * scale_
+
+            self.var.value = val
+
+        elif profile == 'lognormal':
+            from scipy.stats import lognorm
+
+            loc = kwargs['loc']
+            scale = kwargs['scale']
+            coeff = kwargs['coeff']
+            lognorm_shape = 1.25
+            lognorm_mult = 1.74673269133
+            # this depends on the shape, so we hardcode it here
+            C = numerix.sqrt(2 * numerix.pi)
+
+            # loc and scale should be in units of the domain mesh
+            if hasattr(loc, 'unit'):
+                loc_ = loc.inUnitsOf(self.domain.depths.unit).value
+            else:
+                loc_ = loc
+
+            if hasattr(scale, 'unit'):
+                scale_ = scale.inUnitsOf(self.domain.depths.unit).value
+            else:
+                scale_ = scale
+
+            if hasattr(coeff, 'unit'):
+                # check if compatible with variable unit
+                try:
+                    c = coeff.inUnitsOf(self.var.unit)
+                except TypeError:
+                    self.logger.error(
+                        'Coeff {!r} not compatible with variable unit {!r}'.format(coeff,
+                                                                                   self.var.unit.name()))
+                    raise ValueError('Incompatible unit of coefficient')
+
+            self.logger.info(
+                'Seeding with profile lognormal loc: {} scale: {} coeff: {}'.format(loc_, scale_,
+                                                                                    coeff))
+
+            rv = lognorm(lognorm_shape, loc=loc_, scale=C ** 2 * scale_ / lognorm_shape)
+            val = coeff * rv.pdf(self.domain.depths) * C * scale_
 
             self.var.value = val
 

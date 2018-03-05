@@ -27,6 +27,24 @@ seed_norm: &seed_normal
         coeff:
             type: [integer, float, physical_unit]
 
+seed_norm: &seed_lognormal
+    dependencies:
+        profile: lognormal
+
+    schema:
+        loc:
+            type: physical_unit
+            like_unit: mm
+    #        required: true
+
+        scale:
+            type: physical_unit
+            like_unit: mm
+    #        min: 0
+
+        coeff:
+            type: [integer, float, physical_unit]
+
 seed_linear: &seed_linear
     dependencies:
         profile: linear
@@ -90,12 +108,13 @@ variables: &var_schema
                 schema:
                     profile:
                         type: string
-                        allowed: [linear, normal]
+                        allowed: [linear, normal, lognormal]
                     params:
                         type: dict
                         oneof:
                             - *seed_normal
                             - *seed_linear
+                            - *seed_lognormal
 
 #                            - dependencies:
 #                                profile: linear
