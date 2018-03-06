@@ -30,9 +30,9 @@ class Simulation(CreateMixin):
                  simtime_lims = (1, 300),
                  simtime_adaptive = True,
                  snapshot_interval = 30,
-                 residual_target = 1e-10,
+                 residual_target = 1e-12,
                  residual_break = 1e-3,
-                 sweeps_target = 8,
+                 sweeps_target = 5,
                  fipy_solver = 'scipy'
                  ):
         """
@@ -481,9 +481,9 @@ class Simulation(CreateMixin):
             self.simtime_step, num_sweeps, self.sweeps_target, residual, self.residual_target
             ))
 
-        residual_factor = math.log10(self.residual_target / (residual + 1e-30) / 10.0) * 0.05
+        residual_factor = math.log10(self.residual_target / (residual + 1e-30)) * 0.05
 
-        if residual_factor > 0:
+        if residual < self.residual_target:
 
             try:
                 mult = 1.0 + 4 * math.log10(

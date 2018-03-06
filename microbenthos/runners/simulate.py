@@ -274,6 +274,11 @@ class SimulationRunner(object):
 
         self.prepare_simulation()
 
+        self.logger.info('Solving equations')
+        for name, eqn in self.model.equations.items():
+            self.logger.info(eqn.as_pretty_string())
+
+        self.logger.info('As fipy equations')
         for name, eqn in self.model.equations.items():
             self.logger.info('Equation {}: {!r}'.format(name, eqn.obj))
 
