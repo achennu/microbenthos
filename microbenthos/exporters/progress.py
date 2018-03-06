@@ -37,7 +37,7 @@ class ProgressExporter(BaseExporter):
         self._total_time_value = self._total_time.value
         self._total_time_unit = self._total_time.unit.name()
 
-        self._max_sweeps = sim.max_sweeps
+        self._sweeps_target = sim.sweeps_target
 
         self._pbar = tqdm.tqdm(
             total=int(self._total_time.numericValue),
@@ -68,7 +68,7 @@ class ProgressExporter(BaseExporter):
             clock=clock_info,
             dt=dt,
             res=residual,
-            sweeps='{}/{}'.format(sweeps, self._max_sweeps)
+            sweeps='{}/{}'.format(sweeps, self._sweeps_target)
             )
 
     def finish(self):
