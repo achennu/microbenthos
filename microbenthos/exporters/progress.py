@@ -15,7 +15,7 @@ class ProgressExporter(BaseExporter):
     __version__ = '2.0'
     is_eager = True
 
-    def __init__(self, desc = 'evolution', **kwargs):
+    def __init__(self, desc = 'evolution', position = None, **kwargs):
         self.logger = kwargs.get('logger') or logging.getLogger(__name__)
         self.logger.debug('Init in {}'.format(self.__class__.__name__))
         kwargs['logger'] = self.logger
@@ -24,6 +24,7 @@ class ProgressExporter(BaseExporter):
         self._pbar = None
         self._desc = desc
         self._total_time = None
+        self._position = position
 
     def prepare(self, sim):
         """
@@ -43,6 +44,7 @@ class ProgressExporter(BaseExporter):
             desc=self._desc,
             unit='dt',
             dynamic_ncols=True,
+            position=self._position,
             )
         # self._pbar = tqdm.tqdm(total=sim.total_steps, desc=self._desc)
 

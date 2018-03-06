@@ -153,9 +153,6 @@ class Simulation(CreateMixin):
         except TypeError:
             raise ValueError('simtime_step {!r} not compatible with time units'.format(val))
 
-        if val <= 0:
-            raise ValueError('simtime_step should be > 0')
-
         dtMin, dtMax = self.simtime_lims
         val = min(max(val, dtMin), dtMax)
         assert hasattr(val, 'unit')
@@ -350,7 +347,8 @@ class Simulation(CreateMixin):
                 dt=float(dt.numericValue)
                 )
             num_sweeps += 1
-            self.logger.debug('Sweeps: {}  residual: {:.2g}'.format(num_sweeps, float(res)))
+            res = float(res)
+            self.logger.debug('Sweeps: {}  residual: {:.2g}'.format(num_sweeps, res))
 
         if res > self.residual_target:
             self.logger.info('Timestep residual {:.2g} > limit {:.2g} sweeps={}'.format(
@@ -476,12 +474,12 @@ class Simulation(CreateMixin):
             self.simtime_step, num_sweeps, self.max_sweeps, residual, self.residual_target
             ))
 
-        residual_factor = math.log10(self.residual_target / (residual + 1e-30)) * 0.1
+        residual_factor = math.log10(self.residual_target / (residual + 1e-30)) * 0.05
 
         if residual <= self.residual_target:
 
-            mult = 1.0 + 4 * math.log10(
-                0.5 * (self.max_sweeps) / (num_sweeps + 1.0)) + residual_factor
+            mult = 1.0 + math.log10(
+                0.5 * self.max_sweeps / num_sweeps) + residual_factor
             self.logger.debug(
                 'Residual ok. Multiplier: {:.4f} '.format(mult))
 
@@ -489,7 +487,7 @@ class Simulation(CreateMixin):
             mult = 10 ** (residual_factor * 5)
             self.logger.debug('Penalizing by {:.3g} due to overshoot'.format(mult))
 
-        self.simtime_step *= mult
+        self.simtime_step *= max(1e-10, mult)
 
         self.simtime_step = min(self.simtime_step, self.simtime_total - self.model.clock())
         self.logger.debug('Updated simtime_step: {}'.format(self.simtime_step))
