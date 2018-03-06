@@ -15,7 +15,7 @@ class ProgressExporter(BaseExporter):
     __version__ = '2.0'
     is_eager = True
 
-    def __init__(self, desc = 'evolution', **kwargs):
+    def __init__(self, desc = 'evolution', position = None, **kwargs):
         self.logger = kwargs.get('logger') or logging.getLogger(__name__)
         self.logger.debug('Init in {}'.format(self.__class__.__name__))
         kwargs['logger'] = self.logger
@@ -24,6 +24,7 @@ class ProgressExporter(BaseExporter):
         self._pbar = None
         self._desc = desc
         self._total_time = None
+        self._position = position
 
     def prepare(self, sim):
         """
@@ -36,13 +37,14 @@ class ProgressExporter(BaseExporter):
         self._total_time_value = self._total_time.value
         self._total_time_unit = self._total_time.unit.name()
 
-        self._max_sweeps = sim.max_sweeps
+        self._sweeps_target = sim.sweeps_target
 
         self._pbar = tqdm.tqdm(
             total=int(self._total_time.numericValue),
             desc=self._desc,
             unit='dt',
             dynamic_ncols=True,
+            position=self._position,
             )
         # self._pbar = tqdm.tqdm(total=sim.total_steps, desc=self._desc)
 
@@ -66,7 +68,7 @@ class ProgressExporter(BaseExporter):
             clock=clock_info,
             dt=dt,
             res=residual,
-            sweeps='{}/{}'.format(sweeps, self._max_sweeps)
+            sweeps='{}/{}'.format(sweeps, self._sweeps_target)
             )
 
     def finish(self):

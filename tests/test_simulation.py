@@ -3,6 +3,7 @@ import tempfile
 
 import mock
 import pytest
+
 from microbenthos.model import Simulation
 from microbenthos.runners import SimulationRunner
 from microbenthos.utils import yaml
@@ -28,7 +29,7 @@ SIMULATION_DEF = """
 simtime_total: !unit 1 h
 simtime_step: !unit 120 s
 residual_target: 1e-6
-max_sweeps: 15
+sweeps_target: 15
 fipy_solver: scipy
 """
 
@@ -116,10 +117,10 @@ class TestSimulation:
     def test_max_sweeps(self, sweeps, error):
         if error:
             with pytest.raises(error):
-                sim = Simulation(max_sweeps=sweeps)
+                sim = Simulation(sweeps_target=sweeps)
 
         else:
-            sim = Simulation(max_sweeps=sweeps)
+            sim = Simulation(sweeps_target=sweeps)
             assert sim
 
     def test_set_model(self, model):
