@@ -339,7 +339,7 @@ class Simulation(CreateMixin):
         dt = self.simtime_step
         self.logger.info('Running timestep {} + {}'.format(self.model.clock, dt))
 
-        num_sweeps = 1
+        num_sweeps = 0
         res = 1
 
         EQN = self.model.full_eqn
@@ -476,12 +476,12 @@ class Simulation(CreateMixin):
             self.simtime_step, num_sweeps, self.max_sweeps, residual, self.residual_target
             ))
 
-        residual_factor = math.log10(self.residual_target / (residual + 1e-30)) * 0.05
+        residual_factor = math.log10(self.residual_target / (residual + 1e-30)) * 0.1
 
         if residual <= self.residual_target:
 
-            # if self.simtime_step < self.simtime_lims[1]:
-            mult = 1.0 + math.log10(0.5 * (self.max_sweeps) / num_sweeps) + residual_factor
+            mult = 1.0 + 4 * math.log10(
+                0.5 * (self.max_sweeps) / (num_sweeps + 1.0)) + residual_factor
             self.logger.debug(
                 'Residual ok. Multiplier: {:.4f} '.format(mult))
 

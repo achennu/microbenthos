@@ -53,8 +53,8 @@ class ProgressExporter(BaseExporter):
         self._pbar.update(dt)
 
         clock_info = '{0:.2f}/{1:.2f} {2}'.format(
-            curr.value,
-            self._total_time_value,
+            float(curr.value),
+            float(self._total_time_value),
             self._total_time_unit,
             )
 
