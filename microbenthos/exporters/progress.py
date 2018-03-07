@@ -69,7 +69,7 @@ class ProgressExporter(BaseExporter):
             clock=clock_info,
             dt=dt,
             res=residual,
-            sweeps='{}/{:3.2f}'.format(sweeps, self._sim.sweeps_target)
+            sweeps='{}/{:3.2f}/{}'.format(sweeps, self._sim.recent_sweeps, self._sim.max_sweeps)
             )
 
     def finish(self):

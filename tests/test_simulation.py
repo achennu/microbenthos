@@ -117,10 +117,10 @@ class TestSimulation:
     def test_max_sweeps(self, sweeps, error):
         if error:
             with pytest.raises(error):
-                sim = Simulation(sweeps_target=sweeps)
+                sim = Simulation(max_sweeps=sweeps)
 
         else:
-            sim = Simulation(sweeps_target=sweeps)
+            sim = Simulation(max_sweeps=sweeps)
             assert sim
 
     def test_set_model(self, model):
