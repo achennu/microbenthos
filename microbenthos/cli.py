@@ -252,17 +252,14 @@ def export_video(datafile, outfile, overwrite, style, dpi, show, budget, fps, bi
 
     from matplotlib import animation
 
-
-    if outfile:
-        if os.path.exists(outfile) and not overwrite:
-            click.confirm('Overwrite existing file: {}?'.format(outfile),
-                          abort=True)
-    else:
-        # outfile = datafile.replace('.h5', '.mp4')
-        outfile = os.path.join(os.path.dirname(datafile), 'simulation.mp4')
+    outfile = outfile or os.path.join(os.path.dirname(datafile), 'simulation.mp4')
 
     if not os.path.splitext(outfile)[1] == '.mp4':
         outfile += '.mp4'
+
+    if os.path.exists(outfile) and not overwrite:
+        click.confirm('Overwrite existing file: {}?'.format(outfile),
+                      abort=True)
 
     try:
         Writer = animation.writers['ffmpeg']
