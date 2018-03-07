@@ -508,7 +508,6 @@ simulation:
 
     snapshot_interval:
         type: [integer, float, physical_unit]
-        default: 30
 
     sweeps_target:
         type: integer

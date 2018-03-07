@@ -12,7 +12,7 @@ from .exporter import BaseExporter
 
 class ProgressExporter(BaseExporter):
     _exports_ = 'progress'
-    __version__ = '2.0'
+    __version__ = '3.0'
     is_eager = True
 
     def __init__(self, desc = 'evolution', position = None, **kwargs):
@@ -33,14 +33,15 @@ class ProgressExporter(BaseExporter):
         self.logger.debug('Preparing progressbar for simulation: {} {} {}'.format(
             sim.simtime_total, sim.simtime_step, sim.total_steps
             ))
-        self._total_time = sim.simtime_total
-        self._total_time_value = self._total_time.value
-        self._total_time_unit = self._total_time.unit.name()
+        self._sim = sim
+        # self._total_time = sim.simtime_total
+        # self._total_time_value = self._total_time.value
+        # self._total_time_unit = self._total_time.unit.name()
 
-        self._sweeps_target = sim.sweeps_target
+        # self._sweeps_target = sim.sweeps_target
 
         self._pbar = tqdm.tqdm(
-            total=int(self._total_time.numericValue),
+            total=int(self._sim.simtime_total.numericValue),
             desc=self._desc,
             unit='dt',
             dynamic_ncols=True,
@@ -50,14 +51,14 @@ class ProgressExporter(BaseExporter):
 
     def process(self, num, state):
         time, tdict = state['time']['data']
-        curr = PhysicalField(time, tdict['unit']).inUnitsOf(self._total_time.unit)
+        curr = PhysicalField(time, tdict['unit']).inUnitsOf(self._sim.simtime_total.unit)
         dt = int(curr.numericValue) - self._pbar.n  # in seconds
         self._pbar.update(dt)
 
         clock_info = '{0:.2f}/{1:.2f} {2}'.format(
             float(curr.value),
-            float(self._total_time_value),
-            self._total_time_unit,
+            float(self._sim.simtime_total.value),
+            self._sim.simtime_total.unit.name(),
             )
 
         residual = state['metrics']['residuals']['data'][0]
@@ -68,7 +69,7 @@ class ProgressExporter(BaseExporter):
             clock=clock_info,
             dt=dt,
             res=residual,
-            sweeps='{}/{}'.format(sweeps, self._sweeps_target)
+            sweeps='{}/{:3.2f}'.format(sweeps, self._sim.sweeps_target)
             )
 
     def finish(self):

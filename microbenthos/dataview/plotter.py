@@ -5,6 +5,7 @@ from decimal import Decimal
 
 import matplotlib.pyplot as plt
 from cycler import cycler
+from fipy import PhysicalField
 from fipy.tools import numerix as np
 from mpl_toolkits.axes_grid1 import Grid
 
@@ -284,6 +285,8 @@ class ModelPlotter(object):
 
         self.logger.propagate = False
 
+        self._clock = PhysicalField(0, 's')
+
         self.update_artists(tidx=0)
 
     def _get_label(self, path):
@@ -376,8 +379,8 @@ class ModelPlotter(object):
 
     def create_clock_artist(self):
 
-        self.clockstr = '{0:02d}h {1:02d}m {2:02d}s'
-        self.clock_artist = plt.annotate(self.clockstr.format(0, 0, 0),
+        self.clockstr = '{0:02d}h {1:02d}m {2:02d}s (+{3:02d} s)'
+        self.clock_artist = plt.annotate(self.clockstr.format(0, 0, 0, 0),
                                          xy=(0.01, 0.01),
                                          xycoords='figure fraction',
                                          size='medium',
@@ -462,8 +465,11 @@ class ModelPlotter(object):
             'Updating artist_paths for time step #{}'.format(tidx))
 
         clocktime = self.model.times[tidx]
+        dt = int(np.ceil((clocktime - self._clock).numericValue))
         H, M, S = [int(s.value) for s in clocktime.inUnitsOf('h', 'min', 's')]
-        hmstr = self.clockstr.format(H, M, S)
+        hmstr = self.clockstr.format(H, M, S, dt)
+        self._clock = clocktime
+
         self.clock_artist.set_text(hmstr)
         self.logger.debug('Time: {}'.format(hmstr))
 

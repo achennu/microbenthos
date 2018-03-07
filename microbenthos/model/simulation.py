@@ -7,6 +7,7 @@ import importlib
 import logging
 import math
 import time
+from collections import deque
 
 from fipy import PhysicalField, Variable
 
@@ -29,7 +30,7 @@ class Simulation(CreateMixin):
                  simtime_days = None,
                  simtime_lims = (1, 300),
                  simtime_adaptive = True,
-                 snapshot_interval = 30,
+                 snapshot_interval = 60,
                  residual_target = 1e-12,
                  residual_break = 1e-3,
                  sweeps_target = 5,
@@ -101,6 +102,7 @@ class Simulation(CreateMixin):
 
         self._sweeps_target = None
         self.sweeps_target = sweeps_target
+        self._sweepsQ = deque([], maxlen=5)
 
         self._model = None
 
@@ -212,11 +214,12 @@ class Simulation(CreateMixin):
     @sweeps_target.setter
     def sweeps_target(self, val):
         try:
-            val = int(val)
-            assert val > 1
+            # val = int(val)
+            val = float(val)
+            assert val > 0
             self._sweeps_target = val
         except:
-            raise ValueError('sweeps_target {} should be > 1'.format(val))
+            raise ValueError('sweeps_target {} should be > 0'.format(val))
 
     @property
     def model(self):
@@ -342,7 +345,7 @@ class Simulation(CreateMixin):
 
         EQN = self.model.full_eqn
 
-        while (res > self.residual_target) and (num_sweeps < 2 * self.sweeps_target):
+        while (res > self.residual_target) and (num_sweeps < 30):
             res = EQN.sweep(
                 solver=self._solver,
                 dt=float(dt.numericValue)
@@ -411,7 +414,11 @@ class Simulation(CreateMixin):
             residual, num_sweeps = self.run_timestep()
             toc = time.time()
 
+            self._sweepsQ.appendleft(num_sweeps)
+
             if self.simtime_adaptive:
+                self.sweeps_target = sum(self._sweepsQ) / len(self._sweepsQ)
+                # self.sweeps_target = (self.sweeps_target + num_sweeps)/2.0
                 self.update_simtime_step(residual, num_sweeps)
 
             calc_time = 1000 * (toc - tic)
