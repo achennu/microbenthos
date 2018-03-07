@@ -99,7 +99,7 @@ class Simulation(CreateMixin):
         self.residual_break = float(residual_break)
         assert self.residual_break > 0
 
-        self._max_sweeps = None
+        self._sweeps_target = None
         self.sweeps_target = sweeps_target
 
         self._model = None
@@ -207,14 +207,14 @@ class Simulation(CreateMixin):
 
     @property
     def sweeps_target(self):
-        return self._max_sweeps
+        return self._sweeps_target
 
     @sweeps_target.setter
     def sweeps_target(self, val):
         try:
             val = int(val)
             assert val > 1
-            self._max_sweeps = val
+            self._sweeps_target = val
         except:
             raise ValueError('sweeps_target {} should be > 1'.format(val))
 
@@ -383,8 +383,6 @@ class Simulation(CreateMixin):
 
         """
 
-        # TODO: uncouple state yield time from time step, esp for small time steps
-
         self.logger.info('Simulation evolution starting')
         self.logger.debug('Solving: {}'.format(self.model.full_eqn))
         self.start()
@@ -417,7 +415,8 @@ class Simulation(CreateMixin):
                 self.update_simtime_step(residual, num_sweeps)
 
             calc_time = 1000 * (toc - tic)
-            self.logger.debug('Timestep done in {:.2f} msec'.format(calc_time))
+            self.logger.debug('Time step {} done in {:.2f} msec'.format(
+                self.simtime_step, calc_time))
 
             metrics = dict(
                 calc_times=dict(data=(calc_time, dict(unit='ms'))),
@@ -453,8 +452,8 @@ class Simulation(CreateMixin):
         # now yield final state
         state = self.model.snapshot()
         state['metrics'] = dict(
-            calc_times=dict(data=(calc_time, dict(unit='ms'))),
-            residuals=dict(data=(residual, None)),
+            calc_times=dict(data=(0, dict(unit='ms'))),
+            residuals=dict(data=(0, None)),
             sweeps=dict(data=(0, None)),
             )
         yield (step, state)
