@@ -7,6 +7,7 @@ import importlib
 import logging
 import math
 import time
+from collections import deque
 
 from fipy import PhysicalField, Variable
 
@@ -29,10 +30,10 @@ class Simulation(CreateMixin):
                  simtime_days = None,
                  simtime_lims = (1, 300),
                  simtime_adaptive = True,
-                 snapshot_interval = 30,
-                 residual_target = 1e-10,
+                 snapshot_interval = 60,
+                 residual_target = 1e-12,
                  residual_break = 1e-3,
-                 sweeps_target = 8,
+                 sweeps_target = 5,
                  fipy_solver = 'scipy'
                  ):
         """
@@ -99,8 +100,9 @@ class Simulation(CreateMixin):
         self.residual_break = float(residual_break)
         assert self.residual_break > 0
 
-        self._max_sweeps = None
+        self._sweeps_target = None
         self.sweeps_target = sweeps_target
+        self._sweepsQ = deque([], maxlen=5)
 
         self._model = None
 
@@ -207,16 +209,17 @@ class Simulation(CreateMixin):
 
     @property
     def sweeps_target(self):
-        return self._max_sweeps
+        return self._sweeps_target
 
     @sweeps_target.setter
     def sweeps_target(self, val):
         try:
-            val = int(val)
-            assert val > 1
-            self._max_sweeps = val
+            # val = int(val)
+            val = float(val)
+            assert val > 0
+            self._sweeps_target = val
         except:
-            raise ValueError('sweeps_target {} should be > 1'.format(val))
+            raise ValueError('sweeps_target {} should be > 0'.format(val))
 
     @property
     def model(self):
@@ -342,7 +345,7 @@ class Simulation(CreateMixin):
 
         EQN = self.model.full_eqn
 
-        while (res > self.residual_target) and (num_sweeps < 2 * self.sweeps_target):
+        while (res > self.residual_target) and (num_sweeps < 30):
             res = EQN.sweep(
                 solver=self._solver,
                 dt=float(dt.numericValue)
@@ -383,8 +386,6 @@ class Simulation(CreateMixin):
 
         """
 
-        # TODO: uncouple state yield time from time step, esp for small time steps
-
         self.logger.info('Simulation evolution starting')
         self.logger.debug('Solving: {}'.format(self.model.full_eqn))
         self.start()
@@ -413,11 +414,16 @@ class Simulation(CreateMixin):
             residual, num_sweeps = self.run_timestep()
             toc = time.time()
 
+            self._sweepsQ.appendleft(num_sweeps)
+
             if self.simtime_adaptive:
+                self.sweeps_target = sum(self._sweepsQ) / len(self._sweepsQ)
+                # self.sweeps_target = (self.sweeps_target + num_sweeps)/2.0
                 self.update_simtime_step(residual, num_sweeps)
 
             calc_time = 1000 * (toc - tic)
-            self.logger.debug('Timestep done in {:.2f} msec'.format(calc_time))
+            self.logger.debug('Time step {} done in {:.2f} msec'.format(
+                self.simtime_step, calc_time))
 
             metrics = dict(
                 calc_times=dict(data=(calc_time, dict(unit='ms'))),
@@ -453,8 +459,8 @@ class Simulation(CreateMixin):
         # now yield final state
         state = self.model.snapshot()
         state['metrics'] = dict(
-            calc_times=dict(data=(calc_time, dict(unit='ms'))),
-            residuals=dict(data=(residual, None)),
+            calc_times=dict(data=(0, dict(unit='ms'))),
+            residuals=dict(data=(0, None)),
             sweeps=dict(data=(0, None)),
             )
         yield (step, state)
@@ -481,9 +487,9 @@ class Simulation(CreateMixin):
             self.simtime_step, num_sweeps, self.sweeps_target, residual, self.residual_target
             ))
 
-        residual_factor = math.log10(self.residual_target / (residual + 1e-30) / 10.0) * 0.05
+        residual_factor = math.log10(self.residual_target / (residual + 1e-30)) * 0.05
 
-        if residual_factor > 0:
+        if residual < self.residual_target:
 
             try:
                 mult = 1.0 + 4 * math.log10(
