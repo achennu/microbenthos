@@ -23,7 +23,6 @@ def check_compatibility(state, store):
         True if the structures are compatible
 
     Raises:
-          AssertionError: if the structures are not compatible
           ValueError: if an incompatible data is returned
           NotImplementedError: for state arrays of dim > 1
 
@@ -38,7 +37,6 @@ def check_compatibility(state, store):
 
     for path_parts, ctype, content in _iter_nested(state):
 
-        print('')
         path = '/' + '/'.join(path_parts)
 
         node = store[path]
@@ -55,16 +53,23 @@ def check_compatibility(state, store):
                     sv = sv.tolist()
                     if isinstance(sv, list):
                         sv = tuple(sv)
-                logger.info('metadata {}::{} state={} store={}'.format(path, k, v, sv))
-                assert v == sv, '{}: {} & {} are not equal'.format(path, v, sv)
+                logger.debug('metadata {}::{} state={} store={}'.format(path, k, v, sv))
+
+                try:
+                    is_equal = (set(v) == set(sv))
+                except TypeError:
+                    is_equal = (v == sv)
+                finally:
+                    if not is_equal:
+                        raise ValueError(
+                            '{}: {} & {} are not equal'.format(path, v, sv))
 
         elif ctype in ('data', 'data_static'):
 
-            logger.info('{}::data comparison'.format(path))
+            logger.debug('{}::data comparison'.format(path))
             node = node['data']
 
             state_arr, attrs = content
-            # state_arr = np.asarray(state_arr)
 
             if ctype == 'data_static':
                 assert np.allclose(node, state_arr)
@@ -78,8 +83,10 @@ def check_compatibility(state, store):
                 except AssertionError:
                     logger.warning('store: {} and state: {}'.format(
                         node.shape, state_arr.shape
-                        ))
-                    raise
+                    ))
+                    raise ValueError('Shape lengths of {} do not match: store={} state={}'.format(
+                        path, node.shape, state_arr.shape
+                    ))
 
                 logger.debug('{} state: {} & store: {}'.format(path, state_arr.shape, node.shape))
 
@@ -87,18 +94,21 @@ def check_compatibility(state, store):
                     logger.debug('{} skipped because single timepoint'.format(path))
 
                 elif len(state_arr.shape) == 1:
-                    assert state_arr.shape[0] == Ndepths
-                    assert node.shape[0] == Ntime
+                    try:
+                        assert state_arr.shape[0] == Ndepths
+                        assert node.shape[0] == Ntime
+                    except AssertionError:
+                        raise ValueError('{} shape did not match. state: {} stored: {}'.format(
+                            path, state_arr.shape, node.shape))
 
                 else:
                     raise NotImplementedError('Handling of state ararys of dim >=2')
-
 
         else:
             raise ValueError('Unknown return type: {}'.format(ctype))
 
 
-def _iter_nested(state, path = None):
+def _iter_nested(state, path=None):
     if path is None:
         path = []
 
@@ -122,6 +132,52 @@ def _iter_nested(state, path = None):
 
         else:
             print('Got type {}={} at {}. What todo?'.format(key, type(val), path))
-            raise ValueError('unknown node type in nested structure')
+            raise TypeError('unknown node type in nested structure')
 
         path.pop(-1)
+
+
+def truncate_model_data(store, time_idx):
+    """
+    Truncates the model data in store till the `time_idx` along the time axis.
+
+    Warning:
+        This is a destructive operation on the provided `store`, if it is write-enabled. Use with
+        caution, because it will resize the datasets in the store to the extent determined by
+        `time_idx` and all the data beyond that will be lost. Only in the case of `time_idx =
+        -1`, may there be no data loss as the resize will occur to the same size as the time vector.
+
+    Args:
+        store (:class:`hdf.Group`): root store of the model data (should be writable)
+        time_idx (int): An integer indicating that index of the time point to truncate
+
+    Returns:
+        size (int): the size of the time dimension after truncation
+    """
+    logger = logging.getLogger(__name__)
+    # now truncate the time-dependent datasets to the time-index
+    # if a ds has shape (35, 210), it means 35 time points
+    # time_idx uses the python scheme for indexing, that is 0 is start, -1 is end, etc
+    dsize = len(store['/time/data'])
+    if dsize == 0:
+        logger.error('Store had a zero-length time series! Cannot use this store.')
+        return 0
+
+    tsize = ((dsize + 1 + time_idx) % dsize) or dsize
+    logger.warning('Truncating datasets time-dim from {} to  {}'.format(dsize, tsize))
+    assert tsize > 0
+
+    def truncate_temporal_dataset(name, ds):
+        if isinstance(ds, hdf.Dataset):
+            if name.startswith('domain/'):
+                return
+            if ds.shape[0] != tsize:
+                ds.resize(tsize, axis=0)
+                logger.debug('{} truncated from {} to {}'.format(name, ds.shape[0], tsize))
+            else:
+                logger.debug('{} truncation skipped due to same size'.format(name))
+
+    # now walk over the hdf hierarchy and resize suitable arrays
+    store.visititems(truncate_temporal_dataset)
+
+    return tsize

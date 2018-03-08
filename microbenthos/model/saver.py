@@ -87,12 +87,12 @@ def _save_nested_dict(D, root, **kwargs):
             raise ValueError(
                 '"metadata" should be mapping, not {}. In path: {}'.format(type(meta), path))
 
-        logger.debug('Saving {}.metadta'.format(path))
+        logger.debug('Saving {}:metadata'.format(path))
         for metak, metav in meta.items():
             if (metav is not None) and (metak not in root.attrs):
                 root.attrs[metak] = metav
             else:
-                logger.debug('Skipping metadata {}.{} = None'.format(path, metak))
+                logger.debug('Skipping metadata {}.{} = {}'.format(path, metak, metav))
 
     data = D.pop('data', None)
     if data:
@@ -105,7 +105,8 @@ def _save_nested_dict(D, root, **kwargs):
                 '"data" should be a (array, meta_dict) sequence. In path: {}'.format(path))
 
         logger.debug('data at {}'.format(path))
-        logger.debug('data shape={} dtype={}'.format(dsdata.shape, dsdata.dtype))
+        # logger.debug('data shape={} dtype={}'.format(dsdata.shape, dsdata.dtype))
+        # logger.debug('data:metadata: {}'.format(dsmeta))
         try:
             _save_data(root, dsdata, dsmeta, name='data', **kwargs)
         except IOError:

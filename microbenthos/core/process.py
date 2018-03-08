@@ -230,6 +230,15 @@ class Process(DomainEntity):
 
         return state
 
+    def restore_from(self, state, tidx):
+        self.logger.debug('Restoring {} from state: {}'.format(self, tuple(state)))
+        self.check_domain()
+
+        # nothing to restore here since evaled = as_term() is a binary operator of other variables
+        pass
+
+
+
     def add_event(self, name, **definition):
         """
         Add an event to this process

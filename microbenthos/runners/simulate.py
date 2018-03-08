@@ -15,7 +15,7 @@ DUMP_KWARGS = dict(
     explicit_start=True,
     explicit_end=True,
     default_flow_style=False
-    )
+)
 
 
 class SimulationRunner(object):
@@ -35,7 +35,7 @@ class SimulationRunner(object):
         * clean up
     """
 
-    def __init__(self, output_dir = None, model = None, simulation = None):
+    def __init__(self, output_dir=None, model=None, simulation=None):
         self.logger = logging.getLogger(__name__)
         self.logger.info('Initializing {}'.format(self))
 
@@ -95,7 +95,7 @@ class SimulationRunner(object):
         self._exporter_classes = {c._exports_: c for c in find_subclasses_recursive(BaseExporter)}
         self.logger.debug("Loaded exporter classes: {}".format(self._exporter_classes.keys()))
 
-    def add_exporter(self, exptype, name = None, **kwargs):
+    def add_exporter(self, exptype, name=None, **kwargs):
         """
         Add an exporter to the simulation run
 
@@ -139,7 +139,7 @@ class SimulationRunner(object):
                 self.logger.error('Error creating output_dir')
                 raise
 
-    def setup_logfile(self, mode = 'w'):
+    def setup_logfile(self, mode='w'):
         """
         Setup log file in the output directory
         """
@@ -170,7 +170,7 @@ class SimulationRunner(object):
             yaml.dump(dict(
                 model=self.model.definition_,
                 simulation=self.simulation.definition_
-                ), fp, **DUMP_KWARGS)
+            ), fp, **DUMP_KWARGS)
 
     def save_run_info(self):
         """
@@ -281,9 +281,6 @@ class SimulationRunner(object):
         self.logger.info('As fipy equations')
         for name, eqn in self.model.equations.items():
             self.logger.info('Equation {}: {!r}'.format(name, eqn.obj))
-
-        # see if a progress exporter is active. This should be triggered each time
-        eager_exporters = [exp for exp in self.exporters.values() if exp._exports_ == 'progress']
 
         with self.exporters_activated():
             for step in self.simulation.evolution():

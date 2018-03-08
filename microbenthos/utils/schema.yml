@@ -470,7 +470,7 @@ simulation:
         type: physical_unit
         like_unit: 'h'
         min: 0
-        default: !unit 6 h
+#        default: !unit 6 h
 
     simtime_step:
         type: physical_unit

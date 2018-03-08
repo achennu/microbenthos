@@ -31,9 +31,9 @@ class Simulation(CreateMixin):
                  simtime_lims=(1, 120),
                  simtime_adaptive=True,
                  snapshot_interval=60,
-                 residual_target=1e-14,
+                 residual_target=1e-15,
                  residual_break=1e-3,
-                 max_sweeps=20,
+                 max_sweeps=25,
                  fipy_solver='scipy'
                  ):
         """
@@ -408,19 +408,18 @@ class Simulation(CreateMixin):
 
         self.model.update_vars()
 
+        self._prev_snapshot = Variable(self.model.clock, name='prev_snapshot')
         step = 0
 
         # yield the initial condition first
         state = self.model.snapshot()
-        residual = 0.0
-        calc_time = 0.0
         state['metrics'] = dict(
-            calc_times=dict(data=(calc_time, dict(unit='ms'))),
-            residuals=dict(data=(residual, None)),
+            calc_times=dict(data=(0.0, dict(unit='ms'))),
+            residuals=dict(data=(0.0, None)),
             sweeps=dict(data=(0, None)),
         )
-        self._prev_snapshot = Variable(self.model.clock, name='prev_snapshot')
         yield (step, state)
+
 
         while self.model.clock() < self.simtime_total:
             step += 1
@@ -503,7 +502,7 @@ class Simulation(CreateMixin):
 
         # residual_factor = math.log10(self.residual_target / (residual + 1e-30)) * 0.05
 
-        alpha = 0.6
+        alpha = 0.7
         Smax = self.max_sweeps
         old_step = self.simtime_step
 
@@ -512,15 +511,15 @@ class Simulation(CreateMixin):
             if num_sweeps < alpha * Smax:
                 mult = 1.0 + 2 * math.log10(1.0 + (self.recent_sweeps / num_sweeps))
             else:
-                mult = 1.0 - 0.5 * math.log10(1.0 + 1.0 * Smax / num_sweeps)
+                mult = 1.0 - 0.5 * math.log10(1.0 + Smax / (num_sweeps + 1.0))
 
         else:
             # mult = 0.25
-            mult = 1.0 - 2 * math.log10(1.0 + 1.0 * Smax / num_sweeps)
+            mult = 1.0 - 2 * math.log10(1.0 + Smax / (num_sweeps + 1.0))
 
         new_step = self.simtime_step * max(1e-3, mult)
         self.simtime_step = min(new_step, self.simtime_total - self.model.clock())
-        self.logger.warning('Time-step update {} x {:.2g} = {}'.format(
+        self.logger.info('Time-step update {} x {:.2g} = {}'.format(
             old_step, mult, self.simtime_step))
 
         self.logger.debug('Updated simtime_step: {}'.format(self.simtime_step))

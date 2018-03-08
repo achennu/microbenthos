@@ -6,6 +6,7 @@ import h5py as hdf
 from . import BaseExporter
 from ..model import save_snapshot
 
+
 class ModelDataExporter(BaseExporter):
     """
     A 'stateless' exporter for model snapshot data into HDF file. The exporter only keeps the
@@ -33,8 +34,8 @@ class ModelDataExporter(BaseExporter):
 
     def prepare(self, sim):
         """
-        Check that the output path can be created. Create the HDF file and add some metadata from
-        the exporter.
+        Check that the output path can be created. Create the HDF file and
+        add some metadata from the exporter.
 
         Args:
             sim: The Simulation object
@@ -44,12 +45,17 @@ class ModelDataExporter(BaseExporter):
 
         if os.path.exists(self.outpath):
             if self.overwrite:
-                self.logger.warning('Overwrite set for output file: {}'.format(self.outpath))
+                self.logger.warning(
+                    'Overwrite set for output file: {}'.format(self.outpath)
+                )
                 os.remove(self.outpath)
             else:
-                raise ValueError('Overwrite is false but output path exists: {}'.format(self.outpath))
+                # raise ValueError('Overwrite is false but output path
+                # exists: {}'.format(self.outpath))
+                self.logger.info(
+                    'Data output file exists. Data series will be continued')
 
-        with hdf.File(self.outpath, 'w', libver='latest') as hf:
+        with hdf.File(self.outpath, libver='latest') as hf:
             hf.attrs.update(self.get_info())
 
         self.logger.debug('Preparation done')
@@ -64,7 +70,8 @@ class ModelDataExporter(BaseExporter):
 
         """
         self.logger.debug('Processing export data for step #{}'.format(num))
-        save_snapshot(self.outpath, snapshot=state, compression=self._compression)
+        save_snapshot(self.outpath, snapshot=state,
+                      compression=self._compression)
         self.logger.debug('Export data processed')
 
     def finish(self):
