@@ -46,12 +46,12 @@ class ProgressExporter(BaseExporter):
             unit='dt',
             dynamic_ncols=True,
             position=self._position,
+            initial=int(self._sim.model.clock.numericValue),
             )
-        # self._pbar = tqdm.tqdm(total=sim.total_steps, desc=self._desc)
 
     def process(self, num, state):
         time, tdict = state['time']['data']
-        curr = PhysicalField(time, tdict['unit']).inUnitsOf(self._sim.simtime_total.unit)
+        curr = PhysicalField(time, tdict['unit'])
         dt = int(curr.numericValue) - self._pbar.n  # in seconds
         self._pbar.update(dt)
 
@@ -69,7 +69,7 @@ class ProgressExporter(BaseExporter):
             clock=clock_info,
             dt=dt,
             res=residual,
-            sweeps='{}/{:3.2f}'.format(sweeps, self._sim.sweeps_target)
+            sweeps='{}/{:3.2f}/{}'.format(sweeps, self._sim.recent_sweeps, self._sim.max_sweeps)
             )
 
     def finish(self):

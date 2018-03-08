@@ -185,3 +185,11 @@ class MicrobialGroup(DomainEntity):
             processes[name] = obj.snapshot(base=base)
 
         return state
+
+    def restore_from(self, state, tidx):
+
+        for name, obj in self.features.items():
+            obj.restore_from(state['features'][name], tidx)
+
+        for name, obj in self.processes.items():
+            obj.restore_from(state['processes'][name], tidx)

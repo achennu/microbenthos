@@ -2,6 +2,7 @@ import logging
 from collections import Mapping, namedtuple
 
 import fipy.tools.numerix as np
+import h5py as hdf
 import sympy as sp
 from fipy import TransientTerm, ImplicitDiffusionTerm, CellVariable, Variable, \
     PhysicalField, ImplicitSourceTerm
@@ -11,7 +12,8 @@ sp.init_printing()
 
 from ..core import Entity, Expression, Process, SedimentDBLDomain
 from ..core import Variable as mVariable
-from ..utils import snapshot_var, CreateMixin
+from ..utils import snapshot_var, restore_var, CreateMixin
+from .resume import check_compatibility, truncate_model_data
 
 
 class MicroBenthosModel(CreateMixin):
@@ -128,7 +130,7 @@ class MicroBenthosModel(CreateMixin):
 
         domain_def = definition.get('domain')
         if domain_def:
-            self.logger.warning('Creating the domain')
+            self.logger.info('Creating the domain')
             self.logger.debug(domain_def)
             if isinstance(domain_def, Mapping):
                 self.domain = Entity.from_dict(domain_def)
@@ -137,20 +139,20 @@ class MicroBenthosModel(CreateMixin):
 
         # Load up the formula namespace
         if 'formulae' in definition:
-            self.logger.warning('Creating formulae')
+            self.logger.info('Creating formulae')
             for name, fdict in definition['formulae'].items():
                 self.add_formula(name, **fdict)
 
         env_def = definition.get('environment')
         if env_def:
-            self.logger.warning('Creating environment')
+            self.logger.info('Creating environment')
 
             for name, pdict in env_def.items():
                 self._create_entity_into('env', name, pdict)
 
         microbes_def = definition.get('microbes')
         if microbes_def:
-            self.logger.warning('Creating microbes')
+            self.logger.info('Creating microbes')
 
             for name, pdict in microbes_def.items():
                 self._create_entity_into('microbes', name, pdict)
@@ -160,7 +162,7 @@ class MicroBenthosModel(CreateMixin):
 
         eqndef = definition.get('equations')
         if eqndef:
-            self.logger.debug('Creating equations')
+            self.logger.info('Creating model equations')
             for eqnname, eqndef in eqndef.items():
                 self.add_equation(eqnname, **eqndef)
 
@@ -206,7 +208,7 @@ class MicroBenthosModel(CreateMixin):
         """
         self.logger.debug('Creating model snapshot')
         state = {}
-        state['time'] = dict(data=snapshot_var(self.clock))
+        state['time'] = dict(data=snapshot_var(self.clock, base=base))
         state['domain'] = self.domain.snapshot(base=base)
 
         env = state['env'] = {}
@@ -231,6 +233,68 @@ class MicroBenthosModel(CreateMixin):
         return state
 
     __getstate__ = snapshot
+
+    def restore_from(self, store, time_idx):
+        """
+        Restore the model entities from the given store
+
+        Warning:
+            This is a destructive operation! After checking that we :meth:`.can_restore_from` the
+            given `store`, :func:`truncate_model_data` is called. This method modifies the data
+            structure in the supplied store by truncating the datasets to the length of the time
+            series as determined from `tidx`. Only in the case of `tidx=-1` it may not modify the
+            data.
+
+            store (:class:`hdf.Group`): The root of the model data store
+            tidx (int): the index along the time series to restore to
+
+        Raises:
+            Exception: as raised by :func:`truncate_model_data`.
+        """
+        self.logger.info('Restoring model from store: {}'.format(tuple(store)))
+
+        if not self.can_restore_from(store):
+            raise TypeError('Store incompatible to be restored from!')
+
+        step_num = truncate_model_data(store, time_idx=time_idx)
+
+        # now that the store has been truncated to the right length
+        # read out and restore data from the last time point
+
+        tidx = -1
+
+        for name, envobj in self.env.items():
+            self.logger.debug('Restoring {}: {}'.format(name, envobj))
+            envobj.restore_from(store['env'][name], tidx)
+
+        for name, microbe in self.microbes.items():
+            microbe.restore_from(store['microbes'][name], tidx)
+
+        for name, eqn in self.equations.items():
+            eqn.restore_from(store['equations'][name], tidx)
+
+        key = 'time'
+        self.clock.setValue(restore_var(store[key], tidx))
+        self.logger.info('Restored model clock to {}'.format(self.clock))
+
+    def can_restore_from(self, store):
+        """
+        Check if the model can be resumed from the given store
+
+        Args:
+            store (:class:`hdf.Group`): The root of the model data store
+
+        Returns:
+            True if it is compatible
+
+        """
+        self.logger.info('Checking if model can resume from {}'.format(store))
+        try:
+            check_compatibility(self.snapshot(), store)
+            return True
+        except:
+            self.logger.warning('Model & stored data not compatible', exc_info=True)
+            return False
 
     def add_equation(self, name, transient, sources = None, diffusion = None, track_budget = False):
         """
@@ -427,7 +491,7 @@ class MicroBenthosModel(CreateMixin):
         Args:
             dt (PhysicalField): the time step duration
         """
-        self.logger.debug('Updating model equations. Current time: {}'.format(self.clock))
+        self.logger.debug('Updating model equations. Current time: {} dt={}'.format(self.clock, dt))
 
         for eqn in self.equations.values():
             eqn.update_tracked_budget(dt)
@@ -490,7 +554,9 @@ class ModelEquation(object):
                                   ('time_step', 'var_expected', 'var_actual', 'sources_change',
                                    'transport_change')
                                   )
-        self.tracked = self.Tracked(0.0, 0.0, 0.0, 0.0, 0.0)
+        self.tracked = self.Tracked(
+            PhysicalField(0.0, 's'),
+            0.0, 0.0, 0.0, 0.0)
 
         self._track_budget = None
         self.track_budget = track_budget
@@ -523,6 +589,7 @@ class ModelEquation(object):
             self.sources_total = PhysicalField(np.zeros_like(self.var), self.var.unit.name() + '/s')
 
         self.obj = self.term_transient == sum(self.RHS_terms)
+        self.update_tracked_budget(PhysicalField(0.0, 's'))
         self.finalized = True
         self.logger.info('Final equation: {}'.format(self.obj))
 
@@ -760,6 +827,22 @@ class ModelEquation(object):
             state['tracked_budget'] = tracked_state
 
         return state
+
+    def restore_from(self, state, tidx):
+        self.logger.debug('Restoring {} from state: {}'.format(self, tuple(state)))
+
+        # update the tracked budget info
+        # self.Tracked = namedtuple('tracked_budget',
+        #                           ('time_step', 'var_expected', 'var_actual', 'sources_change',
+        #                            'transport_change')
+        tracked_state = state['tracked_budget']
+        values = []
+        for fld in self.tracked._fields:
+            self.logger.debug('Reading tracked field {!r}'.format(fld))
+            values.append(restore_var(tracked_state[fld], tidx))
+
+        self.tracked = self.Tracked(*values)
+        self.logger.debug('Restored {} budget: {}'.format(self, self.tracked))
 
     def sources_rate(self):
         """

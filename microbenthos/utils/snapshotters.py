@@ -1,3 +1,4 @@
+import h5py as hdf
 from fipy import Variable, PhysicalField
 from fipy.terms.binaryTerm import _BinaryTerm
 from fipy.tools import numerix as np
@@ -54,3 +55,30 @@ def snapshot_var(V, base = False, to_unit = None):
         raise ValueError('Cannot snapshot variable of type {}'.format(type(V)))
 
     return arr, dict(unit=unit)
+
+
+def restore_var(input, tidx):
+    """
+    This is the inverse operation of :func:`snapshot_var`. It takes the output of that function
+    and returns a PhysicalField quantity
+
+
+    Returns:
+        :class:`PhysicalField`
+
+    """
+    if tidx is None:
+        tidx = slice(None, None)
+
+    if isinstance(input, hdf.Group):
+        value = input['data']
+        unitstr = value.attrs['unit']
+
+    elif isinstance(input, (tuple, list)):
+        value, mdict = input
+        unitstr = mdict['unit']
+
+    else:
+        raise ValueError('Unknown type {} to restore data from'.format(type(input)))
+
+    return PhysicalField(value[tidx], unit=unitstr)
