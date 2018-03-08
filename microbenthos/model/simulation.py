@@ -26,15 +26,16 @@ class Simulation(CreateMixin):
 
     def __init__(self,
                  simtime_total=6,
-                 simtime_step=30,
                  simtime_days=None,
                  simtime_lims=(1, 120),
-                 simtime_adaptive=True,
                  snapshot_interval=60,
+                 fipy_solver='scipy',
+                 max_sweeps=25,
+
+                 simtime_step=30,
+                 simtime_adaptive=True,
                  residual_target=1e-15,
                  residual_break=1e-3,
-                 max_sweeps=25,
-                 fipy_solver='scipy'
                  ):
         """
         Initialize the Simulation with parameters
@@ -100,10 +101,16 @@ class Simulation(CreateMixin):
         self.residual_break = float(residual_break)
         assert self.residual_break > 0
 
+        self._residualQ = deque([], maxlen=5)
+        self._residualQ.appendleft(1e-18)
+
+        self.simtime_step = 1
+
         self._max_sweeps = None
         self.max_sweeps = max_sweeps
         self._sweepsQ = deque([], maxlen=5)
         self._sweepsQ.appendleft(1)
+
 
         self._model = None
 
@@ -224,6 +231,10 @@ class Simulation(CreateMixin):
     @property
     def recent_sweeps(self):
         return math.fsum(self._sweepsQ) / len(self._sweepsQ)
+
+    @property
+    def recent_residuals(self):
+        return math.fsum(self._residualQ) / len(self._residualQ)
 
     @property
     def model(self):
@@ -351,7 +362,7 @@ class Simulation(CreateMixin):
         retry = True
         fails = 0
 
-        while (res > self.residual_target) and (num_sweeps < self.max_sweeps) and retry:
+        while (res > self.recent_residuals * 10) and (num_sweeps < self.max_sweeps) and retry:
 
             try:
                 res = EQN.sweep(
@@ -361,6 +372,7 @@ class Simulation(CreateMixin):
                 num_sweeps += 1
                 res = float(res)
                 self.logger.debug('Sweeps: {}  residual: {:.2g}'.format(num_sweeps, res))
+
             except RuntimeError:
                 self.logger.error(
                     'Numerical error in timestep sweeps={} res={:.2g}'.format(num_sweeps, res))
@@ -369,16 +381,16 @@ class Simulation(CreateMixin):
                     retry = False
                     self.logger.error('Cannot recover. Expect a ka-boom!')
 
-        retry = True
-        if res > self.residual_target:
-            self.logger.info('Timestep residual {:.2g} > limit {:.2g} sweeps={}'.format(
-                res, self.residual_target, num_sweeps))
-
-            if res > self.residual_break:
-                self.logger.warning('Residual {:.2g} too high (>{:.2g})'.format(
-                    res,
-                    self.residual_break
-                ))
+                    # retry = True
+                    # if res > self.residual_target:
+                    #     self.logger.info('Timestep residual {:.2g} > limit {:.2g} sweeps={}'.format(
+                    #         res, self.residual_target, num_sweeps))
+                    #
+                    #     if res > self.residual_break:
+                    #         self.logger.warning('Residual {:.2g} too high (>{:.2g})'.format(
+                    #             res,
+                    #             self.residual_break
+                    #         ))
                 # raise RuntimeError('Residual {:.2g} too high (>{:.2g}) to continue'.format(
                 #     res,
                 #     self.residual_break
@@ -430,6 +442,7 @@ class Simulation(CreateMixin):
             toc = time.time()
 
             self._sweepsQ.appendleft(num_sweeps)
+            self._residualQ.appendleft(residual)
 
             if self.simtime_adaptive:
                 self.update_simtime_step(residual, num_sweeps)
@@ -506,7 +519,7 @@ class Simulation(CreateMixin):
         Smax = self.max_sweeps
         old_step = self.simtime_step
 
-        if residual < self.residual_target:
+        if residual < self.recent_residuals * 10:
 
             if num_sweeps < alpha * Smax:
                 mult = 1.0 + 2 * math.log10(1.0 + (self.recent_sweeps / num_sweeps))
