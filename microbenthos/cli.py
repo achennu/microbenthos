@@ -164,17 +164,14 @@ def setup_completion(shell, show_code):
               help="Add an exporter to run. Form: -x <name> <export_type>")
 @click.option('-sTime', '--simtime_total', callback=_simtime_total_callback,
               help='Total simulation time. Example: "10h"')
-# @click.option('-dt', '--simtime_step', type=str, help='Simulation time step. Example: "10s"')
 @click.option('-sLims', '--simtime-lims', callback=_simtime_lims_callback,
               help='Simulation time step limits. Example: "1s 500s"')
-# @click.option('--adaptive/--no-adaptive', help='Option to toggle adaptive timestep in simulation',
-#               default=None)
 @click.option('-sSweeps', '--max-sweeps', type=click.IntRange(3),
               help='Max number of sweeps of equation in each timestep')
+@click.option('-sRes', '--max-residual', type=float,
+              help='The max residual allowed for the time steps')
 @click.option('-sSolver', '--fipy-solver', help='Solver type to use from fipy',
               callback=_fipy_solver_callback)
-# @click.option('-sRes', '--residual-target', type=click.FLOAT,
-#               help='The residual target for the simulation time steps')
 @click.option('-O', '--overwrite', help='Overwrite file, if exists',
               is_flag=True)
 @click.option('-c', '--compression', type=click.IntRange(0, 9), default=6,
@@ -189,6 +186,10 @@ def setup_completion(shell, show_code):
               help='Save video of simulation plot. This can slow things '
                    'down. ',
               default=False)
+@click.option('--frames/--no-frames',
+              help='Save frames of simulation plot. This can slow things '
+                   'down. ',
+              default=False)
 @click.option('--budget', is_flag=True,
               help='Track variable budget over time and show in plot',
               default=False)
@@ -200,8 +201,8 @@ def setup_completion(shell, show_code):
 @click.argument('model_file', type=click.File())
 def cli_simulate(model_file, output_dir, export, overwrite, compression,
                  confirm, progress,
-                 simtime_total, simtime_lims, max_sweeps, fipy_solver,
-                 plot, video, budget, resume, show_eqns):
+                 simtime_total, simtime_lims, max_sweeps, max_residual, fipy_solver,
+                 plot, video, frames, budget, resume, show_eqns):
     """
     Run simulation from model file
     """
@@ -218,16 +219,16 @@ def cli_simulate(model_file, output_dir, export, overwrite, compression,
         click.secho(
             'Resume = 0 implies to restart simulation. Setting overwrite=True instead',
             fg='yellow')
-        resume = False
+        resume = None
         overwrite = True
 
-    # both overwrite and resume cannot be true
+    # both overwrite and resume cannot be true by the user
     if os.path.exists(data_outpath):
         if overwrite and resume is not None:
             click.secho('Both overwrite and resume cannot be set', fg='red')
             raise click.Abort()
 
-        if not confirm and resume and overwrite is None:
+        if not confirm and (not resume) and (not overwrite):
             click.secho(
                 'Ambiguous case with --no-confirm: file exists and neither --overwrite nor'
                 ' --resume were specified',
@@ -242,6 +243,8 @@ def cli_simulate(model_file, output_dir, export, overwrite, compression,
                     'Overwrite existing file: {}?'.format(data_outpath),
                     abort=True)
                 overwrite = True
+                click.secho('Deleting output path: {}'.format(data_outpath), fg='red')
+                os.remove(data_outpath)
 
     # we want to override the keys in the loaded simulation dictionary,
     # so that when it is created the definition stored on the instance and
@@ -251,8 +254,8 @@ def cli_simulate(model_file, output_dir, export, overwrite, compression,
         simtime_total=simtime_total,
         fipy_solver=fipy_solver,
         max_sweeps=max_sweeps,
-        simtime_lims=simtime_lims
-        # residual_target=residual_target,
+        simtime_lims=simtime_lims,
+        max_residual=max_residual,
     )
     for k, v in sim_kwargs.items():
         if v is None:
@@ -265,18 +268,35 @@ def cli_simulate(model_file, output_dir, export, overwrite, compression,
                               model=defs['model'],
                               simulation=defs['simulation'])
     if resume:
+
+        import h5py as hdf
+        from fipy import PhysicalField
+
+        # open the store and read out the time info
+        with hdf.File(data_outpath, 'r') as store:
+            tds = store['/time/data']
+            nt = len(tds)
+            target_time = tds[resume]
+            latest_time = tds[-1]
+            time_unit = tds.attrs['unit']
+
+        target_time = PhysicalField(target_time, time_unit)
+        latest_time = PhysicalField(latest_time, time_unit)
+
         click.secho(
-            'Model resume set: rewind to time index {}'.format(resume), fg='yellow')
+            '\n\nModel resume set: rewind from latest {} ({}) to {} ({})?'.format(
+                latest_time, nt,
+                target_time, resume
+            ), fg='red')
 
         if confirm:
             click.confirm('Rewinding model clock can lead to data loss! Continue?',
                           default=False, abort=True)
 
-        import h5py as hdf
         try:
             with hdf.File(data_outpath, 'a') as store:
                 runner.model.restore_from(store, time_idx=resume)
-            click.secho('Model restore successful. Clock = {}'.format(runner.model.clock),
+            click.secho('Model restore successful. Clock = {}\n\n'.format(runner.model.clock),
                         fg='green')
             runner.simulation.simtime_step = 1
             # set a small simtime to start
@@ -298,9 +318,9 @@ def cli_simulate(model_file, output_dir, export, overwrite, compression,
     if progress:
         runner.add_exporter('progress')
 
-    if plot or video:
+    if plot or video or frames:
         runner.add_exporter('graphic', write_video=video, show=plot,
-                            track_budget=budget)
+                            track_budget=budget, write_frames=frames)
         if resume and video:
             click.secho('Video will begin from this simulation run, since resume is set!',
                         fg='yellow')
@@ -315,7 +335,7 @@ def cli_simulate(model_file, output_dir, export, overwrite, compression,
 
     click.secho(
         'Simulation setup: solver={0.fipy_solver} '
-        'max_sweeps={0.max_sweeps} residual={0.residual_target} '
+        'max_sweeps={0.max_sweeps} max_residual={0.residual_target} '
         'timestep_lims=({1}, {2})'.format(
             runner.simulation, *runner.simulation.simtime_lims),
         fg='yellow')
@@ -334,7 +354,7 @@ def cli_simulate(model_file, output_dir, export, overwrite, compression,
 @cli.group('export')
 def export():
     """
-    Export simulation data
+    Export options
     """
 
 
@@ -360,9 +380,11 @@ def export():
 @click.option('--bitrate', help='Bitrate for video encoding (default: 1400)',
               type=click.IntRange(800, 4000), default=1400)
 @click.option('--artist-tag', help='Artist tag in metadata')
-def export_video(datafile, outfile, overwrite, style, dpi, show, budget, fps,
-                 bitrate,
-                 artist_tag, figsize=None):
+def export_video(datafile, outfile, overwrite,
+                 style, dpi, figsize,
+                 show, budget,
+                 fps, bitrate, artist_tag,
+                 ):
     """
     Export video from model data
     """

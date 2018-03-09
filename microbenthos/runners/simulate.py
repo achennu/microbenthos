@@ -2,7 +2,6 @@ import contextlib
 import importlib
 import logging
 import os
-import time
 from collections import OrderedDict
 
 from ..exporters import BaseExporter
@@ -229,9 +228,11 @@ class SimulationRunner(object):
         Returns:
         """
         self.logger.info('Preparing exporters: {}'.format(self.exporters.keys()))
+        state = self.simulation.get_state(state=self.model.snapshot())
+
         for expname, exporter in self.exporters.items():
             try:
-                exporter.setup(self)
+                exporter.setup(self, state)
             except:
                 self.logger.error('Error in setting up exporter: {}'.format(expname))
                 raise
@@ -285,7 +286,7 @@ class SimulationRunner(object):
         with self.exporters_activated():
             for step in self.simulation.evolution():
                 try:
-                    time.sleep(1e-5)
+                    # time.sleep(1e-5)
                     # step is (num, state) is the model snapshot
                     if step:
                         num, state = step
