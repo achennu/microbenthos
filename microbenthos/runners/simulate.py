@@ -138,7 +138,7 @@ class SimulationRunner(object):
                 self.logger.error('Error creating output_dir')
                 raise
 
-    def setup_logfile(self, mode='w'):
+    def setup_logfile(self, mode='a'):
         """
         Setup log file in the output directory
         """

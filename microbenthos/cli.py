@@ -212,6 +212,8 @@ def cli_simulate(model_file, output_dir, export, overwrite, compression,
 
     click.echo('Loading model from {}'.format(model_file.name))
     defs = yaml.load(model_file)
+    if 'simulation' not in defs:
+        defs['simulation'] = {}
 
     data_outpath = os.path.join(output_dir, 'simulation_data.h5')
 
