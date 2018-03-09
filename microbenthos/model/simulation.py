@@ -26,23 +26,18 @@ class Simulation(CreateMixin):
 
     def __init__(self,
                  simtime_total=6,
-                 simtime_step=30,
                  simtime_days=None,
-                 simtime_lims=(1, 120),
-                 simtime_adaptive=True,
+                 simtime_lims=(1, 240),
                  snapshot_interval=60,
-                 residual_target=1e-15,
-                 residual_break=1e-3,
+                 fipy_solver='scipy',
                  max_sweeps=25,
-                 fipy_solver='scipy'
+                 max_residual=1e-14,
                  ):
         """
         Initialize the Simulation with parameters
 
         Args:
             simtime_total (float): The number of hours for the simulation to run
-
-            simtime_step (float) Number of seconds in each simulation step
 
             simtime_days (float): The number of days (in terms of the
             model's irradiance cycle) the simulation should run for. Note that specifying this
@@ -51,19 +46,12 @@ class Simulation(CreateMixin):
             simtime_lims (float, float): The limits for the :attr:`simtime_step`. This is useful
             when an adaptive time step is used, but hard limits are necessary.
 
-            simtime_adaptive (bool): If the :attr:`simtime_step` should adapt to the residual of
-            the simulation evolution (default: False).
-
             snapshot_interval (int, float, :class:`PhysicalField`): the duration in seconds between
             taking snapshots of the model for exporters (default: 60 seconds)
 
-            residual_target (float): The max residual limit below which the timestep is considered
-            to be numerically accurate
-
-            residual_break (float): Residual at a time step above this value will cause the
-            simulation to abort
-
             max_sweeps (int): Number of sweeps to use within the timestep
+
+            max_residual (float): Maximum residual value at a timestep
 
             fipy_solver (str): Name of the fipy solver to use
         """
@@ -88,22 +76,22 @@ class Simulation(CreateMixin):
                 raise ValueError('simtime_days should be >0, not {:.2f}'.format(simtime_days))
             self.simtime_days = simtime_days
 
-        self.simtime_adaptive = bool(simtime_adaptive)
         self.simtime_total = simtime_total
         self.simtime_lims = simtime_lims
-        self.simtime_step = simtime_step
+        self.simtime_step = self.simtime_lims[0]
 
         self.snapshot_interval = PhysicalField(snapshot_interval, 's')
 
-        self._residual_target = None
-        self.residual_target = residual_target
-        self.residual_break = float(residual_break)
-        assert self.residual_break > 0
+        self.max_residual = float(max_residual)
+        if not (0 < self.max_residual < 1e-3):
+            raise ValueError('Max residual should be a small positive number, not {:.3g}'.format(
+                self.max_residual))
+
+        self._residualQ = deque([], maxlen=10)
 
         self._max_sweeps = None
         self.max_sweeps = max_sweeps
         self._sweepsQ = deque([], maxlen=5)
-        self._sweepsQ.appendleft(1)
 
         self._model = None
 
@@ -169,16 +157,6 @@ class Simulation(CreateMixin):
         self._simtime_step = val
 
     @property
-    def total_steps(self):
-        try:
-            return int(math.ceil(self.simtime_total / self.simtime_step))
-        except:
-            self.logger.error(
-                "Could not determine total_steps from simtime_total = {} "
-                "and simtime_step = {}".format(
-                    self.simtime_total, self.simtime_step))
-
-    @property
     def simtime_lims(self):
         return self._simtime_lims
 
@@ -197,16 +175,8 @@ class Simulation(CreateMixin):
 
     @property
     def residual_target(self):
-        return self._residual_target
+        return min(self.recent_residuals * 3, self.max_residual)
 
-    @residual_target.setter
-    def residual_target(self, val):
-        try:
-            val = float(val)
-            assert val <= 1e-6
-            self._residual_target = val
-        except:
-            raise ValueError('residual_target {} should be <= 1e-6'.format(val))
 
     @property
     def max_sweeps(self):
@@ -223,7 +193,17 @@ class Simulation(CreateMixin):
 
     @property
     def recent_sweeps(self):
-        return math.fsum(self._sweepsQ) / len(self._sweepsQ)
+        if self._sweepsQ:
+            return math.fsum(self._sweepsQ) / len(self._sweepsQ)
+        else:
+            return 0.0
+
+    @property
+    def recent_residuals(self):
+        if self._residualQ:
+            return math.fsum(self._residualQ) / len(self._residualQ)
+        else:
+            return self.max_residual
 
     @property
     def model(self):
@@ -324,7 +304,7 @@ class Simulation(CreateMixin):
         self.logger.info('Starting simulation')
         self.logger.debug(
             'simtime_total={o.simtime_total} simtime_step={o.simtime_step}, residual_target='
-            '{o.residual_target} max_sweeps={o.max_sweeps}'.format(
+            '{o.residual_target} max_sweeps={o.max_sweeps} max_residual={o.max_residual}'.format(
                 o=self))
 
         solver_module = importlib.import_module('fipy.solvers.{}'.format(self.fipy_solver))
@@ -345,44 +325,47 @@ class Simulation(CreateMixin):
         self.logger.info('Running timestep {} + {}'.format(self.model.clock, dt))
 
         num_sweeps = 0
-        res = 1
+        res = 100.0
 
         EQN = self.model.full_eqn
         retry = True
         fails = 0
 
-        while (res > self.residual_target) and (num_sweeps < self.max_sweeps) and retry:
+        res_target = self.residual_target
+
+        while (res > res_target) and (num_sweeps < self.max_sweeps) \
+            and retry:
 
             try:
+                num_sweeps += 1
                 res = EQN.sweep(
                     solver=self._solver,
                     dt=float(dt.numericValue)
                 )
-                num_sweeps += 1
                 res = float(res)
                 self.logger.debug('Sweeps: {}  residual: {:.2g}'.format(num_sweeps, res))
+
             except RuntimeError:
                 self.logger.error(
-                    'Numerical error in timestep sweeps={} res={:.2g}'.format(num_sweeps, res))
+                    'Numerical error with timestep {} - sweeps={} res={:.2g}'.format(
+                        dt, num_sweeps, res))
                 fails += 1
-                if fails > 3:
+
+                for var in EQN._vars:
+                    self.logger.info('Setting {!r} to old value'.format(var))
+                    var.value = var.old.copy()
+
+                dt = self.simtime_step = self.simtime_lims[0]
+                num_sweeps = 1
+                res_target = self.max_residual
+                self.logger.error('Retrying with timestep {} residual_target {:.2g}'.format(
+                    self.simtime_step, self.max_residual))
+
+                if fails == 2:
                     retry = False
-                    self.logger.error('Cannot recover. Expect a ka-boom!')
-
-        retry = True
-        if res > self.residual_target:
-            self.logger.info('Timestep residual {:.2g} > limit {:.2g} sweeps={}'.format(
-                res, self.residual_target, num_sweeps))
-
-            if res > self.residual_break:
-                self.logger.warning('Residual {:.2g} too high (>{:.2g})'.format(
-                    res,
-                    self.residual_break
-                ))
-                # raise RuntimeError('Residual {:.2g} too high (>{:.2g}) to continue'.format(
-                #     res,
-                #     self.residual_break
-                #     ))
+                    self.logger.error('Could not recover from numerical error. Impending ka-boom!')
+                    self.logger.debug('Runtime eror', exc_info=True)
+                    raise RuntimeError('Numerical problem in equation evolution!')
 
         self.model.update_vars()
         self.model.update_equations(dt)
@@ -411,18 +394,7 @@ class Simulation(CreateMixin):
         self._prev_snapshot = Variable(self.model.clock, name='prev_snapshot')
         step = 0
 
-        # yield the initial condition first
-        state = self.model.snapshot()
-        state['metrics'] = dict(
-            calc_times=dict(data=(0.0, dict(unit='ms'))),
-            residuals=dict(data=(0.0, None)),
-            sweeps=dict(data=(0, None)),
-        )
-        yield (step, state)
-
-
         while self.model.clock() < self.simtime_total:
-            step += 1
             self.logger.debug('Running step #{} {}'.format(step, self.model.clock))
 
             tic = time.time()
@@ -430,26 +402,25 @@ class Simulation(CreateMixin):
             toc = time.time()
 
             self._sweepsQ.appendleft(num_sweeps)
+            self._residualQ.appendleft(residual)
+            step += 1
 
-            if self.simtime_adaptive:
-                self.update_simtime_step(residual, num_sweeps)
+            self.update_simtime_step(residual, num_sweeps)
 
             calc_time = 1000 * (toc - tic)
             self.logger.debug('Time step {} done in {:.2f} msec'.format(
                 self.simtime_step, calc_time))
 
-            metrics = dict(
-                calc_times=dict(data=(calc_time, dict(unit='ms'))),
-                residuals=dict(data=(residual, None)),
-                sweeps=dict(data=(num_sweeps, None))
-            )
-
             if self.export_due():
 
                 self.logger.debug('Snapshot in step #{}'.format(step))
 
-                state = self.model.snapshot()
-                state['metrics'] = metrics
+                state = self.get_state(
+                    state=self.model.snapshot(),
+                    calc_time=calc_time,
+                    residual=residual,
+                    num_sweeps=num_sweeps
+                )
 
                 yield (step, state)
 
@@ -460,25 +431,38 @@ class Simulation(CreateMixin):
             else:
                 # create a minimal state
                 # this is the model clock and current residual
-                state = dict(
-                    time=dict(data=snapshot_var(self.model.clock)),
-                    metrics=metrics
+                state = self.get_state(
+                    calc_time=calc_time,
+                    residual=residual,
+                    num_sweeps=num_sweeps
                 )
 
                 yield (step, state)
 
             self.model.clock.increment_time(self.simtime_step)
 
-        # now yield final state
-        state = self.model.snapshot()
-        state['metrics'] = dict(
-            calc_times=dict(data=(0, dict(unit='ms'))),
-            residuals=dict(data=(0, None)),
-            sweeps=dict(data=(0, None)),
-        )
-        yield (step, state)
-
         self.logger.info('Simulation evolution completed')
+
+    def get_state(self, state=None, metrics=None, **kwargs):
+
+        if state is None:
+            state = dict(
+                time=dict(data=snapshot_var(self.model.clock))
+            )
+
+        if metrics is None:
+            metrics = dict(
+                calc_time=dict(
+                    data=(kwargs.get('calc_time', 0.0), dict(unit='ms'))
+                ),
+                residual=dict(
+                    data=(kwargs.get('residual', 0.0), None)),
+                num_sweeps=dict(
+                    data=(kwargs.get('num_sweeps', 0), None)),
+            )
+
+        state['metrics'] = metrics
+        return state
 
     def export_due(self):
         return self.model.clock() - self._prev_snapshot() >= self.snapshot_interval
@@ -505,17 +489,18 @@ class Simulation(CreateMixin):
         alpha = 0.7
         Smax = self.max_sweeps
         old_step = self.simtime_step
+        num_sweeps = max(1.0, num_sweeps)
 
         if residual < self.residual_target:
 
             if num_sweeps < alpha * Smax:
-                mult = 1.0 + 2 * math.log10(1.0 + (self.recent_sweeps / num_sweeps))
+                mult = 1.0 + 2 * math.log10(2.0 + (self.recent_sweeps / num_sweeps))
             else:
-                mult = 1.0 - 0.5 * math.log10(1.0 + Smax / (num_sweeps + 1.0))
+                mult = 1.0 - 0.5 * math.log10(2.0 + Smax / num_sweeps)
 
         else:
             # mult = 0.25
-            mult = 1.0 - 2 * math.log10(1.0 + Smax / (num_sweeps + 1.0))
+            mult = 1.0 - 2 * math.log10(2.0 + Smax / num_sweeps)
 
         new_step = self.simtime_step * max(1e-3, mult)
         self.simtime_step = min(new_step, self.simtime_total - self.model.clock())

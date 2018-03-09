@@ -96,7 +96,7 @@ def check_compatibility(state, store):
                 elif len(state_arr.shape) == 1:
                     try:
                         assert state_arr.shape[0] == Ndepths
-                        assert node.shape[0] == Ntime
+                        # assert node.shape[0] == Ntime
                     except AssertionError:
                         raise ValueError('{} shape did not match. state: {} stored: {}'.format(
                             path, state_arr.shape, node.shape))

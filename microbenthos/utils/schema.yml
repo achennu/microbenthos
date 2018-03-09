@@ -472,39 +472,25 @@ simulation:
         min: 0
 #        default: !unit 6 h
 
-    simtime_step:
-        type: physical_unit
-        like_unit: 's'
-        min: 0
-        default: !unit 30 s
-
     simtime_days:
         type: float
         min: 0
         nullable: true
 
-    residual_target:
+    max_residual:
         type: float
-        max: 1e-6
-        default: 1e-14
+        min: 1.0e-50
+        max: 1.0e-3
+#        default: 1.0e-12
         coerce: float
 
-    residual_break:
-        type: float
-        min: 0
-        default: 1e-3
-        coerce: float
 
     simtime_lims:
         type: list
         items:
             - type: float
-              min: 0
+              min: 0.00001
             - type: float
-
-    simtime_adaptive:
-        type: boolean
-        default: true
 
     snapshot_interval:
         type: [integer, float, physical_unit]

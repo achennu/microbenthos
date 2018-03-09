@@ -38,14 +38,19 @@ class BaseExporter(object):
     def __repr__(self):
         return '{}({})'.format(self.__class__.__name__, self.name)
 
-    def setup(self, runner):
+    def setup(self, runner, state):
         self.logger.debug('Setting up {}'.format(self))
+        self.runner = runner
         self.output_dir = runner.output_dir
-        self.prepare(runner.simulation)
+        self.prepare(state)
         self.started = True
 
+    @property
+    def sim(self):
+        return self.runner.simulation
+
     @abc.abstractmethod
-    def prepare(self, sim):
+    def prepare(self, sim, state):
         raise NotImplementedError('Should be implemented in subclass')
 
     @property
@@ -65,9 +70,8 @@ class BaseExporter(object):
         self.finish()
         self.started = False
 
-    @abc.abstractmethod
     def finish(self):
-        raise NotImplementedError('Should be implemented in subclass')
+        pass
 
     @abc.abstractmethod
     def process(self, num, state):
