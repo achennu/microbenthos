@@ -271,9 +271,8 @@ class Variable(DomainEntity):
         self.name = name
         self.var = None
 
-        self.create_params = create
-
-        self.check_create(**self.create_params)
+        self.create_params = self.check_create(**create)
+        self.logger.debug('{} saving create params {}'.format(self, self.create_params))
 
         self.constraints = constraints or dict()
         self.check_constraints(self.constraints)
@@ -294,11 +293,26 @@ class Variable(DomainEntity):
 
         from fipy import PhysicalField
         unit = params.get('unit')
+
         if unit:
             try:
                 p = PhysicalField(1, params['unit'])
+                base_units = p.inBaseUnits().unit.name()
+                params['unit'] = base_units
             except:
                 raise ValueError('{!r} is not a valid unit!'.format(params['unit']))
+
+        value = params.get('value')
+        if value is not None:
+            try:
+                v = value.inBaseUnits()
+                base_units = v.unit.name()
+                params['unit'] = base_units
+                params['value'] = v
+            except AttributeError:
+                pass
+
+        return params
 
     @staticmethod
     def check_constraints(constraints):
