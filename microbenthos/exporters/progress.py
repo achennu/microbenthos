@@ -55,8 +55,8 @@ class ProgressExporter(BaseExporter):
             simtime_total.unit.name(),
         )
 
-        residual = state['metrics']['residuals']['data'][0]
-        sweeps = state['metrics']['sweeps']['data'][0]
+        residual = state['metrics']['residual']['data'][0]
+        sweeps = state['metrics']['num_sweeps']['data'][0]
 
         self._pbar.set_postfix(
             clock=clock_info,
