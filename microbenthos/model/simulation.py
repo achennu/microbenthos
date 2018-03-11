@@ -27,7 +27,7 @@ class Simulation(CreateMixin):
     def __init__(self,
                  simtime_total=6,
                  simtime_days=None,
-                 simtime_lims=(1, 240),
+                 simtime_lims=(0.1, 240),
                  snapshot_interval=60,
                  fipy_solver='scipy',
                  max_sweeps=25,
@@ -163,11 +163,11 @@ class Simulation(CreateMixin):
     @simtime_lims.setter
     def simtime_lims(self, vals):
         if vals is None:
-            lmin = PhysicalField(1, 's')
+            lmin = PhysicalField(0.1, 's')
             # lmax = (self.simtime_total / 25.0).inUnitsOf('s').floor()
-            lmax = PhysicalField(300, 's')
+            lmax = PhysicalField(240, 's')
         else:
-            lmin, lmax = [PhysicalField(_, 's') for _ in vals]
+            lmin, lmax = [PhysicalField(float(_), 's') for _ in vals]
         assert 0 < lmin < lmax, 'simtime_lims ({}, {}) are not positive and in order'.format(
             lmin, lmax)
         self._simtime_lims = (lmin, lmax)
@@ -196,7 +196,7 @@ class Simulation(CreateMixin):
         if self._sweepsQ:
             return math.fsum(self._sweepsQ) / len(self._sweepsQ)
         else:
-            return 0.0
+            return 1.0
 
     @property
     def recent_residuals(self):
@@ -346,7 +346,7 @@ class Simulation(CreateMixin):
                 self.logger.debug('Sweeps: {}  residual: {:.2g}'.format(num_sweeps, res))
 
             except RuntimeError:
-                self.logger.error(
+                self.logger.warning(
                     'Numerical error with timestep {} - sweeps={} res={:.2g}'.format(
                         dt, num_sweeps, res))
                 fails += 1
@@ -358,14 +358,19 @@ class Simulation(CreateMixin):
                 dt = self.simtime_step = self.simtime_lims[0]
                 num_sweeps = 1
                 res_target = self.max_residual
-                self.logger.error('Retrying with timestep {} residual_target {:.2g}'.format(
+                self.logger.warning('Retrying with timestep {} residual_target {:.2g}'.format(
                     self.simtime_step, self.max_residual))
 
                 if fails == 2:
                     retry = False
-                    self.logger.error('Could not recover from numerical error. Impending ka-boom!')
-                    self.logger.debug('Runtime eror', exc_info=True)
+                    self.logger.error('Numerical error remained sweeps: {} residual: {}. Impending '
+                                      'ka-boom!'.format(num_sweeps, res))
+                    self.logger.debug('Runtime error', exc_info=True)
                     raise RuntimeError('Numerical problem in equation evolution!')
+        if fails:
+            self.logger.warning(
+                'Recovered with timestep {} - sweeps={} res={:.2g}'.format(
+                    dt, num_sweeps, res))
 
         self.model.update_vars()
         self.model.update_equations(dt)
@@ -486,7 +491,7 @@ class Simulation(CreateMixin):
 
         # residual_factor = math.log10(self.residual_target / (residual + 1e-30)) * 0.05
 
-        alpha = 0.7
+        alpha = 0.9
         Smax = self.max_sweeps
         old_step = self.simtime_step
         num_sweeps = max(1.0, num_sweeps)
