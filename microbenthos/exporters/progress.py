@@ -42,6 +42,7 @@ class ProgressExporter(BaseExporter):
             dynamic_ncols=True,
             position=self._position,
             initial=round(self._prev_t.value, 2),
+            leave=False,
         )
 
     def srepr(self, v, prec=2):

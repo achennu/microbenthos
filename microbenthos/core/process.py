@@ -2,7 +2,6 @@ import logging
 from collections import Mapping
 
 import sympy as sp
-from fipy import Variable
 from fipy.tools import numerix as np
 
 from .expression import Expression
@@ -357,9 +356,7 @@ class ProcessEvent(DomainEntity):
             unit='s',
             value=model.clock
             )
-        self._prev_clock = Variable(model.clock, name='{}:prev_clock'.format(
-            self.name
-            ))
+        self._prev_clock = model.clock.copy()
         self.logger.debug('Clock set to: {}'.format(self._prev_clock))
         self.condition = self.process.evaluate(self.expr.expr())
 
@@ -370,12 +367,12 @@ class ProcessEvent(DomainEntity):
 
         """
         self.logger.debug('Updating {} to clock {}'.format(self, clock))
-        dt = clock - self._prev_clock()
+        dt = clock.copy() - self._prev_clock
         self.logger.debug('Time since last: {}'.format(dt.inUnitsOf('s')))
         condition = self.condition()
-        self.event_time.setValue(self.event_time() + dt)
+        self.event_time.setValue(self.event_time.copy() + dt)
         self.event_time.value[~condition] = 0.0
-        self._prev_clock.setValue(clock)
+        self._prev_clock = clock.copy()
 
         self.logger.debug('{} condition true in {} of {} with max time: {}'.format(
             self,

@@ -27,10 +27,10 @@ class Simulation(CreateMixin):
     def __init__(self,
                  simtime_total=6,
                  simtime_days=None,
-                 simtime_lims=(0.1, 240),
+                 simtime_lims=(0.01, 240),
                  snapshot_interval=60,
                  fipy_solver='scipy',
-                 max_sweeps=25,
+                 max_sweeps=50,
                  max_residual=1e-14,
                  ):
         """
@@ -163,7 +163,7 @@ class Simulation(CreateMixin):
     @simtime_lims.setter
     def simtime_lims(self, vals):
         if vals is None:
-            lmin = PhysicalField(0.1, 's')
+            lmin = PhysicalField(0.01, 's')
             # lmax = (self.simtime_total / 25.0).inUnitsOf('s').floor()
             lmax = PhysicalField(240, 's')
         else:
@@ -396,10 +396,10 @@ class Simulation(CreateMixin):
 
         self.model.update_vars()
 
-        self._prev_snapshot = Variable(self.model.clock, name='prev_snapshot')
+        self._prev_snapshot = Variable(self.model.clock.copy(), name='prev_snapshot')
         step = 0
 
-        while self.model.clock() < self.simtime_total:
+        while self.model.clock() <= self.simtime_total:
             self.logger.debug('Running step #{} {}'.format(step, self.model.clock))
 
             tic = time.time()
@@ -430,7 +430,7 @@ class Simulation(CreateMixin):
                 yield (step, state)
 
                 # now set the prev_snapshot so that export_due() will remain true for processing
-                self._prev_snapshot.setValue(self.model.clock())
+                self._prev_snapshot.setValue(self.model.clock.copy())
                 self.logger.debug('Prev snapshot set: {}'.format(self._prev_snapshot))
 
             else:
@@ -445,6 +445,13 @@ class Simulation(CreateMixin):
                 yield (step, state)
 
             self.model.clock.increment_time(self.simtime_step)
+
+        state = self.get_state(
+            calc_time=calc_time,
+            residual=residual,
+            num_sweeps=num_sweeps
+        )
+        yield (step + 1, state)
 
         self.logger.info('Simulation evolution completed')
 

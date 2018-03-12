@@ -499,8 +499,8 @@ simulation:
     max_sweeps:
         type: integer
         min: 10
-        max: 100
-        default: 20
+        max: 1000
+        default: 50
 
     fipy_solver:
         type: string
