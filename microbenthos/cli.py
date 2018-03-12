@@ -392,9 +392,8 @@ def export_video(datafile, outfile, overwrite,
     """
 
     from matplotlib import animation
-
-    outfile = outfile or os.path.join(os.path.dirname(datafile),
-                                      'simulation.mp4')
+    dirname = os.path.dirname(datafile)
+    outfile = outfile or os.path.join(dirname, 'simulation.mp4')
 
     if not os.path.splitext(outfile)[1] == '.mp4':
         outfile += '.mp4'
@@ -435,7 +434,7 @@ def export_video(datafile, outfile, overwrite,
 
         with writer.saving(plot.fig, outfile, dpi=dpi):
 
-            for i in tqdm(range(len(dm.times))):
+            for i in tqdm(range(len(dm.times)), leave=False, desc=os.path.basename(dirname)):
                 plot.update_artists(tidx=i)
                 plot.draw()
                 writer.grab_frame()
