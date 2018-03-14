@@ -6,6 +6,7 @@ import h5py as hdf
 from . import BaseExporter
 from ..model import save_snapshot
 
+
 class ModelDataExporter(BaseExporter):
     """
     A 'stateless' exporter for model snapshot data into HDF file. The exporter only keeps the
@@ -13,7 +14,7 @@ class ModelDataExporter(BaseExporter):
     committed to disk, reducing risk of data corruption. It uses :func:`save_snapshot` internally.
     """
     _exports_ = 'model_data'
-    __version__ = '2.0'
+    __version__ = '2.1'
 
     def __init__(self, overwrite = False, filename = 'simulation_data.h5', compression = 6,
                  **kwargs):
@@ -31,10 +32,10 @@ class ModelDataExporter(BaseExporter):
     def outpath(self):
         return os.path.join(self.output_dir, self._filename)
 
-    def prepare(self, sim):
+    def prepare(self, state):
         """
-        Check that the output path can be created. Create the HDF file and add some metadata from
-        the exporter.
+        Check that the output path can be created. Create the HDF file and
+        add some metadata from the exporter.
 
         Args:
             sim: The Simulation object
@@ -42,15 +43,15 @@ class ModelDataExporter(BaseExporter):
         """
         self.logger.debug('Preparing file for export')
 
-        if os.path.exists(self.outpath):
-            if self.overwrite:
-                self.logger.warning('Overwrite set for output file: {}'.format(self.outpath))
-                os.remove(self.outpath)
-            else:
-                raise ValueError('Overwrite is false but output path exists: {}'.format(self.outpath))
+        # if no file exists, then save the first state
+        exists = os.path.exists(self.outpath)
 
-        with hdf.File(self.outpath, 'w', libver='latest') as hf:
+        with hdf.File(self.outpath, 'a', libver='latest') as hf:
             hf.attrs.update(self.get_info())
+
+        if not exists:
+            save_snapshot(self.outpath, snapshot=state,
+                          compression=self._compression)
 
         self.logger.debug('Preparation done')
 
@@ -64,9 +65,7 @@ class ModelDataExporter(BaseExporter):
 
         """
         self.logger.debug('Processing export data for step #{}'.format(num))
-        save_snapshot(self.outpath, snapshot=state, compression=self._compression)
+        save_snapshot(self.outpath, snapshot=state,
+                      compression=self._compression)
         self.logger.debug('Export data processed')
-
-    def finish(self):
-        pass
 

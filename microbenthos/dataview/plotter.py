@@ -159,7 +159,8 @@ class ModelPlotter(object):
                                )
             self.axError = axgrid_time.axes_all[0]
 
-        self.axMicrobes, self.axEnv, self.axSources, self.axProcesses = axgrid_depths.axes_all
+        # self.axMicrobes, self.axEnv, self.axSources, self.axProcesses = axgrid_depths.axes_all
+        self.axMicrobes, self.axProcesses, self.axSources, self.axEnv, = axgrid_depths.axes_all
 
         # self.axMicrobes = ax = plt.subplot2grid(grid_shape, (0, 0),
         #                                         rowspan=depth_rowspan,

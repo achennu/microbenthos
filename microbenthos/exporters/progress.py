@@ -12,10 +12,10 @@ from .exporter import BaseExporter
 
 class ProgressExporter(BaseExporter):
     _exports_ = 'progress'
-    __version__ = '3.0'
+    __version__ = '5.0'
     is_eager = True
 
-    def __init__(self, desc = 'evolution', position = None, **kwargs):
+    def __init__(self, desc='evolution', position=None, **kwargs):
         self.logger = kwargs.get('logger') or logging.getLogger(__name__)
         self.logger.debug('Init in {}'.format(self.__class__.__name__))
         kwargs['logger'] = self.logger
@@ -26,51 +26,59 @@ class ProgressExporter(BaseExporter):
         self._total_time = None
         self._position = position
 
-    def prepare(self, sim):
+    def prepare(self, state):
         """
         Set up the progress bar
         """
-        self.logger.debug('Preparing progressbar for simulation: {} {} {}'.format(
-            sim.simtime_total, sim.simtime_step, sim.total_steps
-            ))
-        self._sim = sim
-        # self._total_time = sim.simtime_total
-        # self._total_time_value = self._total_time.value
-        # self._total_time_unit = self._total_time.unit.name()
-
-        # self._sweeps_target = sim.sweeps_target
+        sim = self.sim
+        self.logger.debug('Preparing progressbar for simulation: {}'.format(sim.simtime_total))
+        self._clock_unit = sim.simtime_total.unit
+        self._prev_t = sim.model.clock.inUnitsOf(self._clock_unit)
 
         self._pbar = tqdm.tqdm(
-            total=int(self._sim.simtime_total.numericValue),
+            total=sim.simtime_total.value,
             desc=self._desc,
-            unit='dt',
+            # unit=self._clock_unit.name(),
             dynamic_ncols=True,
             position=self._position,
-            )
-        # self._pbar = tqdm.tqdm(total=sim.total_steps, desc=self._desc)
+            initial=round(self._prev_t.value, 2),
+            leave=False,
+        )
+
+    def srepr(self, v, prec=2):
+        unit = v.unit.name()
+        return '{:.{}f} {}'.format(float(v.value), prec, unit)
 
     def process(self, num, state):
+        simtime_total = self.sim.simtime_total
+
         time, tdict = state['time']['data']
-        curr = PhysicalField(time, tdict['unit']).inUnitsOf(self._sim.simtime_total.unit)
-        dt = int(curr.numericValue) - self._pbar.n  # in seconds
-        self._pbar.update(dt)
+        # curr = PhysicalField(time, tdict['unit']).inUnitsOf(simtime_total.unit)
+        curr = PhysicalField(time, tdict['unit']).inUnitsOf(self._clock_unit)
+        dt = curr - self._prev_t
+        dt_unitless = round((curr - self._prev_t).value, 2)
 
-        clock_info = '{0:.2f}/{1:.2f} {2}'.format(
-            float(curr.value),
-            float(self._sim.simtime_total.value),
-            self._sim.simtime_total.unit.name(),
-            )
+        # clock_info = '{0:.2f}/{1:.2f} {2}'.format(
+        #     float(curr.value),
+        #     float(simtime_total.value),
+        #     simtime_total.unit.name(),
+        # )
 
-        residual = state['metrics']['residuals']['data'][0]
-        sweeps = state['metrics']['sweeps']['data'][0]
-        # sweeps = state['metrics']['calc_times']['data'][0]
+        residual = state['metrics']['residual']['data'][0]
+        sweeps = state['metrics']['num_sweeps']['data'][0]
 
         self._pbar.set_postfix(
-            clock=clock_info,
-            dt=dt,
-            res=residual,
-            sweeps='{}/{:3.2f}'.format(sweeps, self._sim.sweeps_target)
+            # clock=clock_info,
+            dt=self.srepr(dt.inUnitsOf('s')),
+            res='{:.2g} / {:.2g}'.format(residual, self.sim.residual_target),
+            sweeps='{:02d}/{:3.2f}'.format(
+                sweeps,
+                self.sim.recent_sweeps,
+                # self.sim.max_sweeps
             )
+        )
+        self._pbar.update(round(dt_unitless, 2))
+        self._prev_t = curr
 
     def finish(self):
         self._pbar.close()

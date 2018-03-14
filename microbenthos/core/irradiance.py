@@ -5,7 +5,7 @@ from fipy.tools import numerix
 from scipy.stats import cosine
 
 from .entity import DomainEntity
-from ..utils.snapshotters import snapshot_var
+from ..utils.snapshotters import snapshot_var, restore_var
 
 
 class Irradiance(DomainEntity):
@@ -165,6 +165,13 @@ class Irradiance(DomainEntity):
             channels[ch] = chobj.snapshot(base=base)
 
         return state
+
+    def restore_from(self, state, tidx):
+        self.logger.debug('Restoring {} from state: {}'.format(self, tuple(state)))
+        self.check_domain()
+
+        for ch, chobj in self.channels.items():
+            chobj.restore_from(state['channels'][ch], tidx)
 
 
 class IrradianceChannel(DomainEntity):
@@ -367,3 +374,11 @@ class IrradianceChannel(DomainEntity):
         inten['data'] = snapshot_var(self.intensities, base=base)
 
         return state
+
+    def restore_from(self, state, tidx):
+        self.logger.debug('Restoring {} from state: {}'.format(self, tuple(state)))
+        self.check_domain()
+
+        self.intensities.setValue(restore_var(state['intensity'], tidx))
+        # cannot set attenuation as this is determined as a binary operation between other variables
+        # self.k_var.setValue(restore_var(state['attenuation'])[tidx])

@@ -470,30 +470,20 @@ simulation:
         type: physical_unit
         like_unit: 'h'
         min: 0
-        default: !unit 6 h
-
-    simtime_step:
-        type: physical_unit
-        like_unit: 's'
-        min: 0
-        default: !unit 30 s
+#        default: !unit 6 h
 
     simtime_days:
         type: float
         min: 0
         nullable: true
 
-    residual_target:
+    max_residual:
         type: float
-        max: 1e-8
-        default: 1e-12
+        min: 1.0e-50
+        max: 1.0e-3
+#        default: 1.0e-12
         coerce: float
 
-    residual_break:
-        type: float
-        min: 0
-        default: 1e-3
-        coerce: float
 
     simtime_lims:
         type: list
@@ -502,18 +492,15 @@ simulation:
               min: 0
             - type: float
 
-    simtime_adaptive:
-        type: boolean
-        default: true
-
     snapshot_interval:
         type: [integer, float, physical_unit]
+        default: 60
 
-    sweeps_target:
+    max_sweeps:
         type: integer
-        min: 3
-        max: 25
-        default: 5
+        min: 10
+        max: 1000
+        default: 50
 
     fipy_solver:
         type: string

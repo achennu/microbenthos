@@ -4,7 +4,7 @@ import logging
 from fipy import PhysicalField
 from fipy.tools import numerix
 
-from microbenthos.utils.snapshotters import snapshot_var
+from microbenthos.utils.snapshotters import snapshot_var, restore_var
 
 
 class Entity(object):
@@ -108,7 +108,8 @@ class Entity(object):
 
     def post_init(self, **kwargs):
         """
-        Hook to customize initialization of entity after construction by :meth:`.validate_dict`. This
+        Hook to customize initialization of entity after construction by :meth:`.validate_dict`.
+        This
         must be overriden by subclasses, to be useful.
 
         Args:
@@ -138,6 +139,23 @@ class Entity(object):
         raise NotImplementedError('Snapshot of entity {}'.format(self))
 
     __getstate__ = snapshot
+
+    def restore_from(self, state, tidx):
+        """
+        Restore the state from a saved one
+
+        tidx is the time index. If it is `None`, then it is set to `slice(None, None)` and the
+        entire time series is read out. Typically, it `tidx = -1`, to read out the values of only
+        the last time point.
+
+        The `state` dictionary must be of the structure:
+            * see subclasses
+
+        Raises:
+            ValueError: if the state restore does not succeed
+        """
+
+        raise NotImplementedError('Restore of entity {}'.format(self))
 
 
 class DomainEntity(Entity):
@@ -253,9 +271,8 @@ class Variable(DomainEntity):
         self.name = name
         self.var = None
 
-        self.create_params = create
-
-        self.check_create(**self.create_params)
+        self.create_params = self.check_create(**create)
+        self.logger.debug('{} saving create params {}'.format(self, self.create_params))
 
         self.constraints = constraints or dict()
         self.check_constraints(self.constraints)
@@ -276,11 +293,26 @@ class Variable(DomainEntity):
 
         from fipy import PhysicalField
         unit = params.get('unit')
+
         if unit:
             try:
                 p = PhysicalField(1, params['unit'])
+                base_units = p.inBaseUnits().unit.name()
+                params['unit'] = base_units
             except:
                 raise ValueError('{!r} is not a valid unit!'.format(params['unit']))
+
+        value = params.get('value')
+        if value is not None:
+            try:
+                v = value.inBaseUnits()
+                base_units = v.unit.name()
+                params['unit'] = base_units
+                params['value'] = v
+            except AttributeError:
+                pass
+
+        return params
 
     @staticmethod
     def check_constraints(constraints):
@@ -462,12 +494,16 @@ class Variable(DomainEntity):
                 try:
                     c = coeff.inUnitsOf(self.var.unit)
                 except TypeError:
-                    self.logger.error('Coeff {!r} not compatible with variable unit {!r}'.format(coeff, self.var.unit.name()))
+                    self.logger.error(
+                        'Coeff {!r} not compatible with variable unit {!r}'.format(coeff,
+                                                                                   self.var.unit.name()))
                     raise ValueError('Incompatible unit of coefficient')
 
-            self.logger.info('Seeding with profile normal loc: {} scale: {} coeff: {}'.format(loc_, scale_, coeff))
+            self.logger.info(
+                'Seeding with profile normal loc: {} scale: {} coeff: {}'.format(loc_, scale_,
+                                                                                 coeff))
 
-            normrv = norm(loc=loc_, scale=C**2*scale_)
+            normrv = norm(loc=loc_, scale=C ** 2 * scale_)
             val = coeff * normrv.pdf(self.domain.depths) * C * scale_
 
             self.var.value = val
@@ -545,7 +581,8 @@ class Variable(DomainEntity):
             else:
                 stop_ = stop
 
-            self.logger.info('Seeding with profile linear: start: {} stop: {}'.format(start_, stop_))
+            self.logger.info(
+                'Seeding with profile linear: start: {} stop: {}'.format(start_, stop_))
 
             val = numerix.linspace(start_, stop_, N)
             self.var.value = val
@@ -578,3 +615,26 @@ class Variable(DomainEntity):
             meta[key] = str(cval)
 
         return state
+
+    def restore_from(self, state, tidx):
+        """
+        Restore the state from a saved one
+
+        tidx is the time index
+
+        The `state` dictionary must be of the structure:
+            * `data`: (array, dict(unit=str))
+
+        Raises:
+            ValueError: if the state restore does not succeed
+        """
+        self.logger.debug('Restoring {} from state: {}'.format(self, tuple(state)))
+
+        self.check_domain()
+
+        try:
+            self.var.setValue(restore_var(state, tidx))
+            self.logger.debug('{} restored state'.format(self))
+        except:
+            self.logger.exception('Data restore failed')
+            raise ValueError('{}: restore of "data" failed!'.format(self))
