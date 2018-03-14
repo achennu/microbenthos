@@ -32,6 +32,27 @@ def _matplotlib_style_callback(ctx, param, value):
             'Plot style {!r} not in known: {}'.format(value, STYLES))
 
 
+def _matplotlib_writer_callback(ctx, param, value):
+    if not value:
+        return
+
+    try:
+        from matplotlib import animation
+        writers_available = animation.writers.list()
+    except ImportError:
+        click.secho(
+            'Feature not available. Install "matplotlib" package first.',
+            fg='red')
+        raise click.Abort()
+
+    if value in writers_available:
+        return value
+    else:
+        raise click.BadParameter('Animation writer {!r} not in available: {}'.format(
+            value, writers_available
+        ))
+
+
 def _fipy_solver_callback(ctx, param, value):
     if value:
         from microbenthos.model import Simulation
@@ -368,6 +389,8 @@ def export():
               is_flag=True)
 @click.option('--style', callback=_matplotlib_style_callback,
               help='Plot style name from matplotlib')
+@click.option('--writer', callback=_matplotlib_writer_callback,
+              help='Animation writer class to use', default='ffmpeg')
 @click.option('--figsize', callback=_figsize_callback,
               help='Figure size in inches (example: "9.6x5.4")')
 @click.option('--dpi', type=click.IntRange(100, 400),
