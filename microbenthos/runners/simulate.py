@@ -2,6 +2,7 @@ import contextlib
 import importlib
 import logging
 import os
+import warnings
 from collections import OrderedDict
 
 from ..exporters import BaseExporter
@@ -138,7 +139,7 @@ class SimulationRunner(object):
                 self.logger.error('Error creating output_dir')
                 raise
 
-    def setup_logfile(self, mode='w'):
+    def setup_logfile(self, mode='a'):
         """
         Setup log file in the output directory
         """
@@ -283,6 +284,8 @@ class SimulationRunner(object):
         for name, eqn in self.model.equations.items():
             self.logger.info('Equation {}: {!r}'.format(name, eqn.obj))
 
+        warnings.filterwarnings('ignore', category=RuntimeWarning, module='fipy')
+
         with self.exporters_activated():
             for step in self.simulation.evolution():
                 try:
@@ -310,3 +313,4 @@ class SimulationRunner(object):
                     break
 
         self.teardown_logfile()
+        warnings.resetwarnings()

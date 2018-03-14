@@ -489,7 +489,7 @@ simulation:
         type: list
         items:
             - type: float
-              min: 0.00001
+              min: 0
             - type: float
 
     snapshot_interval:
@@ -499,8 +499,8 @@ simulation:
     max_sweeps:
         type: integer
         min: 10
-        max: 50
-        default: 20
+        max: 1000
+        default: 50
 
     fipy_solver:
         type: string

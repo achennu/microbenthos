@@ -32,6 +32,27 @@ def _matplotlib_style_callback(ctx, param, value):
             'Plot style {!r} not in known: {}'.format(value, STYLES))
 
 
+def _matplotlib_writer_callback(ctx, param, value):
+    if not value:
+        return
+
+    try:
+        from matplotlib import animation
+        writers_available = animation.writers.list()
+    except ImportError:
+        click.secho(
+            'Feature not available. Install "matplotlib" package first.',
+            fg='red')
+        raise click.Abort()
+
+    if value in writers_available:
+        return value
+    else:
+        raise click.BadParameter('Animation writer {!r} not in available: {}'.format(
+            value, writers_available
+        ))
+
+
 def _fipy_solver_callback(ctx, param, value):
     if value:
         from microbenthos.model import Simulation
@@ -212,6 +233,8 @@ def cli_simulate(model_file, output_dir, export, overwrite, compression,
 
     click.echo('Loading model from {}'.format(model_file.name))
     defs = yaml.load(model_file)
+    if 'simulation' not in defs:
+        defs['simulation'] = {}
 
     data_outpath = os.path.join(output_dir, 'simulation_data.h5')
 
@@ -366,6 +389,8 @@ def export():
               is_flag=True)
 @click.option('--style', callback=_matplotlib_style_callback,
               help='Plot style name from matplotlib')
+@click.option('--writer', callback=_matplotlib_writer_callback,
+              help='Animation writer class to use', default='ffmpeg')
 @click.option('--figsize', callback=_figsize_callback,
               help='Figure size in inches (example: "9.6x5.4")')
 @click.option('--dpi', type=click.IntRange(100, 400),
@@ -390,9 +415,8 @@ def export_video(datafile, outfile, overwrite,
     """
 
     from matplotlib import animation
-
-    outfile = outfile or os.path.join(os.path.dirname(datafile),
-                                      'simulation.mp4')
+    dirname = os.path.dirname(datafile)
+    outfile = outfile or os.path.join(dirname, 'simulation.mp4')
 
     if not os.path.splitext(outfile)[1] == '.mp4':
         outfile += '.mp4'
@@ -433,7 +457,7 @@ def export_video(datafile, outfile, overwrite,
 
         with writer.saving(plot.fig, outfile, dpi=dpi):
 
-            for i in tqdm(range(len(dm.times))):
+            for i in tqdm(range(len(dm.times)), leave=False, desc=os.path.basename(dirname)):
                 plot.update_artists(tidx=i)
                 plot.draw()
                 writer.grab_frame()
