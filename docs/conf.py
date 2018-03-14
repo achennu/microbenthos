@@ -41,7 +41,7 @@ import microbenthos
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 extensions = ['sphinx.ext.autodoc', 'sphinx.ext.viewcode',
-              'sphinxcontrib.napoleon',
+              'sphinxcontrib.napoleon', 'sphinx.ext.todo',
               'sphinx.ext.intersphinx',
               ]
 
@@ -51,7 +51,7 @@ napoleon_numpy_docstring = False
 napoleon_include_init_with_doc = True
 napoleon_include_private_with_doc = True
 napoleon_include_special_with_doc = False
-napoleon_use_admonition_for_examples = True
+napoleon_use_admonition_for_examples = False
 napoleon_use_admonition_for_notes = True
 napoleon_use_admonition_for_references = False
 napoleon_use_ivar = True
@@ -220,6 +220,7 @@ intersphinx_mapping = {
     'numpy': ('http://docs.scipy.org/doc/numpy/', None),
     'scipy': ('http://docs.scipy.org/doc/scipy/reference/', None),
     'matplotlib': ('http://matplotlib.sourceforge.net/', None),
+    'h5py': ('http://docs.h5py.org/en/latest/', None),
     # 'fipy': ('https://www.ctcms.nist.gov/fipy/documentation', None),
 
     }

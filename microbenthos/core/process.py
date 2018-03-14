@@ -11,10 +11,16 @@ from ..utils import snapshot_var
 
 class Process(DomainEntity):
     """
-    Class to represent a reaction occurring in the model domain. It is used as an adapter to
-    interface the pure mathematical formulation in :class:`Expression` into the model equation
-    terms. Additionally, it responds to the simulation clock.
+    Class to represent a reaction occurring in the model domain.
+
+    It is used as an adapter to the symbolic formulation in :class:`Expression` into the model
+    equation terms. By calling :meth:`.evaluate` the symbolic expression, is cast into
+    :mod:`fipy` terms which can be used as :class:`fipy.SourceTerm` in the model. Additionally,
+    if :attr:`.implicit` is set, then the expression will attempted to be cast into a linear and
+    implicit source term which can help the speed of numerical approximation.
+
     """
+
     _lambdify_modules = (np, 'numpy')
 
     def __init__(self, expr,
@@ -22,20 +28,38 @@ class Process(DomainEntity):
                  implicit = True,
                  events = None,
                  **kwargs):
+        """
+        Initialize the process
+
+        Args:
+            expr (dict, :class:`Expression`): input for :attr:`.expr` of the process
+
+            params (dict): mapping of symbolic vars to numerical values uses in expression,
+                typically to represent process parameters or constants.
+
+            implicit (bool): Whether to cast the equation as implicit source term (default: True)
+
+            events (None, dict): definitions for :meth:`.add_event`
+
+        """
         self.logger = kwargs.get('logger') or logging.getLogger(__name__)
         self.logger.debug('Init in {}'.format(self.__class__.__name__))
         kwargs['logger'] = self.logger
         super(Process, self).__init__(**kwargs)
 
+        self._expr = None
         self.expr = expr
         assert isinstance(self.expr, Expression)
 
         params = params or {}
+        #: the container (dict) for the parameters uses to :meth:`.evaluate` the process
         self.params = dict(params)
         self.logger.debug('{}: stored params: {}'.format(self, self.params))
 
+        #: flag which controls if expression will be cast into linearized and implicit source terms
         self.implicit = implicit
 
+        #: container (dict) of :class:`ProcessEvent`
         self.events = {}
         if events:
             for name, eventdef in events.items():
@@ -43,6 +67,17 @@ class Process(DomainEntity):
 
     @property
     def expr(self):
+        """
+        The symbolic expression of the mathematical formulation
+
+        Args:
+            e (dict, :class:`Expression`): if a dict, then it is passed to
+                :meth:`Expression.__init__` with `name = self.name` to create the instance.
+
+        Returns:
+            :class:`Expression`
+
+        """
         return self._expr
 
     @expr.setter
@@ -58,21 +93,25 @@ class Process(DomainEntity):
 
     def evaluate(self, expr, params = None, domain = None):
         """
-        Evaluate the given expression on the supplied domain and param containers.
+        Evaluate the given sympy expression on the supplied domain and param containers.
 
-        If `domain` is not given, then the :attr:`.domain` is used. If `params` is not given,
-        then the :attr:`params` dict is used.
+        If `domain` is not given, then the :attr:`~DomainEntity.domain` is used. If `params` is not
+        given, then :attr:`.params` is used.
 
         The `expr` atoms are inspected, and all symbols collected. Symbols that are not found in
-        the `params` container, are set as variables to be sourced from the `domain` container.
+        the `params` container, are set as variables to be sourced from the `domain`  or
+        :attr:`.events` container.
+
+        The symbols from the expression are collected, the expression lambdified and then
+        evaluated using the objects sourced from the containers and events.
 
         Args:
-            expr (int, :class:`sp.Expr`): The expression to evaluate
+            expr (int, :class:`~sympy.core.expr.Expr`): The expression to evaluate
             params (dict, None): The parameter container
             domain (dict, None): The domain container for variables
 
         Returns:
-            The evaluated expression. This is typically an array or fipy binOp condition
+            evaluated result typically one of (:class:`fipy binOp`, :class:`numpy.ndarray`)
 
         """
         self.logger.debug('Evaluating expr {!r}'.format(expr))
@@ -124,14 +163,16 @@ class Process(DomainEntity):
 
     def as_source_for(self, varname, **kwargs):
         """
-        Cast the underlying :class:`Expression` as a source condition for the given variable name.
+        Cast the :attr:`.expr` as a source condition for the given variable name.
 
         If :attr:`.implicit` is True, then the expression will be differentiated (symbolically)
         with respect to variable `v` (from `varname`), and the source expression `S` will be
-        attempted to be split as `S1 = dS/dv` and `S0 = S - S1 * v`. If :attr:`.implicit` is
-        False, then returns `(S,0)`. This also turns out to be the case when the expression `S`
-        is linear with respect to the variable `v`. Finally `S0` and `S1` are evaluated and
-        returned.
+        attempted to be split as `S1 = dS/dv` and `S0 = S - S1 * v` (see `fipy docs`_).
+
+        If :attr:`.implicit` is False, then returns `(S,0)`. This also turns out to be the case
+        when the expression `S` is linear with respect to the variable `v`.
+
+        Finally `S0` and `S1` are evaluated and returned.
 
         Args:
             varname (str): The variable that the expression is a source for
@@ -140,8 +181,11 @@ class Process(DomainEntity):
 
         Returns:
             tuple: A `(varobj, S0, S1)` tuple, where `varobj` is the variable evaluated on the
-            domain, and `S0` and `S1` are the evaluated source expressions on the domain. If `S1`
-            is non-zero, then it indicates it should be cast as an implicit source.
+                domain, and `S0` and `S1` are the evaluated source expressions on the domain. If
+                `S1` is non-zero, then it indicates it should be cast as an implicit source.
+
+        .. _fipy docs: https://www.ctcms.nist.gov/fipy/examples/phase/generated/examples.phase
+            .simple.html
 
         """
         self.logger.debug('{}: creating as source for variable {!r}'.format(self, varname))
@@ -187,26 +231,40 @@ class Process(DomainEntity):
         return (varobj, S0term, S1term)
 
     def as_term(self, **kwargs):
+        """
+        Return the process as :mod:`fipy` term by calling :meth:`.evaluate`
+        """
         return self.evaluate(self.expr.expr(), **kwargs)
 
     def repr_pretty(self):
+        """
+        Return a pretty representation of the :attr:`.expr`.
+
+        See :func:`~sympy.printing.pretty.pretty.pretty`
+
+        """
         e = self.expr.expr()
         return sp.pretty(e)
 
     def snapshot(self, base = False):
         """
-        Returns a snapshot of the Process state
+        Returns a snapshot of the state with the structure
+
+            * "metadata"
+
+                * "expr" : str(`.expr.expr()`)
+
+                * "param_names": tuple(:attr:`.params`)
+
+                * name: str(p) for p in :attr:`.params`
+
+            * "data" : (:func:`.snapshot_var` of :meth:`.as_term`)
 
         Args:
             base (bool): Convert to base units?
 
         Returns:
-            Dictionary with structure:
-                * `metadata`:
-                    * `expr`: str(:attr:`.expr.expr()`)
-                    * `param_names`: tuple of :attr:`.param.keys()`
-                    * `params`: (name, val) of :attr:`.params`
-                * `data`: (array of :meth:`.evaluate()`, dict(unit=unit)
+            dict: the process state
 
         """
         self.check_domain()
@@ -221,33 +279,28 @@ class Process(DomainEntity):
 
         evaled = self.as_term()
 
-        if hasattr(evaled, 'unit'):
-            state['data'] = snapshot_var(evaled, base=base)
-
-        else:
-            state['data'] = snapshot_var(evaled, base=base)
+        state['data'] = snapshot_var(evaled, base=base)
 
         return state
 
     def restore_from(self, state, tidx):
+        """
+        Restore the process state. This is a no-op as the term of the process is symbolically
+        defined through :class:`fipy.binOp`.
+        """
         self.logger.debug('Restoring {} from state: {}'.format(self, tuple(state)))
         self.check_domain()
 
         # nothing to restore here since evaled = as_term() is a binary operator of other variables
         pass
 
-
-
     def add_event(self, name, **definition):
         """
-        Add an event to this process
-
-        Events are useful for tracking the last time at which a certain condition occurred in the
-        domain.
+        Add an event to this process through :class:`ProcessEvent`
 
         Args:
             name (str): Name for the event
-            definition (dict): Definition for the event
+            definition (dict): definition for the event
 
         Returns:
 
@@ -259,17 +312,25 @@ class Process(DomainEntity):
         self.logger.info('Added event: {}'.format(event))
 
     def setup(self, **kwargs):
+        """
+        Sets up any contained :attr:`.events`
+        """
         for event in self.events.values():
             event.setup(process=self, **kwargs)
 
     def on_time_updated(self, clocktime):
+        """
+        Updates any contained :attr:`.events`
+        """
         for event in self.events.values():
             event.on_time_updated(clocktime)
 
 
 class ProcessEvent(DomainEntity):
     """
-    Class that represents a temporal event in the domain.
+    Class that represents a temporal event in the domain. Events are useful for tracking the last
+    time at which a certain condition occurred in the domain.
+
 
     It is represented as a relational expression between different domain variables. When this
     relation is True, then the time of the event is considered active at that domain depth
@@ -285,7 +346,7 @@ class ProcessEvent(DomainEntity):
 
         Args:
             expr (dict, :class:`Expression`): The relational expression between domain variables
-            in symbolic form
+                in symbolic form
 
         Example:
             * "oxy >= OxyThreshold"
@@ -301,12 +362,15 @@ class ProcessEvent(DomainEntity):
 
         self.expr = expr
 
-        self.process = None
         #: The process that this event belongs to
+        self.process = None
+
+        #: The depth distribution of the time when the event condition was reached
         self.event_time = None
-        #: The depth distribution of when the event condition was reached
-        self.condition = None
+
         #: The event condition expressed through domain variables
+        self.condition = None
+
         self._prev_clock = None
 
     def __repr__(self):
@@ -321,6 +385,9 @@ class ProcessEvent(DomainEntity):
 
     @property
     def expr(self):
+        """
+        Similar to :attr:`Process.expr`
+        """
         return self._expr
 
     @expr.setter
@@ -362,9 +429,8 @@ class ProcessEvent(DomainEntity):
 
     def on_time_updated(self, clock):
         """
-        The event_time must be reset, wherever :attr:`condition` evaluates to False. Wherever it
-        evaluates to True, then increment the value by (clock-prev_clock).
-
+        The event_time must be reset, wherever :attr:`.condition` evaluates to False. Wherever it
+        evaluates to True, then increment the value by ``(clock - prev_clock)``.
         """
         self.logger.debug('Updating {} to clock {}'.format(self, clock))
         dt = clock.copy() - self._prev_clock

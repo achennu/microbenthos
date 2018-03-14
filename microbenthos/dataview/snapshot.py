@@ -7,6 +7,9 @@ from .base import ModelData
 
 
 class SnapshotModelData(ModelData):
+    """
+        Class that encapsulates the model data stored in snapshot :class:`dict`
+        """
     def check_store(self, obj):
         return isinstance(obj, Mapping)
 

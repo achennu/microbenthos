@@ -14,18 +14,23 @@ def save_snapshot(fpath, snapshot, compression = 6, shuffle = True):
     Save a snapshot dictionary of the model to a HDF file
 
     This method preserves the nested structure of the model snapshot. If the specified file path
-    already exists, then the snapshot data is appended to the nested
-    data structures within.
+    already exists, then the snapshot data is recursively appended to the nested
+    data structure within.
 
     The nested data structure has three keys with special meaning:
 
-        * `metadata`: The dictionary under this key will be saved as HDF attributes of the group
-        it is in.
-        * `data`: The value here is expected to be a tuple `(data_array, meta_dict)`, and is saved
-        as a HDF dataset with the attributes set from the `meta_dict`. This dataset will be
-        appended to if future snapshots are appended to the file.
-        * `data_static`: This is similar to the `data` case, except it is for data that does not
-        change during model evolution. So a fixed-size dataset called "data" is created here.
+    * `metadata`:
+        The dictionary under this key will be saved as HDF attributes of the group it is in.
+
+    * `data`:
+        The value here is expected to be a tuple `(data_array, meta_dict)`, and is saved
+        as a HDF dataset with the attributes set from the `meta_dict`. This dataset
+        will be appended to if future snapshots are appended to the file.
+
+    * `data_static`:
+        This is similar to the `data` case, except it is for data that does not change during
+        model evolution. So a fixed-size dataset called "data" is created here.
+
 
     Note:
          Due to the recursive traversal of the snapshot, no guarantees are made that the data

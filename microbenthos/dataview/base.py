@@ -7,7 +7,8 @@ from fipy.tools import numerix as np
 
 class ModelData(object):
     """
-    Class that encapsulates the model data from a simulation run
+    Abstract Base Class that encapsulates the model data from a simulation, and provides a uniform
+    interface to access elements in the nested hierarchy.
     """
 
     __metaclass__ = abc.ABCMeta
@@ -29,32 +30,32 @@ class ModelData(object):
         self.logger = logging.getLogger(__name__)
         self.logger.debug('{} initialized'.format(self.__class__.__name__))
 
-        self._store = None
         #: the root data store
-        self.times = None
+        self._store = None
         #: numerical array of the model clock times
-        self.depths = None
+        self.times = None
         #: numerical array of the domain depths
-        self.eqn_vars = set()
+        self.depths = None
         #: Set of data paths for equation variables
-        self.eqn_processes = set()
+        self.eqn_vars = set()
         #: Set of data paths for equation process expressions
-        self.eqn_source_totals = set()
+        self.eqn_processes = set()
         #: Set of data paths for equation source totals
-        self.eqn_var_actual = set()
+        self.eqn_source_totals = set()
         #: Set of data paths for equation var actual density
-        self.eqn_var_expected = set()
+        self.eqn_var_actual = set()
         #: Set of data paths for equation var expected density
-        self.eqn_var_difference = set()
+        self.eqn_var_expected = set()
         #: Set of data paths var (expected - actual)
-        self.microbe_features = set()
+        self.eqn_var_difference = set()
         #: set of data paths for microbial features
-        self.irradiance_intensities = set()
+        self.microbe_features = set()
         #: set of data paths for irradiance intensity channels
-        self.aliased_paths = dict()
+        self.irradiance_intensities = set()
         #: mapping of aliased to real path
-        self.derived_paths = dict()
+        self.aliased_paths = dict()
         #: mapping of derived paths to its inputs and processor
+        self.derived_paths = dict()
 
         self.tdim = 0
 
@@ -63,6 +64,9 @@ class ModelData(object):
 
     @property
     def store(self):
+        """
+        The backing data store
+        """
         return self._store
 
     @store.setter
@@ -110,7 +114,7 @@ class ModelData(object):
         Check if the given store is of the right type
 
         Returns:
-            True if a valid store obj
+            bool: True if a valid store obj
         """
 
     @abc.abstractmethod
@@ -159,7 +163,7 @@ class ModelData(object):
 
     def update_domain_info(self):
         """
-        Read in the domain info and create the attributes :attr:`.times` and :attr:`depths`.
+        Read in the domain info and create the attributes :attr:`.times` and :attr:`.depths`.
 
         """
 
@@ -181,8 +185,7 @@ class ModelData(object):
     def update_equations(self):
         """
         Update the information about the equation variables and sources in :attr:`.eqn_vars`,
-        :attr:`eqn_source_totals` and
-        :attr:`eqn_processes`.
+        :attr:`.eqn_source_totals` and :attr:`.eqn_processes`.
         """
         self.logger.debug('Updating equations')
         eqn_sources = set()
@@ -246,7 +249,6 @@ class ModelData(object):
                     return PhysicalField(0.0, '')
                 else:
                     return PhysicalField((a - b) / a, '')
-
 
             if difference not in self.derived_paths:
                 self.add_derived_data(difference,
@@ -328,7 +330,7 @@ class ModelData(object):
 
     def update_microbes(self):
         """
-        Update the microbial features from the model data into :attr:`microbes_features`
+        Update the microbial features from the model data into :attr:`.microbes_features`
         """
         self.logger.debug('Updating microbial features')
         microbes_features = set()

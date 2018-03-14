@@ -1,7 +1,3 @@
-"""
-Exporter that shows the  simulation progress bar on the console
-"""
-
 import logging
 
 import tqdm
@@ -11,11 +7,14 @@ from .exporter import BaseExporter
 
 
 class ProgressExporter(BaseExporter):
+    """
+    An exporter that displays a progress bar of a running simulation.
+    """
     _exports_ = 'progress'
     __version__ = '5.0'
     is_eager = True
 
-    def __init__(self, desc='evolution', position=None, **kwargs):
+    def __init__(self, desc = 'evolution', position = None, **kwargs):
         self.logger = kwargs.get('logger') or logging.getLogger(__name__)
         self.logger.debug('Init in {}'.format(self.__class__.__name__))
         kwargs['logger'] = self.logger
@@ -42,14 +41,20 @@ class ProgressExporter(BaseExporter):
             dynamic_ncols=True,
             position=self._position,
             initial=round(self._prev_t.value, 2),
-            leave=False,
-        )
+            leave=True,
+            )
 
-    def srepr(self, v, prec=2):
+    def srepr(self, v, prec = 2):
         unit = v.unit.name()
         return '{:.{}f} {}'.format(float(v.value), prec, unit)
 
     def process(self, num, state):
+        """
+        Write the progress information to the progress bar
+
+        This includes info about residual, duration (dt), and number of sweeps in the timestep
+        and the global progress through the model clock.
+        """
 
         time, tdict = state['time']['data']
         # curr = PhysicalField(time, tdict['unit']).inUnitsOf(simtime_total.unit)
@@ -74,8 +79,8 @@ class ProgressExporter(BaseExporter):
                 sweeps,
                 self.sim.recent_sweeps,
                 # self.sim.max_sweeps
+                )
             )
-        )
         self._pbar.update(round(dt_unitless, 2))
         self._prev_t = curr
 

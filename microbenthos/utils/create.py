@@ -10,21 +10,24 @@ class CreateMixin(object):
     @classmethod
     def create_from(cls, obj, **kwargs):
         """
-        Instantiate class from the given object
-
-        Various types of `obj` are handled:
-            * if obj is an instance of the cls, then it is returned
-            * if obj is a Mapping (like `dict`), then it is passed to :meth:`cls.validate_dict`
-            * if obj is a string, it is converted to stream-like and passed to :meth:`cls.validate_yaml`
-            * if obj is a stream, it is passed to :meth:`cls.validate_yaml`
+        Instantiate class from the given object, and if possible, save the definition that was
+        used to create the instance.
 
         Args:
-            obj (obj, dict, str, stream): The various inputsIf an object is supplied,
-            it is checked to
-            be an instance of
-            :class:`MicroBenthosModel`. If a dictionary is supplied then it is loaded with
-            :meth:`validate_dict`. If a stream is supplied, it is considered to be a path to the
-            model definition yaml file and is loaded with :meth:`validate_yaml`.
+            obj (object, dict, str, :class:`~io.IOBase`):
+                * :class:`object`: if an instance of the cls, then it is returned directly
+                * :class:`dict`: if a mapping, then it is passed to :func:`.validate_dict`
+                * str: if a string, it is converted to stream-like and passed to
+                  :func:`validate_yaml`
+                * :class:`io.IOBase`: if a stream, it is passed to :py:func:`validate_yaml`
+
+            **kwargs: passed to :meth:`validate_dict` or :meth:`validate_yaml` as necessary.
+
+        Attributes:
+            `definition_` : the validated definition used to create the instance
+
+        Returns:
+            instance of the class this is subclassed by
 
         """
         logger = logging.getLogger(__name__)

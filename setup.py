@@ -3,11 +3,17 @@
 
 from setuptools import setup
 
-with open('README.rst') as readme_file:
-    readme = readme_file.read()
+def get_description():
+    import os
+    CURR = os.path.dirname(__file__)
 
-with open('HISTORY.rst') as history_file:
-    history = history_file.read()
+    with open(os.path.join(CURR, 'README.rst')) as readme_file:
+        readme = readme_file.read()
+
+    with open(os.path.join(CURR, 'HISTORY.rst')) as history_file:
+        history = history_file.read()
+
+    return readme + '\n\n' + history
 
 requirements = [
     'click>=6.0',
@@ -32,7 +38,7 @@ setup(
     name='microbenthos',
     version='0.7.1',
     description="In silico microbenthic simulations for studies of biogeochemistry and microbial ecology",
-    long_description=readme + '\n\n' + history,
+    long_description=get_description(),
     author="Arjun Chennu",
     author_email='achennu@mpi-bremen.de',
     url='https://github.com/achennu/microbenthos',
