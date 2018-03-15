@@ -306,7 +306,7 @@ class SimulationRunner(object):
 
                         self.logger.info('Step #{}: Export done'.format(num))
                     else:
-                        self.logger.warning('Step #{}: Empty model state received!'.format(num))
+                        self.logger.warning('Empty model state received!')
 
                 except KeyboardInterrupt:
                     self.logger.error("Keyboard interrupt on simulation run!")

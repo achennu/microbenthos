@@ -1,5 +1,7 @@
 import logging
+import operator
 from collections import Mapping, namedtuple
+from functools import reduce
 
 import fipy.tools.numerix as np
 import h5py as hdf
@@ -322,7 +324,7 @@ class MicroBenthosModel(CreateMixin):
 
         def is_pair_tuple(obj):
             try:
-                path, coeff = obj
+                _, __ = obj
                 return True
             except:
                 return False
@@ -367,8 +369,6 @@ class MicroBenthosModel(CreateMixin):
             raise RuntimeError('No equations available for model!')
 
         self.logger.info('Creating full equation from {}'.format(self.equations.keys()))
-
-        import operator
 
         full_eqn = reduce(operator.and_, [eqn.obj for eqn in self.equations.values()])
         self.logger.info('Full model equation: {!r}'.format(full_eqn))
@@ -433,7 +433,6 @@ class MicroBenthosModel(CreateMixin):
         """
         clock = self.clock()
         self.logger.info('Updating entities for model clock: {}'.format(clock))
-
 
         for name, obj in self.env.items():
             obj.on_time_updated(clock)
@@ -542,6 +541,10 @@ class ModelEquation(object):
         self.sources_total = None
 
         self.diffusion_def = ()
+        """:type : (str, float)
+        
+        The model path to the diffussion coeff and a numeric coefficient to multiply in the equation
+        """
 
         self.obj = None
         self.finalized = False

@@ -1,7 +1,7 @@
 from collections import Mapping
 
-import numpy as np
 from fipy import PhysicalField
+from fipy.tools import numerix as np
 
 from .base import ModelData
 

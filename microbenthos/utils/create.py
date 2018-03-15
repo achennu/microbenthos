@@ -40,9 +40,9 @@ class CreateMixin(object):
         if isinstance(obj, Mapping):
             definition = validate_dict(obj, **kwargs)
 
-        elif isinstance(obj, basestring):
+        elif isinstance(obj, str):
             definition = validate_yaml(
-                io.StringIO(unicode(obj)), **kwargs)
+                io.StringIO(obj), **kwargs)
 
         elif isinstance(obj, (io.IOBase, file)):
             # a file-like object

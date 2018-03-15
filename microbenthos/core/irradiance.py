@@ -65,7 +65,7 @@ class Irradiance(DomainEntity):
         if self.surface_irrad is None:
             self.surface_irrad = Variable(name='irrad_surface', value=0.0, unit=None)
 
-        for channel in self.channels.itervalues():
+        for channel in self.channels.values():
             if not channel.has_domain:
                 channel.domain = self.domain
             channel.setup(model=model)
@@ -82,10 +82,11 @@ class Irradiance(DomainEntity):
 
         Args:
             name: The channel name
-            k0: The base attenuation for this channel through the sediment
-            k_mods: A list of (var, coeff) pairs to add attenuation sources to k0
+            k0 (int, `PhysicalField`): The base attenuation for this channel through the sediment
+            k_mods (list): A list of (var, coeff) pairs to add attenuation sources to k0
 
         Returns:
+            The created :class:`IrradianceChannel` instance
 
         """
         if name in self.channels:
@@ -127,7 +128,7 @@ class Irradiance(DomainEntity):
         self.logger.debug('Updated for time {} surface irradiance: {}'.format(clocktime,
                                                                               self.surface_irrad))
 
-        for channel in self.channels.itervalues():
+        for channel in self.channels.values():
             #: TODO: remove explicit calling by using Variable?
             channel.update_intensities(self.surface_irrad)
 

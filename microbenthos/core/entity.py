@@ -3,7 +3,6 @@ import logging
 
 from fipy import PhysicalField
 from fipy.tools import numerix
-
 from microbenthos.utils.snapshotters import snapshot_var, restore_var
 
 
@@ -536,13 +535,13 @@ class Variable(DomainEntity):
                     c = coeff.inUnitsOf(self.var.unit)
                 except TypeError:
                     self.logger.error(
-                        'Coeff {!r} not compatible with variable unit {!r}'.format(coeff,
-                                                                                   self.var.unit.name()))
+                        'Coeff {!r} not compatible with variable unit {!r}'.format(
+                            coeff, self.var.unit.name()))
                     raise ValueError('Incompatible unit of coefficient')
 
             self.logger.info(
-                'Seeding with profile lognormal loc: {} scale: {} coeff: {}'.format(loc_, scale_,
-                                                                                    coeff))
+                'Seeding with profile lognormal loc: {} scale: {} coeff: {}'.format(
+                    loc_, scale_, coeff))
 
             rv = lognorm(lognorm_shape, loc=loc_, scale=C ** 2 * scale_ / lognorm_shape)
             val = coeff * rv.pdf(self.domain.depths) * C * scale_

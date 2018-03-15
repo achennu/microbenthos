@@ -62,7 +62,7 @@ class Expression(object):
         self.logger.debug('Parsing formula: {}'.format(formula))
         expressions = []
 
-        if isinstance(formula, basestring):
+        if isinstance(formula, str):
             base = self._sympify(formula)
 
         elif isinstance(formula, Mapping):

@@ -195,13 +195,13 @@ class ModelData(object):
         eqns = self.store[self.ENTRY_EQUATIONS]
         for eqnname in eqns:
             self.logger.debug('Collecting equation vars & sources for {}'.format(eqnname))
-            eqndef = eqns[eqnname]
+
             transient = self.read_metadata_from('/'.join([
                 self.ENTRY_EQUATIONS,
                 eqnname,
                 'transient'
                 ]))
-            varname = transient.keys()[0]
+            varname = tuple(transient.keys())[0]
             varname = varname.replace('domain', 'env').replace('.', '/')
             eqn_vars.add(varname)
 

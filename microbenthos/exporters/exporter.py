@@ -76,7 +76,6 @@ class BaseExporter(object):
     @abc.abstractmethod
     def process(self, num, state):
         self.logger.debug('Processing step #{}'.format(num))
-        self._process(num, state)
 
     def get_info(self):
         return dict(exports=self._exports_, version=self.__version__, cls=self.__class__.__name__)

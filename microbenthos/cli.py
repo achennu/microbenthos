@@ -9,7 +9,7 @@ try:
 
     click_completion.init()
 except ImportError:
-    pass
+    click_completion = None
 
 
 def _matplotlib_style_callback(ctx, param, value):
@@ -132,6 +132,7 @@ def _simtime_total_callback(ctx, param, value):
               multiple=True, type=(str, click.IntRange(10, 40)))
 def cli(verbosity, logger):
     """Console entry point for microbenthos"""
+    loglevel = 0
     if verbosity:
         if verbosity == 1:
             loglevel = 40
@@ -426,9 +427,9 @@ def export_video(datafile, outfile, overwrite,
                       abort=True)
 
     try:
-        Writer = animation.writers['ffmpeg']
+        Writer = animation.writers[writer]
     except:
-        click.secho('Animation writer ffmpeg not available. Is it installed?',
+        click.secho('Animation writer {!r} not available. Is it installed?'.format(writer),
                     fg='red')
         click.Abort()
 

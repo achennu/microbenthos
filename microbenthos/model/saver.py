@@ -6,7 +6,7 @@ import logging
 from collections import Mapping
 
 import h5py as hdf
-import numpy as np
+from fipy.tools import numerix as np
 
 
 def save_snapshot(fpath, snapshot, compression = 6, shuffle = True):
@@ -113,7 +113,6 @@ def _save_nested_dict(D, root, **kwargs):
             logger.error('Error saving {} data {}: {}'.format(root, root['data'], dsdata.shape))
             raise
 
-
     stdata = D.pop('data_static', None)
     if stdata:
         try:
@@ -143,7 +142,7 @@ def _save_nested_dict(D, root, **kwargs):
 def _save_data(root, data, meta, name = 'data', **kwargs):
     if 'data' not in root:
         maxshape = (None,) + data.shape
-        chunks = (5,) + tuple([25 for s in range(len(data.shape))])
+        chunks = (5,) + tuple([25 for _ in range(len(data.shape))])
         ds = root.create_dataset(name,
                                  shape=(1,) + data.shape,
                                  maxshape=maxshape,

@@ -50,7 +50,6 @@ class ProgressExporter(BaseExporter):
         return '{:.{}f} {}'.format(float(v.value), prec, unit)
 
     def process(self, num, state):
-        simtime_total = self.sim.simtime_total
 
         time, tdict = state['time']['data']
         # curr = PhysicalField(time, tdict['unit']).inUnitsOf(simtime_total.unit)

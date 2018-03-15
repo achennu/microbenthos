@@ -67,7 +67,7 @@ class Process(DomainEntity):
         the `params` container, are set as variables to be sourced from the `domain` container.
 
         Args:
-            expr (:class:`sp.Expr`): The expression to evaluate
+            expr (int, :class:`sp.Expr`): The expression to evaluate
             params (dict, None): The parameter container
             domain (dict, None): The domain container for variables
 
