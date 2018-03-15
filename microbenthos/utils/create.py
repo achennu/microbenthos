@@ -7,6 +7,11 @@ from .loader import validate_yaml, validate_dict
 
 
 class CreateMixin(object):
+    """
+    A Mixin class that can create instances of classes defined in schema.yml, based on the
+    :attr:`.schema_key`. A variety of object types are handled in :meth:`.create_from`,
+    and the validated input is stored as :attr:`.definition_`
+    """
     @classmethod
     def create_from(cls, obj, **kwargs):
         """

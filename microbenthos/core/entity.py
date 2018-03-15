@@ -299,7 +299,7 @@ class Variable(DomainEntity):
 
     """
 
-    def __init__(self, name, create,
+    def __init__(self, create,
                  constraints = None,
                  seed = None,
                  clip_min = None,
@@ -323,7 +323,7 @@ class Variable(DomainEntity):
         kwargs['logger'] = self.logger
         super(Variable, self).__init__(**kwargs)
 
-        self.logger.debug('Init in DomainVariable for {!r}'.format(name))
+        self.logger.debug('Init in {} {!r}'.format(self.__class__.__name__, self.name))
 
         self.var = None
         """:type : :class:`fipy.CellVariable` 

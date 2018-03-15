@@ -222,6 +222,7 @@ intersphinx_mapping = {
     'matplotlib': ('http://matplotlib.sourceforge.net/', None),
     'h5py': ('http://docs.h5py.org/en/latest/', None),
     # 'fipy': ('https://www.ctcms.nist.gov/fipy/documentation', None),
+    'sympy': ('http://docs.sympy.org/latest/', None)
 
     }
 

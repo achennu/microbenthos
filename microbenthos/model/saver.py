@@ -19,36 +19,40 @@ def save_snapshot(fpath, snapshot, compression = 6, shuffle = True):
 
     The nested data structure has three keys with special meaning:
 
-    * `metadata`:
+    * ``"metadata"``
         The dictionary under this key will be saved as HDF attributes of the group it is in.
 
-    * `data`:
+    * ``"data"``
         The value here is expected to be a tuple `(data_array, meta_dict)`, and is saved
         as a HDF dataset with the attributes set from the `meta_dict`. This dataset
         will be appended to if future snapshots are appended to the file.
 
-    * `data_static`:
+    * ``"data_static"``
         This is similar to the `data` case, except it is for data that does not change during
         model evolution. So a fixed-size dataset called "data" is created here.
 
 
     Note:
          Due to the recursive traversal of the snapshot, no guarantees are made that the data
-         saving is done atomically for the dictionary. Also, nested snapshot dictionaries with
-         infinite self references in nodes will be problematic.
+         saving is done atomically for the dictionary. As far as possible, the file access is
+         brief and done under a closing context of :class:`h5py:File`.
+
+         Also, nested snapshot dictionaries with infinite self references in nodes will be
+         problematic.
 
     Args:
-        fpath (str): Path to the target HDF file
+        fpath (str): Path to the target HDF :class:`h5py:File`
+
         snapshot (dict): Nested snapshot dictionary
-        compression (int): The compression level 0-9 for the datasets (default: 6)
+
+        compression (int): The compression level 0-9 for the created :class:`h5py:Dataset`
+            (default: 6)
+
         shuffle (bool): Whether to use the shuffle filter
 
-    Returns:
-        None
-
     Raises:
-        TypeError if `snapshot` is not a suitable mapping type
-        ValueError if data saving fails
+        TypeError: if `snapshot` is not a suitable mapping type
+        ValueError: if saving fails due to incompatible data types
 
     """
     logger = logging.getLogger(__name__)
@@ -74,7 +78,7 @@ def _save_nested_dict(D, root, **kwargs):
 
     Args:
         D (dict): A possibly nested dictionary with special keys
-        root (hdf.Group): Reference to a HDF Group
+        root (:class:`h5py:Group`): Reference to a node within the state hierarchy
 
     """
     logger = logging.getLogger(__name__)
@@ -145,6 +149,10 @@ def _save_nested_dict(D, root, **kwargs):
 
 
 def _save_data(root, data, meta, name = 'data', **kwargs):
+    """
+    Commit the data to the `root` node under the given `name`, and resize the target
+    :class:`h5py:Dataset` accordingly. The dataset is created, if it doesn't exist.
+    """
     if 'data' not in root:
         maxshape = (None,) + data.shape
         chunks = (5,) + tuple([25 for _ in range(len(data.shape))])

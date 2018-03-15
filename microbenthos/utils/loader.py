@@ -12,6 +12,9 @@ from .yaml_setup import yaml
 # TODO: Allow equation with no diffusion term
 
 class MicroBenthosSchemaValidator(cerberus.Validator):
+    """
+    A :mod:`cereberus` validator for schema.yml in MicroBenthos
+    """
     logger = logging.getLogger(__name__)
     logger.addHandler(logging.NullHandler())
     logger.propagate = False
