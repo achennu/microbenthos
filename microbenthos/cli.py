@@ -406,7 +406,7 @@ def export():
               type=click.IntRange(800, 4000), default=1400)
 @click.option('--artist-tag', help='Artist tag in metadata')
 def export_video(datafile, outfile, overwrite,
-                 style, dpi, figsize,
+                 style, dpi, figsize, writer,
                  show, budget,
                  fps, bitrate, artist_tag,
                  ):
