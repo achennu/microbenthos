@@ -21,8 +21,8 @@ from .equation import ModelEquation
 
 class MicroBenthosModel(CreateMixin):
     """
-    The theater where all the actors of microbenthos come together to in a concerted interactive
-    play driven by the model clock. This is the class that encapsulates the nested
+    The theater where all the actors of microbenthos come together in a concerted
+    play driven by the clock. This is the class that encapsulates the nested
     structure and function of the various entities, variables, microbial groups and binds them
     with the domain.
     """

@@ -205,9 +205,12 @@ class SimulationRunner(object):
         Add an exporter to the simulation run
 
         Args:
-            obj: Object to create instance from. See :attr:`BaseExporter.create_from`
-            name (str): The name to set for the exporter. If None, then the
-            :attr:`BaseExporter._exports_` is used.
+            exptype (str): The type of exporter. This should match the :attr:`_exports_ on the
+                class of the exporter. (See :class:`~microbenthos.exporters.exporter.BaseExporter`)
+
+            name (str): The name to set for the exporter
+
+            **kwargs: passed to the init of the exporter class.
 
         Returns:
             The name of the exporter created

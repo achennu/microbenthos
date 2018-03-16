@@ -7,6 +7,6 @@ This is the complete class and function reference of :mod:`microbenthos`.
 Contents:
 
 .. toctree::
-   :maxdepth: 8
+   :maxdepth: 4
 
-   api/modules
+   api/microbenthos
