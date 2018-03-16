@@ -62,10 +62,13 @@ class GraphicExporter(BaseExporter):
         if self.write_video:
             Writer = animation.writers['ffmpeg']
 
-            self.writer = Writer(fps=15, bitrate=1800,
+            from datetime import datetime
+            year = datetime.today().year
+
+            self.writer = Writer(fps=10, bitrate=1400,
                                  metadata=dict(
-                                     artist='Microbenthos - Arjun Chennu',
-                                     copyright='2018')
+                                     artist='MicroBenthos',
+                                     copyright=str(year))
                                  )
             video_path = os.path.join(self.output_dir, self._video_filename)
             self.writer.setup(self.plot.fig, video_path, dpi=self.video_dpi)
