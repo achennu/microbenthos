@@ -238,8 +238,9 @@ class Simulation(CreateMixin):
             lmax = PhysicalField(240, 's')
         else:
             lmin, lmax = [PhysicalField(float(_), 's') for _ in vals]
-        assert 0 < lmin < lmax, 'simtime_lims ({}, {}) are not positive and in order'.format(
-            lmin, lmax)
+        if not (0 < lmin < lmax):
+            raise ValueError('simtime_lims ({}, {}) are not positive and in order'.format(
+            lmin, lmax))
         self._simtime_lims = (lmin, lmax)
         self.logger.debug('simtime_lims set: {}'.format(self._simtime_lims))
 
@@ -417,6 +418,9 @@ class Simulation(CreateMixin):
         if not self.started:
             raise RuntimeError('Simulation timestep cannot be run since started=False')
 
+        if self.model is None:
+            raise RuntimeError('Simulation model is None, cannot run timestep')
+
         dt = self.simtime_step
         self.logger.info('Running timestep {} + {}'.format(self.model.clock, dt))
 
@@ -433,11 +437,11 @@ class Simulation(CreateMixin):
             and retry:
 
             try:
-                num_sweeps += 1
                 res = EQN.sweep(
                     solver=self._solver,
                     dt=float(dt.numericValue)
                     )
+                num_sweeps += 1
                 res = float(res)
                 self.logger.debug('Sweeps: {}  residual: {:.2g}'.format(num_sweeps, res))
 
@@ -480,7 +484,7 @@ class Simulation(CreateMixin):
         ``model.clock() <= self.simtime_total``.
 
         This is a generator that yields the step number, and the state of the evolution after
-        each time step. If :meth:`export_due` is true, then also the model snapshot is included
+        each time step. If :meth:`snapshot_due` is true, then also the model snapshot is included
         in the state.
 
         Yields:
@@ -526,7 +530,7 @@ class Simulation(CreateMixin):
             self.logger.debug('Time step {} done in {:.2f} msec'.format(
                 self.simtime_step, calc_time))
 
-            if self.export_due():
+            if self.snapshot_due():
 
                 self.logger.debug('Snapshot in step #{}'.format(step))
 
@@ -539,7 +543,7 @@ class Simulation(CreateMixin):
 
                 yield (step, state)
 
-                # now set the prev_snapshot so that export_due() will remain true for processing
+                # now set the prev_snapshot so that snapshot_due() will remain true for processing
                 self._prev_snapshot.setValue(self.model.clock.copy())
                 self.logger.debug('Prev snapshot set: {}'.format(self._prev_snapshot))
 
@@ -556,12 +560,12 @@ class Simulation(CreateMixin):
 
             self.model.clock.increment_time(self.simtime_step)
 
-        state = self.get_state(
-            calc_time=calc_time,
-            residual=residual,
-            num_sweeps=num_sweeps
-            )
-        yield (step + 1, state)
+        # state = self.get_state(
+        #     calc_time=calc_time,
+        #     residual=residual,
+        #     num_sweeps=num_sweeps
+        #     )
+        # yield (step + 1, state)
 
         self.logger.info('Simulation evolution completed')
         self._started = False
@@ -603,7 +607,7 @@ class Simulation(CreateMixin):
         state['metrics'] = metrics
         return state
 
-    def export_due(self):
+    def snapshot_due(self):
         """
         Returns:
             bool: If the current model clock time has exceeded :attr:`.snapshot_interval` since

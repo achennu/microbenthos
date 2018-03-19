@@ -196,7 +196,7 @@ class SedimentDBLDomain(object):
 
         try:
             varr = numerix.ones(self.mesh.shape)
-            value *= varr
+            value = varr * value
         except TypeError:
             self.logger.error('Error creating variable', exc_info=True)
             raise ValueError('Value {} could not be cast numerically'.format(value))

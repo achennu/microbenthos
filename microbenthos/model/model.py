@@ -13,7 +13,6 @@ from sympy import Lambda, symbols
 sp.init_printing()
 
 from ..core import Entity, Expression, SedimentDBLDomain
-from ..core import Variable as mVariable
 from ..utils import snapshot_var, restore_var, CreateMixin
 from .resume import check_compatibility, truncate_model_data
 from .equation import ModelEquation
@@ -83,10 +82,13 @@ class MicroBenthosModel(CreateMixin):
 
         """
         self.logger.info('Adding formula {!r}: {}'.format(name, expr))
-
-        func = Lambda(symbols(vars), expr)
-        self.logger.debug('Formula {!r}: {}'.format(name, func))
-        Expression._sympy_ns[name] = func
+        try:
+            func = Lambda(symbols(vars), expr)
+            self.logger.debug('Formula {!r}: {}'.format(name, func))
+            Expression._sympy_ns[name] = func
+        except:
+            self.logger.exception('Invalid input for formula {}: vars={} expr={}'.format(name, vars, expr))
+            raise ValueError('Invalid input for formula')
 
     @property
     def domain(self):
@@ -155,6 +157,8 @@ class MicroBenthosModel(CreateMixin):
                 self.domain = Entity.from_dict(domain_def)
             elif isinstance(domain_def, SedimentDBLDomain):
                 self.domain = domain_def
+            else:
+                raise ValueError('Domain input {} of wrong type!'.format(type(domain_def)))
 
         # Load up the formula namespace
         if 'formulae' in definition:
@@ -231,7 +235,11 @@ class MicroBenthosModel(CreateMixin):
         self.logger.debug('Creating model snapshot')
         state = {}
         state['time'] = dict(data=snapshot_var(self.clock, base=base))
-        state['domain'] = self.domain.snapshot(base=base)
+        if self.domain:
+            domain = self.domain.snapshot(base=base)
+        else:
+            domain = {}
+        state['domain'] = domain
 
         env = state['env'] = {}
         for name, obj in self.env.items():
@@ -354,6 +362,7 @@ class MicroBenthosModel(CreateMixin):
 
         def is_pair_tuple(obj):
             try:
+                assert isinstance(obj, (tuple, list))
                 _, __ = obj
                 return True
             except:
@@ -436,7 +445,7 @@ class MicroBenthosModel(CreateMixin):
         parts = path.split('.')
 
         if len(parts) == 1:
-            raise ValueError('Path should dotted string, but got {!r}'.format(path))
+            raise TypeError('Path should dotted string, but got {!r}'.format(path))
 
         S = self
         for p in parts:
@@ -478,7 +487,7 @@ class MicroBenthosModel(CreateMixin):
         updated = []
         for name, obj in self.env.items():
             path = 'env.{}'.format(name)
-            if isinstance(obj, mVariable):
+            if hasattr(obj, 'var'):
                 try:
                     obj.var.updateOld()
                     self.logger.debug("Updated old: {}".format(path))
@@ -498,7 +507,7 @@ class MicroBenthosModel(CreateMixin):
         for name, microbe in self.microbes.items():
             for fname, feat in microbe.features.items():
                 path = 'microbes.{}.features.{}'.format(name, fname)
-                if isinstance(feat, mVariable):
+                if hasattr(feat, 'var'):
                     try:
                         feat.var.updateOld()
                         self.logger.debug("Updated old: {}".format(path))

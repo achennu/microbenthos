@@ -460,7 +460,7 @@ class SimulationRunner(object):
                     if step:
                         num, state = step
 
-                        export_due = self.simulation.export_due() or (num == 0)
+                        export_due = self.simulation.snapshot_due() or (num == 0)
                         self.logger.info('Step #{}: Exporting model state'.format(num))
 
                         for exporter in self.exporters.values():

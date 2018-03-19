@@ -1,5 +1,6 @@
 import pytest
 from fipy import PhysicalField
+
 from microbenthos import SedimentDBLDomain
 
 
@@ -96,7 +97,7 @@ class TestModelDomain:
             ('3.5', 'kg', ValueError),
             (PhysicalField(3, 'kg'), None, None),
             (PhysicalField(3, 'kg'), 'g', None)
-        ]
+            ]
         )
     def test_create_var(self, value, unit, err):
 
@@ -122,7 +123,8 @@ class TestModelDomain:
         statekeys = ('metadata', 'depths', 'distances')
         assert set(statekeys) == set(state)
 
-        metakeys = ('cell_size', 'sediment_length', 'DBL_length', 'sediment_cells', 'DBL_cells', 'sediment_porosity', 'idx_surface', 'total_cells', 'total_length')
+        metakeys = ('cell_size', 'sediment_length', 'DBL_length', 'sediment_cells', 'DBL_cells',
+                    'sediment_porosity', 'idx_surface', 'total_cells', 'total_length')
         assert set(state['metadata']) == set(metakeys)
 
         assert len(state['depths']['data_static'][0]) == len(domain.mesh.x())
