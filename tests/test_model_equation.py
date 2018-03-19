@@ -3,7 +3,7 @@ import pytest
 from fipy import CellVariable, PhysicalField
 
 from microbenthos import MicroBenthosModel
-from microbenthos.model.model import ModelEquation
+from microbenthos.model.equation import ModelEquation
 from microbenthos.utils import snapshotters
 
 

@@ -11,7 +11,7 @@ class ModelDataExporter(BaseExporter):
     """
     A 'stateless' exporter for model snapshot data into HDF file. The exporter only keeps the
     output path, and reopens the file for each snapshot. This ensures that each snapshot is
-    committed to disk, reducing risk of data corruption. It uses :func:`save_snapshot` internally.
+    committed to disk, reducing risk of data corruption. It uses :func:`.save_snapshot` internally.
     """
     _exports_ = 'model_data'
     __version__ = '2.1'
@@ -37,8 +37,11 @@ class ModelDataExporter(BaseExporter):
         Check that the output path can be created. Create the HDF file and
         add some metadata from the exporter.
 
-        Args:
-            sim: The Simulation object
+        If newly created, then the `state` is stored into the disk.
+
+        Warnings:
+            If the output file already exists on disk, then it is just appended to. So, care must
+            be taken by the caller that old files are removed, if so desired.
 
         """
         self.logger.debug('Preparing file for export')
@@ -57,15 +60,10 @@ class ModelDataExporter(BaseExporter):
 
     def process(self, num, state):
         """
-        Process the data to be exported
-
-        Args:
-            num (int): The step number of simulation evolution
-            state (dict): The model snapshot state
+        Append the `state` to the HDF store.
 
         """
         self.logger.debug('Processing export data for step #{}'.format(num))
         save_snapshot(self.outpath, snapshot=state,
                       compression=self._compression)
         self.logger.debug('Export data processed')
-

@@ -1,5 +1,5 @@
-Welcome to MicroBenthos's documentation!
-======================================
+MicroBenthos: in silico microbial geochemistry
+===============================================
 
 Contents:
 
@@ -9,8 +9,10 @@ Contents:
    readme
    installation
    usage
+   apimain
    contributing
-   authorshistory
+   authors
+   history
 
 Indices and tables
 ==================

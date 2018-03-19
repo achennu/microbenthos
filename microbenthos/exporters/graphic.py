@@ -10,9 +10,10 @@ from ..dataview import SnapshotModelData, ModelPlotter
 
 class GraphicExporter(BaseExporter):
     """
-    A 'stateless' exporter for model snapshot data into HDF file. The exporter only keeps the
-    output path, and reopens the file for each snapshot. This ensures that each snapshot is
-    committed to disk, reducing risk of data corruption. It uses :func:`save_snapshot` internally.
+    An exporter for model snapshot data into a graphical representation.
+
+    This can write out videos (with :attr:`write_video` = True) and image frames (with
+    :attr:`.write_frames` = True). This uses :mod:`matplotlib` to render the plots.
     """
     _exports_ = 'graphic'
     __version__ = '3.0'
@@ -44,11 +45,7 @@ class GraphicExporter(BaseExporter):
 
     def prepare(self, state):
         """
-        Prepare the graphic exporter. Primarily to show a live ticker plot of the simulation,
-        and optionally to write it into a video.
-
-        See: :meth:`BaseExporter.prepare`.
-
+        Prepare the :class:`.ModelPlotter` that will generate the plots for graphical export
         """
         self.logger.info('Preparing graphic exporter')
         self.mdata = SnapshotModelData()
@@ -65,10 +62,13 @@ class GraphicExporter(BaseExporter):
         if self.write_video:
             Writer = animation.writers['ffmpeg']
 
-            self.writer = Writer(fps=15, bitrate=1800,
+            from datetime import datetime
+            year = datetime.today().year
+
+            self.writer = Writer(fps=10, bitrate=1400,
                                  metadata=dict(
-                                     artist='Microbenthos - Arjun Chennu',
-                                     copyright='2018')
+                                     artist='MicroBenthos',
+                                     copyright=str(year))
                                  )
             video_path = os.path.join(self.output_dir, self._video_filename)
             self.writer.setup(self.plot.fig, video_path, dpi=self.video_dpi)
@@ -89,11 +89,7 @@ class GraphicExporter(BaseExporter):
 
     def process(self, num, state):
         """
-        Process the simulation step for graphical export
-
-        Args:
-            num (int): The step number
-            state (dict): The model snapshot
+        Update the model plotter and grab or write frames
         """
 
         self.logger.debug('Processing snapshot #{}'.format(num))
@@ -109,6 +105,9 @@ class GraphicExporter(BaseExporter):
             self.write_frame(state)
 
     def write_frame(self, state):
+        """
+        Save a frame into the output directory for the current state
+        """
         time, tdict = state['time']['data']
         clock = int(PhysicalField(time, tdict['unit']).numericValue)
         fname = 'frame_{:010d}.png'.format(clock)
@@ -118,7 +117,7 @@ class GraphicExporter(BaseExporter):
 
     def finish(self):
         """
-        Clean up exporter resources
+        Close the video writer and the model plotter.
         """
         if self.writer:
             self.logger.debug('Finishing writer')

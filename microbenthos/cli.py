@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
-
+"""
+The command line interface for :mod:`microbenthos`
+"""
 import os
 
 import click
@@ -9,7 +11,7 @@ try:
 
     click_completion.init()
 except ImportError:
-    pass
+    click_completion = None
 
 
 def _matplotlib_style_callback(ctx, param, value):
@@ -132,6 +134,7 @@ def _simtime_total_callback(ctx, param, value):
               multiple=True, type=(str, click.IntRange(10, 40)))
 def cli(verbosity, logger):
     """Console entry point for microbenthos"""
+    loglevel = 0
     if verbosity:
         if verbosity == 1:
             loglevel = 40
@@ -180,7 +183,7 @@ def setup_completion(shell, show_code):
 @click.option('-o', '--output-dir', type=click.Path(file_okay=False),
               default=os.getcwd(),
               help='Output directory for simulation')
-@click.option('-x', '--export', multiple=True,
+@click.option('-x', '--exporter', multiple=True,
               type=(str, str),
               help="Add an exporter to run. Form: -x <name> <export_type>")
 @click.option('-sTime', '--simtime_total', callback=_simtime_total_callback,
@@ -220,12 +223,12 @@ def setup_completion(shell, show_code):
 @click.option('-eqns', '--show-eqns', is_flag=True,
               help='Show equations that will be solved')
 @click.argument('model_file', type=click.File())
-def cli_simulate(model_file, output_dir, export, overwrite, compression,
+def cli_simulate(model_file, output_dir, exporter, overwrite, compression,
                  confirm, progress,
                  simtime_total, simtime_lims, max_sweeps, max_residual, fipy_solver,
                  plot, video, frames, budget, resume, show_eqns):
     """
-    Run simulation from model file
+    Run simulation from definition file
     """
 
     click.secho('Starting MicroBenthos simulation', fg='green')
@@ -235,39 +238,6 @@ def cli_simulate(model_file, output_dir, export, overwrite, compression,
     defs = yaml.load(model_file)
     if 'simulation' not in defs:
         defs['simulation'] = {}
-
-    data_outpath = os.path.join(output_dir, 'simulation_data.h5')
-
-    if resume == 0:
-        click.secho(
-            'Resume = 0 implies to restart simulation. Setting overwrite=True instead',
-            fg='yellow')
-        resume = None
-        overwrite = True
-
-    # both overwrite and resume cannot be true by the user
-    if os.path.exists(data_outpath):
-        if overwrite and resume is not None:
-            click.secho('Both overwrite and resume cannot be set', fg='red')
-            raise click.Abort()
-
-        if not confirm and (not resume) and (not overwrite):
-            click.secho(
-                'Ambiguous case with --no-confirm: file exists and neither --overwrite nor'
-                ' --resume were specified',
-                fg='red')
-            raise click.Abort()
-
-        else:
-            if resume:
-                overwrite = False
-            else:
-                click.confirm(
-                    'Overwrite existing file: {}?'.format(data_outpath),
-                    abort=True)
-                overwrite = True
-                click.secho('Deleting output path: {}'.format(data_outpath), fg='red')
-                os.remove(data_outpath)
 
     # we want to override the keys in the loaded simulation dictionary,
     # so that when it is created the definition stored on the instance and
@@ -289,89 +259,20 @@ def cli_simulate(model_file, output_dir, export, overwrite, compression,
     from microbenthos.runners import SimulationRunner
     runner = SimulationRunner(output_dir=output_dir,
                               model=defs['model'],
-                              simulation=defs['simulation'])
-    if resume:
+                              simulation=defs['simulation'],
+                              resume=resume,
+                              overwrite=overwrite,
+                              confirm=confirm,
+                              progress=progress,
+                              compression=compression,
+                              plot=plot,
+                              video=video,
+                              frames=frames,
+                              budget=budget,
+                              exporters=exporter,
+                              show_eqns=show_eqns)
 
-        import h5py as hdf
-        from fipy import PhysicalField
-
-        # open the store and read out the time info
-        with hdf.File(data_outpath, 'r') as store:
-            tds = store['/time/data']
-            nt = len(tds)
-            target_time = tds[resume]
-            latest_time = tds[-1]
-            time_unit = tds.attrs['unit']
-
-        target_time = PhysicalField(target_time, time_unit)
-        latest_time = PhysicalField(latest_time, time_unit)
-
-        click.secho(
-            '\n\nModel resume set: rewind from latest {} ({}) to {} ({})?'.format(
-                latest_time, nt,
-                target_time, resume
-            ), fg='red')
-
-        if confirm:
-            click.confirm('Rewinding model clock can lead to data loss! Continue?',
-                          default=False, abort=True)
-
-        try:
-            with hdf.File(data_outpath, 'a') as store:
-                runner.model.restore_from(store, time_idx=resume)
-            click.secho('Model restore successful. Clock = {}\n\n'.format(runner.model.clock),
-                        fg='green')
-            runner.simulation.simtime_step = 1
-            # set a small simtime to start
-        except:
-            click.secho('Simulation could not be restored from given data file!', fg='red')
-            raise  # click.Abort()
-
-    from microbenthos.utils import find_subclasses_recursive
-    from microbenthos.exporters import BaseExporter
-
-    _exporters = {e._exports_: e for e in
-                  find_subclasses_recursive(BaseExporter)}
-
-    runner._exporter_classes = _exporters
-
-    runner.add_exporter('model_data', compression=compression,
-                        overwrite=overwrite)
-
-    if progress:
-        runner.add_exporter('progress')
-
-    if plot or video or frames:
-        runner.add_exporter('graphic', write_video=video, show=plot,
-                            track_budget=budget, write_frames=frames)
-        if resume and video:
-            click.secho('Video will begin from this simulation run, since resume is set!',
-                        fg='yellow')
-
-    for name, exptype in export:
-        runner.add_exporter(exptype=exptype, name=name)
-
-    if show_eqns:
-        click.secho('Solving the equation(s):', fg='green')
-        for neqn, eqn in runner.model.equations.items():
-            click.secho(eqn.as_pretty_string(), fg='green')
-
-    click.secho(
-        'Simulation setup: solver={0.fipy_solver} '
-        'max_sweeps={0.max_sweeps} max_residual={0.residual_target} '
-        'timestep_lims=({1}, {2})'.format(
-            runner.simulation, *runner.simulation.simtime_lims),
-        fg='yellow')
-    click.secho('Simulation clock at {}. Run till {}'.format(runner.model.clock,
-                                                             runner.simulation.simtime_total),
-                fg='yellow')
-    if confirm:
-        click.confirm('Proceed with simulation run?',
-                      default=True, abort=True)
-
-    click.secho('Starting simulation...', fg='green')
     runner.run()
-    click.secho('Simulation done.', fg='green')
 
 
 @cli.group('export')
@@ -406,7 +307,7 @@ def export():
               type=click.IntRange(800, 4000), default=1400)
 @click.option('--artist-tag', help='Artist tag in metadata')
 def export_video(datafile, outfile, overwrite,
-                 style, dpi, figsize,
+                 style, dpi, figsize, writer,
                  show, budget,
                  fps, bitrate, artist_tag,
                  ):
@@ -426,13 +327,13 @@ def export_video(datafile, outfile, overwrite,
                       abort=True)
 
     try:
-        Writer = animation.writers['ffmpeg']
+        Writer = animation.writers[writer]
     except:
-        click.secho('Animation writer ffmpeg not available. Is it installed?',
+        click.secho('Animation writer {!r} not available. Is it installed?'.format(writer),
                     fg='red')
         click.Abort()
 
-    artist_tag = artist_tag or 'MicroBenthos - Arjun Chennu'
+    artist_tag = artist_tag or 'MicroBenthos'
     from datetime import datetime
     year = datetime.today().year
 

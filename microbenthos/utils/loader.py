@@ -12,6 +12,9 @@ from .yaml_setup import yaml
 # TODO: Allow equation with no diffusion term
 
 class MicroBenthosSchemaValidator(cerberus.Validator):
+    """
+    A :mod:`cereberus` validator for schema.yml in MicroBenthos
+    """
     logger = logging.getLogger(__name__)
     logger.addHandler(logging.NullHandler())
     logger.propagate = False
@@ -39,7 +42,7 @@ class MicroBenthosSchemaValidator(cerberus.Validator):
         """
         self.logger.debug('Validating importpath: {}'.format(value))
         try:
-            a, b = value.rsplit('.', 1)
+            _, __ = value.rsplit('.', 1)
             return True
         except ValueError:
             return not value.startswith('.')
@@ -66,7 +69,7 @@ class MicroBenthosSchemaValidator(cerberus.Validator):
         try:
             PhysicalField(1, value)
             return True
-        except:
+        except TypeError:
             return False
 
     def _validate_like_unit(self, unit, field, value):
@@ -98,7 +101,7 @@ class MicroBenthosSchemaValidator(cerberus.Validator):
         A string that can be run through sympify
         """
         self.logger.debug('Validating sympifyable: {}'.format(value))
-        if not isinstance(value, (basestring, int, float)):
+        if not isinstance(value, (str, int, float)):
             return False
         try:
             e = sympify(value)

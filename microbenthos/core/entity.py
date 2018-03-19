@@ -3,11 +3,23 @@ import logging
 
 from fipy import PhysicalField
 from fipy.tools import numerix
-
 from microbenthos.utils.snapshotters import snapshot_var, restore_var
 
 
+# Todo: refactor :meth:`DomainEntity.set_domain` out of API
+
 class Entity(object):
+    """
+    A base class to represent a model entity.
+
+    It defines the interface for subclasses for:
+
+        * Creation of instances through :meth:`from_params` and :meth:`from_dict`
+        * Response to model clock through :meth:`on_time_updated`
+        * (de-)serialization of state through :meth:`snapshot` and :meth:`restore_from`
+
+    """
+
     def __init__(self, name = None, logger = None):
 
         if not logger:
@@ -16,6 +28,7 @@ class Entity(object):
         else:
             self.logger = logger
 
+        #: The name of the entity
         self.name = name or 'unnamed'
 
     def __repr__(self):
@@ -26,20 +39,28 @@ class Entity(object):
     @classmethod
     def from_params(cls_, cls, init_params, post_params = None):
         """
-        Create entity instance from supplied CLS path and init parameters
+        Create entity instance from the given parameters.
 
-        CLS is a string such as `Irradiance` or `microbenthos.Process` or `sympy.Lambda`
+        The `cls` path is a string that specificies a class definition to be imported,
+        and initialized with the given parameters. As a result, the returned instance need not be
+        that of the calling class.
 
         Args:
             cls (str): The qualified `module.class_name`. If no `module` is in the string,
-            then it is assummed to be `"microbenthos"`
+                then it is assumed to be "microbenthos".
 
-            init_params (dict): Dictionary of params to supply to the class __init__
+            init_params (dict): Params to supply to the __init__ of the target class
 
             post_params (dict): Dictionary of params for :meth:`post_init` if available
 
         Returns:
             Instance of the entity
+
+        Examples:
+
+            >>> Entity.from_params(cls="Irradiance", ...)
+            >>> Entity.from_params(cls="microbenthos.Process", ...)
+            >>> Entity.from_params(cls="sympy.Lambda", ...)
 
         """
         logger = logging.getLogger(__name__)
@@ -75,23 +96,17 @@ class Entity(object):
     @classmethod
     def from_dict(cls, cdict):
         """
-        Create the entity instance from a supplied dictionary of parameters.
+        Pre-processor for :meth:`from_params` that extracts and sends the keys `"cls"`,
+        `"init_params"` and `"post_params"`.
 
         Args:
-            cdict: This dictionary must contain a key `cls` which contains the import path to the
-            class (example: `"microbenthos.irradiance.Irradiance"`, and a key `init_params` whose
-            value
-            will be passed to the constructor of the class. The rest of the dictionary (except
-            `cls`) will be
-            passed to :meth:`.post_init` to allow subclasses to finish setup.
+            cdict (dict): parameters for :meth:`from_params`
 
         Returns:
-            New instance of the entity
+            Instance of the entity created
 
         Raises:
-              KeyError: If the `cls` key is missing
-              ValueError: If the cls is not a valid module path
-              TypeError: If the class cannot be imported
+            KeyError: If the `cls` key is missing in `cdict`
         """
 
         try:
@@ -108,33 +123,38 @@ class Entity(object):
 
     def post_init(self, **kwargs):
         """
-        Hook to customize initialization of entity after construction by :meth:`.validate_dict`.
-        This
-        must be overriden by subclasses, to be useful.
+        Hook to customize initialization of entity after construction by :meth:`.from_params`.
+
+        This must be overriden by subclasses to be useful.
 
         Args:
-            **kwargs:
+            **kwargs: arbitrary parameters for :meth:`post_init`
 
         Returns:
             None
+
         """
         # self.logger.debug('Empty post_init on {}'.format(self))
 
     def on_time_updated(self, clocktime):
         """
-        Method which should update the entity features for the simulation clock
+        Hook to respond to the model clock changing.
 
-        :param float clocktime: The simulation time (units depends on the solver setup)
+        This must be overridden by subclasses to be useful.
+
+        Args:
+            clocktime (float, PhysicalField): The model clock time.
         """
         self.logger.debug('Updating {} for clock {}'.format(self, clocktime))
 
     def snapshot(self):
         """
-        Returns a snapshot of the entity's state
+        Returns a snapshot of the entity's state which will be a node in the nested structure to
+        be consumed by :func:`~microbenthos.model.saver.save_snapshot`.
 
         Returns:
-            Dictionary with keys: `data`, `metadata, where the value of each `data` entry is
-            either another such dictionary or a numeric array
+            dict: a representation of the state of the entity
+
         """
         raise NotImplementedError('Snapshot of entity {}'.format(self))
 
@@ -142,14 +162,13 @@ class Entity(object):
 
     def restore_from(self, state, tidx):
         """
-        Restore the state from a saved one
+        Restore the entity from a saved state
 
         tidx is the time index. If it is `None`, then it is set to `slice(None, None)` and the
-        entire time series is read out. Typically, it `tidx = -1`, to read out the values of only
+        entire time series is read out. Typically, `tidx = -1`, to read out the values of only
         the last time point.
 
-        The `state` dictionary must be of the structure:
-            * see subclasses
+        The `state` dictionary must be of the structure as defined in :meth:`.snapshot`.
 
         Raises:
             ValueError: if the state restore does not succeed
@@ -160,10 +179,16 @@ class Entity(object):
 
 class DomainEntity(Entity):
     """
-    A base class that represents entities in the microbenthic env. This can be used to
-    subclass microbial groups, chemical reactions, or other parameters. The class provides a
-    uniform interface to add the entity to the simulation domain and setup parameters and update
-    according to the simulation clock.
+    An :class:`Entity` that is aware of the model domain (see :mod:`~microbenthos.core.domain`),
+    and serves as the base class for :class:`~microbenthos.core.MicrobialGroup`,
+    :class:`~microbenthos.irradiance.Irradiance`, :class:`Variable`, etc.
+
+    This class defines the interface to:
+
+        * register the entity with the model domain (see :meth:`set_domain` and :attr:`domain`)
+        * check that entity :meth:`has_domain`
+        * respond to event :meth:`on_domain_set`
+        * :meth:`setup` the entity for the simulation
     """
 
     def __init__(self, **kwargs):
@@ -174,15 +199,13 @@ class DomainEntity(Entity):
     @property
     def domain(self):
         """
-        Set the domain for the entity
+        The domain for the entity
 
         Args:
-             domain: An instance of :class:`SedimentDBLDomain`
+             domain: An instance of :class:`SedimentDBLDomain` or similar
 
         Raises:
             RuntimeError: if domain is already set
-            TypeError: if domain is of wrong type
-
         """
         return self._domain
 
@@ -200,16 +223,34 @@ class DomainEntity(Entity):
         self.on_domain_set()
 
     def set_domain(self, domain):
+        """
+        Silly method that just does ``self.domain = domain``. Will likely be removed in a future
+        version.
+        """
         self.domain = domain
         self.logger.debug('{} domain set: {}'.format(self, domain))
 
     def check_domain(self):
+        """
+        A stricter version of :attr:`has_domain`
+
+        Returns:
+            ``True``: if :attr:`.domain` is not None
+
+        Raises:
+            RuntimeError: if :attr:`has_domain` is False
+
+        """
         if not self.has_domain:
             raise RuntimeError('Domain required for setup of {}'.format(self))
         return True
 
     @property
     def has_domain(self):
+        """
+        Returns:
+            ``True`` if :attr:`.domain` is not None
+        """
         return self.domain is not None
 
     def on_domain_set(self):
@@ -242,11 +283,23 @@ class DomainEntity(Entity):
 
 class Variable(DomainEntity):
     """
-    A helper class to represent a variable for the model domain, which can create the variable,
-    apply boundary conditions.
+    A class to represent a variable on the model domain.
+
+    This class serves as means for defining features such as environmental variables, chemical
+    analytes or microbiological features (biomass). The class allows defining the variable but
+    deferring the initialization of the associated :class:`CellVariable` until the domain is
+    available.
+
+    The interface defined allows to:
+
+        * set boundary condition to :meth:`.constrain` the values
+        * :meth:`.seed` the variable values
+        * create a :meth:`.snapshot` of the state and :meth:`restore_from` it
+        * set :attr:`.clip_min` and :attr:`.clip_max` limits on the values
+
     """
 
-    def __init__(self, name, create,
+    def __init__(self, create,
                  constraints = None,
                  seed = None,
                  clip_min = None,
@@ -257,28 +310,42 @@ class Variable(DomainEntity):
 
         Args:
             name (str): The name of the variable
+
             create (dict): parameters for variable creation (see :meth:`.create`)
+
             constraints (dict): Mapping of `location` to value of boundary condition
-            through :meth:`.constrain`.
+                through :meth:`.constrain`
+
             seed (dict): parameters to seed initial value of variable
-            **kwargs:
+
         """
         self.logger = kwargs.get('logger') or logging.getLogger(__name__)
         kwargs['logger'] = self.logger
         super(Variable, self).__init__(**kwargs)
 
-        self.logger.debug('Init in DomainVariable for {!r}'.format(name))
-        self.name = name
+        self.logger.debug('Init in {} {!r}'.format(self.__class__.__name__, self.name))
+
         self.var = None
+        """:type : :class:`fipy.CellVariable` 
+        
+        Object created on domain.mesh"""
 
         self.create_params = self.check_create(**create)
+        """:type : dict
+        
+        Validated dict of params for creation of variable"""
+
         self.logger.debug('{} saving create params {}'.format(self, self.create_params))
 
+        #: mapping of domain location to values for boundary conditions (see :meth:`constrain`)
         self.constraints = constraints or dict()
         self.check_constraints(self.constraints)
 
         self.seed_params = seed or dict()
+
+        #: the min value to which the variable array is clipped
         self.clip_min = clip_min
+        #: the max value to which the variable array is clipped
         self.clip_max = clip_max
 
     def __repr__(self):
@@ -286,6 +353,34 @@ class Variable(DomainEntity):
 
     @staticmethod
     def check_create(**params):
+        """
+        Check that the given `params` are valid for creating the variable once the domain is
+        available
+
+        Args:
+            name (str): a required identifier string
+
+            unit (str): a string like ("kg/m**3") that defines the physical units of the variable
+
+            value (float, :class:`~numpy.ndarray`, :class:`~fipy.PhysicalField`): the value to set
+                for the variable. If a :class:`PhysicalField` is supplied, then its (base) unit is
+                used as `unit` and overrides any supplied `unit`.
+
+        Returns:
+            dict: the params dictionary to be used
+
+        Raises:
+            ValueError: if no `name` is supplied
+
+            ValueError: if `unit` is not a valid input for :class:`PhysicalField`
+
+
+        Note:
+            Due to limitation in :mod:`fipy` (v3.1.3) that meshes do not accept arrays
+            :class:`PhysicalField` as inputs, the variables defined here are cast into base units
+            since the domain mesh is created in meters.
+
+        """
 
         name = params.get('name')
         if name:
@@ -351,11 +446,22 @@ class Variable(DomainEntity):
 
     def setup(self, **kwargs):
         """
-        Once a domain is available, create the variable with the requested parameters and apply
-        any constraints.
+        Once a domain is available, :meth:`.create` the variable with the requested parameters and
+        apply any constraints.
 
-        Returns:
-            Instance of the variable created
+        Constraints are specified as:
+
+            * ``"top"`` : ``domain.mesh.facesLeft``
+            * ``"bottom"`` : ``domain.mesh.facesRight``
+            * ``"dbl"`` : ``slice(0, domain.idx_surface)``
+            * ``"sediment:`` : ``slice(domain.idx_surface, None)``
+
+        Note:
+            The constraints "dbl" and "sediment" are not yet tested to work with fipy
+            equations. It is likely that this formulation may not work correctly.
+
+            Specifying both "top" and "dbl" or "bottom" and "sediment" does not currently raise
+            an error, but instead warning messages are logged.
 
         """
 
@@ -385,20 +491,24 @@ class Variable(DomainEntity):
 
     def create(self, value, unit = None, hasOld = False, **kwargs):
         """
-        Create a :class:`~fipy.Variable` on the domain.
+        Create a :class:`~fipy.CellVariable` by calling :meth:`.domain.create_var`.
 
         Args:
             value (int, float, array, PhysicalField): the value for the array
+
             unit (str): physical units string for the variable. Is overridden if `value` is a
-            `PhysicalField`.
-            hasOld (bool): flag to indicate how variable values are updated
+                `PhysicalField`.
+
+            hasOld (bool): flag to indicate that the variable should store the older value
+                separately (see :class:`fipy.CellVariable`).
 
         Returns:
             instance of the variable created
 
         Raises:
             RuntimeError: if a domain variable with `name` already exists, or no mesh exists on
-            the domain.
+                the domain.
+
             ValueError: if value.shape is not 1 or the domain shape
 
         """
@@ -414,17 +524,21 @@ class Variable(DomainEntity):
         Constrain the variable at the given location to the given value
 
         Args:
-            loc (str): One of `("top", "bottom", "dbl", "sediment")
-            value (numeric): a numeric value for the constraint, such as a number of a
-            `PhysicalField`
+            loc (str): One of ``("top", "bottom", "dbl", "sediment")``
+
+            value (float, :class:`PhysicalField`): a numeric value for the constraint
 
         Returns:
             None
 
         Raises:
-            ValueError for improper values for `loc`
-            ValueError if value is not a 0-dimension array
-            RuntimeError if variable doesn't exist
+            TypeError: if the units for `value` are incompatible with :attr:`.var` units
+
+            ValueError: for improper values for `loc`
+
+            ValueError: if value is not a 0-dimension array
+
+            RuntimeError: if variable doesn't exist
 
         """
         if self.var is None:
@@ -458,12 +572,37 @@ class Variable(DomainEntity):
         """
         Seed the value of the variable based on the profile and parameters
 
+        Available profiles are:
+
+            * "normal"
+                * normal distribution of values from :data:`scipy.stats.norm`
+                * `loc` and `scale` in units compatible with domain mesh
+                * `coeff` to multiply the distribution with, in units compatible with that of
+                  :attr:`.var`
+                * the normal distribution is created to have unit height for different `loc` and
+                  `scale` values
+
+            * "linear"
+                * uses :func:`~numpy.linspace` to fill the first dimension of :attr:`.var`
+                * `start`: the start value given, else taken from constraint "top"
+                * `stop`: the stop value given, else taken from constraint "bottom"
+
+            * "lognormal"
+                * lognormal distributuion from :data:`scipy.stats.lognorm`
+                * `loc` and `scale` should be in units compatible with domain mesh
+                * `shape` for lognorm is hard-coded to 1.25
+
         Args:
             profile (str): The type of profile to use
             **kwargs: Parmeters for the profile
 
         Returns:
             None
+
+        Raises:
+            ValueError: if incompatible units encountered
+
+
         """
         PROFILES = ('linear', 'normal', 'lognormal')
 
@@ -536,13 +675,13 @@ class Variable(DomainEntity):
                     c = coeff.inUnitsOf(self.var.unit)
                 except TypeError:
                     self.logger.error(
-                        'Coeff {!r} not compatible with variable unit {!r}'.format(coeff,
-                                                                                   self.var.unit.name()))
+                        'Coeff {!r} not compatible with variable unit {!r}'.format(
+                            coeff, self.var.unit.name()))
                     raise ValueError('Incompatible unit of coefficient')
 
             self.logger.info(
-                'Seeding with profile lognormal loc: {} scale: {} coeff: {}'.format(loc_, scale_,
-                                                                                    coeff))
+                'Seeding with profile lognormal loc: {} scale: {} coeff: {}'.format(
+                    loc_, scale_, coeff))
 
             rv = lognorm(lognorm_shape, loc=loc_, scale=C ** 2 * scale_ / lognorm_shape)
             val = coeff * rv.pdf(self.domain.depths) * C * scale_
@@ -591,15 +730,20 @@ class Variable(DomainEntity):
 
     def snapshot(self, base = False):
         """
-        Returns a snapshot of the variable's state
+        Returns a snapshot of the variable's state, with the following structure:
+
+            * data:
+                * (:attr:`.var`, `dict(unit=:meth:`.var.unit.name()`)
+
+            * metadata
+                * constraint_<name>: constraint_value (in :attr:`.constraints`)
 
         Args:
             base (bool): Convert to base units?
 
         Returns:
-            Dictionary with keys:
-            * `data`: (numeric array, dict(unit))
-            *`metadata`: dict with variable info: constraints
+            dict: the variable state
+
         """
         self.logger.debug('Snapshot: {}'.format(self))
 
@@ -618,9 +762,13 @@ class Variable(DomainEntity):
 
     def restore_from(self, state, tidx):
         """
-        Restore the state from a saved one
+        Restore the variable from a saved state
 
-        tidx is the time index
+        It sets the value of the :attr:`.var` to that stored in the `state`.
+
+        Args:
+            state (dict): the saved state
+            tidx (int, None): passed to :func:`.restore_var`
 
         The `state` dictionary must be of the structure:
             * `data`: (array, dict(unit=str))
