@@ -66,8 +66,12 @@ class SimulationRunner(object):
             click.secho(
                 'Resume = 0 implies to restart simulation. Setting overwrite=True instead',
                 fg='yellow')
-            resume = None
+            resume = False
             overwrite = True
+
+        if resume is True:
+            resume = -1
+            overwrite = False
 
         self.resume = resume
         self.overwrite = overwrite
@@ -161,6 +165,9 @@ class SimulationRunner(object):
                     click.secho('Deleting output path: {}'.format(self.data_outpath), fg='red')
                     os.remove(self.data_outpath)
 
+        else:
+            self._create_output_dir()
+
     @property
     def model(self):
         """
@@ -253,7 +260,12 @@ class SimulationRunner(object):
                 'resume={}, so will not resume from existing file'.format(self.resume))
             return
 
+        if not os.path.exists(self.data_outpath):
+            self.logger.debug('Outpath does not exist, cannot resume...')
+            return
+
         from fipy import PhysicalField
+        import h5py as hdf
 
         # open the store and read out the time info
         with hdf.File(self.data_outpath, 'r') as store:

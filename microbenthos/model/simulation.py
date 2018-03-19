@@ -616,12 +616,10 @@ class Simulation(CreateMixin):
         Update the simtime_step to be adaptive to the current residual and sweeps.
 
         A multiplicative factor for the time-step is determined based on the number of sweeps and
-        residual undershoot when the residual is below :attr:`residual_target`. If not,
-        the multiplicative factor penalizes the residual overshoot by setting the factor < 1.
-        Additionally, if `num_sweeps` is > 90% of :attr:`.max_sweeps`, then the time-step is
-        reduced.
-
-        Once a new timestep is determined, it is limited to the time left in the model simulation.
+        residual. If the `residual` is more than :attr:`.max_residual`, then the time-step is
+        quartered. If not, it is boosted by up to double, depending on the `num_sweeps` and
+        :attr:`.max_sweeps. Once a new timestep is determined, it is limited to the time left in
+        the model simulation.
 
         Args:
             residual (float): the residual from the last equation step
@@ -634,32 +632,33 @@ class Simulation(CreateMixin):
 
         # residual_factor = math.log10(self.residual_target / (residual + 1e-30)) * 0.05
 
-        alpha = 0.9
+        alpha = 0.8
         Smax = self.max_sweeps
         old_step = self.simtime_step
         num_sweeps = max(1.0, num_sweeps)
+        mult = 1.0
+        restarget = self.residual_target
 
-        if residual < self.residual_target:
-
-            if num_sweeps < alpha * Smax:
-                mult = 1.0 + 2 * math.log10(2.0 + (self.recent_sweeps / num_sweeps))
-            else:
-                mult = 1.0 - 0.5 * math.log10(2.0 + Smax / num_sweeps)
-
-        elif self.residual_target <= residual < self.max_residual:
-            # mult = 0.25
-            mult = 1.0 - math.log10(1.0 + Smax / num_sweeps)
-
-        elif residual >= self.max_residual:
-            mult = 1e-3
+        if residual >= self.max_residual:
+            mult = 0.25
 
         else:
-            self.logger.warning(
-                'Unknown condition for residual {:.2g} > max ({:.2g}) & recent {:2g}'.format(
-                    residual, self.max_residual, self.recent_residuals
-                    ))
+            if restarget < self.max_residual:
+                if residual < restarget:
+                    if num_sweeps < alpha * Smax:
+                        mult = 2.0
+                    else:
+                        mult = 1.25
 
-        new_step = self.simtime_step * max(1e-3, mult)
+            else:
+                if residual < restarget:
+                    if num_sweeps < alpha * Smax:
+                        mult = 1.5
+                    else:
+                        mult = 0.75
+
+
+        new_step = self.simtime_step * max(0.01, mult)
         self.simtime_step = min(new_step, self.simtime_total - self.model.clock())
         self.logger.info('Time-step update {} x {:.2g} = {}'.format(
             old_step, mult, self.simtime_step))
