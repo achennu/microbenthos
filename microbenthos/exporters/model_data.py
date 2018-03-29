@@ -4,10 +4,11 @@ import os
 import h5py as hdf
 
 from . import BaseExporter
+from ._output_dir_mixin import OutputDirMixin
 from ..model import save_snapshot
 
 
-class ModelDataExporter(BaseExporter):
+class ModelDataExporter(OutputDirMixin, BaseExporter):
     """
     A 'stateless' exporter for model snapshot data into HDF file. The exporter only keeps the
     output path, and reopens the file for each snapshot. This ensures that each snapshot is
@@ -16,7 +17,9 @@ class ModelDataExporter(BaseExporter):
     _exports_ = 'model_data'
     __version__ = '2.1'
 
-    def __init__(self, overwrite = False, filename = 'simulation_data.h5', compression = 6,
+    def __init__(self, overwrite = False,
+                 filename = 'simulation_data.h5',
+                 compression = 6,
                  **kwargs):
         self.logger = kwargs.get('logger') or logging.getLogger(__name__)
         self.logger.debug('Init in {}'.format(self.__class__.__name__))
@@ -45,6 +48,8 @@ class ModelDataExporter(BaseExporter):
 
         """
         self.logger.debug('Preparing file for export')
+
+        self.output_dir = self.runner.output_dir
 
         # if no file exists, then save the first state
         exists = os.path.exists(self.outpath)

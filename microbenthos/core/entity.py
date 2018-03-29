@@ -3,6 +3,7 @@ import logging
 
 from fipy import PhysicalField
 from fipy.tools import numerix
+
 from microbenthos.utils.snapshotters import snapshot_var, restore_var
 
 
@@ -387,25 +388,20 @@ class Variable(DomainEntity):
             raise ValueError('Create params should not contain name. Will be set from init name.')
 
         from fipy import PhysicalField
-        unit = params.get('unit')
+        value = params.get('value', 0.0)
+        if hasattr(value, 'unit'):
+            unit = value.unit
+        else:
+            unit = params.get('unit')
 
-        if unit:
-            try:
-                p = PhysicalField(1, params['unit'])
-                base_units = p.inBaseUnits().unit.name()
-                params['unit'] = base_units
-            except:
-                raise ValueError('{!r} is not a valid unit!'.format(params['unit']))
+        try:
+            p = PhysicalField(value, unit)
+        except:
+            raise ValueError('{!r} is not a valid unit!'.format(unit))
 
-        value = params.get('value')
-        if value is not None:
-            try:
-                v = value.inBaseUnits()
-                base_units = v.unit.name()
-                params['unit'] = base_units
-                params['value'] = v
-            except AttributeError:
-                pass
+        pbase = p.inBaseUnits()
+        params['unit'] = pbase.unit.name()
+        params['value'] = pbase.value
 
         return params
 
@@ -514,7 +510,8 @@ class Variable(DomainEntity):
         """
         self.logger.debug('Creating variable {!r} with unit {}'.format(self.name, unit))
 
-        self.var = self.domain.create_var(name=self.name, value=value, unit=unit, hasOld=hasOld,
+        self.var = self.domain.create_var(name=self.name, value=value,
+                                          unit=unit, hasOld=hasOld,
                                           **kwargs)
 
         return self.var

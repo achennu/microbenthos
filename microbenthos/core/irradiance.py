@@ -63,7 +63,7 @@ class Irradiance(DomainEntity):
         #: the time within the diel period which is the zenith of radiation
         self.zenith_time = self.hours_day
         #: the intensity level at the zenith time
-        self.zenith_level = 100
+        self.zenith_level = 100.0
 
         C = 1.0 / numerix.sqrt(2 * numerix.pi)
         # to scale the cosine distribution from 0 to 1 (at zenith)
@@ -377,7 +377,6 @@ class IrradianceChannel(DomainEntity):
         """
         if not self.is_setup:
             self.logger.warning('Attenuation definition may be incomplete!')
-
         return numerix.cumprod(numerix.exp(-1 * self.k_var * self.domain.distances))
 
     def update_intensities(self, surface_level):
