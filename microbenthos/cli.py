@@ -14,6 +14,46 @@ except ImportError:
     click_completion = None
 
 
+def _exporter_callback(ctx, param, value):
+    if not value:
+        return
+    # this option has multiple=True, so value is a tuple consisting of all the --exporter options
+
+    validated = []
+    exptype_missing = []
+
+    for argval in value:
+
+        parts = argval.split(',')
+
+        partvals = []
+        invalid_options = []
+        for part in parts:
+            try:
+                key, val = part.split('=')
+                partvals.append((key, val))
+            except:
+                invalid_options.append((argval, part))
+
+        argdict = dict(partvals)
+        if 'exptype' not in argdict:
+            exptype_missing.append(argval)
+        else:
+            validated.append(argdict)
+
+    base_errmsg = 'Exporter option should be of form "exptype=<type>,<opt1>=<val1>,<opt2>=<val2>,' \
+                  '...".'
+    if exptype_missing:
+        raise click.BadParameter('{} exptype missing in {}'.format(
+            base_errmsg, exptype_missing
+            ))
+
+    if invalid_options:
+        raise click.BadParameter('{} Options improper in {}'.format(base_errmsg, invalid_options))
+
+    return validated
+
+
 def _matplotlib_style_callback(ctx, param, value):
     if not value:
         return
@@ -52,7 +92,7 @@ def _matplotlib_writer_callback(ctx, param, value):
     else:
         raise click.BadParameter('Animation writer {!r} not in available: {}'.format(
             value, writers_available
-        ))
+            ))
 
 
 def _fipy_solver_callback(ctx, param, value):
@@ -184,8 +224,9 @@ def setup_completion(shell, show_code):
               default=os.getcwd(),
               help='Output directory for simulation')
 @click.option('-x', '--exporter', multiple=True,
-              type=(str, str),
-              help="Add an exporter to run. Form: -x <name> <export_type>")
+              callback=_exporter_callback,
+              help='Add an exporter to run. Form: -x <name> <export_type> ["<option1>=val,'
+                   '<option2>=val2"]')
 @click.option('-sTime', '--simtime_total', callback=_simtime_total_callback,
               help='Total simulation time. Example: "10h"')
 @click.option('-sLims', '--simtime-lims', callback=_simtime_lims_callback,
@@ -249,7 +290,7 @@ def cli_simulate(model_file, output_dir, exporter, overwrite, compression,
         max_sweeps=max_sweeps,
         simtime_lims=simtime_lims,
         max_residual=max_residual,
-    )
+        )
     for k, v in sim_kwargs.items():
         if v is None:
             continue
@@ -264,13 +305,18 @@ def cli_simulate(model_file, output_dir, exporter, overwrite, compression,
                               overwrite=overwrite,
                               confirm=confirm,
                               progress=progress,
-                              compression=compression,
                               plot=plot,
                               video=video,
                               frames=frames,
                               budget=budget,
                               exporters=exporter,
                               show_eqns=show_eqns)
+
+    if not runner.get_data_exporters():
+        click.secho('No data exporters defined. Adding with compression={}'.format(
+            compression), fg='red')
+        runner.add_exporter('model_data', output_dir=runner.output_dir,
+                            compression=compression)
 
     runner.run()
 
@@ -387,7 +433,7 @@ def export_model(model_file, key, verbose):
         except KeyError:
             click.secho('Could not get key {!r}! Found: {}'.format(
                 key, defs.keys()
-            ))
+                ))
             raise click.Abort()
 
     try:

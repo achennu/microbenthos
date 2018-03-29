@@ -4,61 +4,57 @@ import tempfile
 
 import mock
 import pytest
-from microbenthos import yaml
-from microbenthos.runners.simulate import SimulationRunner
+from fipy import PhysicalField
 
-from .test_model import MODEL_DEF
-from .test_simulation import SIMULATION_DEF
+from microbenthos import yaml, MicroBenthosModel, Simulation
+from microbenthos.model.model import ModelClock
+from microbenthos.runners.simulate import SimulationRunner
 
 
 @pytest.fixture()
 def model():
-    from microbenthos.model.model import MicroBenthosModel, ModelClock
-    from fipy.terms.binaryTerm import _BinaryTerm
-
-    model = mock.Mock(spec=MicroBenthosModel)
-    # model = ModelMock()
-    model.clock = mock.Mock(spec=ModelClock)
-    model.full_eqn = mock.Mock(spec=_BinaryTerm)
+    model = mock.MagicMock(MicroBenthosModel)
+    clock = mock.MagicMock(ModelClock)
+    clock.return_value = C = PhysicalField(3, 'h')
+    model.clock = clock
+    model.full_eqn = feqn = mock.Mock()
     return model
 
+
 @pytest.fixture()
-def simulation():
-    from microbenthos.model.simulation import Simulation
-    sim = mock.Mock(spec=Simulation)
+def sim():
+    sim = Simulation()
     return sim
 
 
-class TestRunner:
-
-    def test_init(self):
-
+class TestSimulationRunner:
+    def test_init(self, sim, model):
         runner = SimulationRunner()
         assert runner
 
-    @pytest.mark.xfail(reason='Definition dict not updated to new schema.yml')
-    def test_set_model(self):
-        runner = SimulationRunner(model=MODEL_DEF)
-        assert runner.model is not None
+        runner = SimulationRunner(simulation=sim)
+        assert runner.simulation is sim
 
-    @pytest.mark.xfail(reason='Definition dict not updated to new schema.yml')
-    def test_set_simulation(self):
-        runner = SimulationRunner(simulation=SIMULATION_DEF)
-        assert runner.simulation is not None
+        runner = SimulationRunner(model=model)
+        assert runner.model is model
 
-    def test_create_output_dir(self):
+        runner = SimulationRunner(model=model, simulation=sim)
+        assert runner.simulation.model is model
 
         runner = SimulationRunner()
+        runner.model = model
+        runner.simulation = sim
+        assert runner.simulation.model is model
 
-        with pytest.raises(ValueError):
-            runner._create_output_dir()
+    def test_create_output_dir(self):
+        runner = SimulationRunner()
 
         # dir exists
         DIR = tempfile.mkdtemp()
         runner.output_dir = DIR
         assert os.path.isdir(runner.output_dir)
 
-        # dir doesn't exist
+        # dir doesn't exist, is created
         runner.output_dir = DIR + 'abc'
         runner._create_output_dir()
         assert os.path.isdir(runner.output_dir)
@@ -80,11 +76,6 @@ class TestRunner:
         logger = logging.getLogger('microbenthos')
         assert runner._log_fh in logger.handlers
 
-        with open(logpath) as fp:
-            ll = fp.readlines()
-
-        print(ll)
-
     def test_teardown_logfile(self):
         runner = SimulationRunner(output_dir=tempfile.mkdtemp())
 
@@ -98,11 +89,11 @@ class TestRunner:
         runner.teardown_logfile()
         assert runner._log_fh not in logger.handlers
 
-    def test_save_definitions(self, model, simulation):
+    def test_save_definitions(self, model, sim):
         odir = tempfile.mkdtemp()
         runner = SimulationRunner(output_dir=odir)
         runner.model = model
-        runner.simulation = simulation
+        runner.simulation = sim
 
         path = os.path.join(odir, 'model.yml')
         runner.save_definitions()
@@ -127,10 +118,9 @@ class TestRunner:
         assert 'runner' in definition
         assert 'cls' in definition['runner']
 
-    @pytest.mark.xfail(reason='Definition dict not updated to new schema.yml')
-    def test_prepare_sim(self, model):
+    def test_prepare_sim(self, model, sim):
         runner = SimulationRunner()
-        runner.simulation = SIMULATION_DEF
+        runner.simulation = sim
 
         runner.prepare_simulation()
         assert runner.simulation.model is None
@@ -139,42 +129,36 @@ class TestRunner:
         runner.model = model
 
         runner.prepare_simulation()
-        print(model)
-        print(bool(model))
-        print(runner.simulation)
-        print(runner.model)
-        print(runner.simulation.model)
-
         assert runner.simulation.model is model
 
-
-    def test_exporters_context(self):
+    def test_exporters_context(self, sim, model):
         odir = tempfile.mkdtemp()
-        runner = SimulationRunner(output_dir=odir)
+        runner = SimulationRunner(output_dir=odir,
+                                  simulation=sim,
+                                  model=model)
+        assert not runner.exporters
 
-        with mock.patch('microbenthos.exporters.exporter.BaseExporter', autospec=True) as Exporter:
-            Exporter.return_value.started = False
-            runner.exporters['a'] = Exporter()
+        from microbenthos import BaseExporter
 
-            if not runner.exporters:
-                pytest.xfail('No exporters defined!')
+        MExporter = mock.MagicMock(BaseExporter)
+        exp = MExporter()
+        state = sim.get_state(sim.model.snapshot())
 
-            exps = runner.exporters.values()
-            # assert all(not exp.started for exp in exps)
+        runner.exporters['a'] = exp
 
-            with runner.exporters_activated():
-                for exp in exps:
-                    exp.setup.assert_called_once_with(runner)
-                    exp.started = True
+        with runner.exporters_activated():
+            exp.setup.assert_called_once_with(runner, state)
+            exp.started = True
 
-                # assert all(exp.started for exp in exps)
+        exp.close.assert_called_once()
 
-            for exp in exps:
-                exp.close.assert_called_once_with()
+    def test_run(self, model, sim):
+        runner = SimulationRunner(simulation=sim, model=model)
+        mocked = mock.MagicMock(runner)
 
-    def test_run(self):
+        mocked.confirm = False
 
-        mocked = mock.MagicMock(spec=SimulationRunner())
+        print(sim.simtime_lims)
 
         SimulationRunner.run(mocked)
 
@@ -197,5 +181,18 @@ class TestRunner:
         mocked.teardown_logfile.assert_called_once()
 
     def test_add_exporter(self):
-        pytest.xfail('Not implemented')
-        SimulationRunner.add_exporter()
+        runner = SimulationRunner()
+        with pytest.raises(ValueError):
+            runner.add_exporter('abc', 'myexporter')
+
+        print(runner._exporter_classes)
+        for etype in runner._exporter_classes:
+            print('Adding {}'.format(etype))
+            runner.add_exporter(etype)
+            assert etype in runner.exporters
+
+        runner.add_exporter(etype, 'me')
+        assert 'me' in runner.exporters
+        with pytest.raises(ValueError):
+            runner.add_exporter(etype, 'me')
+            # name already exists

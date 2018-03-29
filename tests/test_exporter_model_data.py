@@ -11,9 +11,10 @@ class TestModelDataExporter:
         assert exp._filename == 'simulation_data.h5'
         assert exp._compression == 6
 
-    @pytest.xfail(reason='not implemented')
+    @pytest.mark.xfail(reason='not implemented')
     def test_setup(self):
         exp = ModelDataExporter()
+        raise NotImplementedError()
         # exp.setup(runner, state)
 
     @pytest.mark.xfail(reason='Not implemented')
@@ -32,6 +33,7 @@ class TestModelDataExporter:
         # TODO: How to mock the state dict for `save_snapshot`?
 
         exp = ModelDataExporter()
+        raise NotImplementedError
 
 
     @pytest.mark.xfail(reason='Not implemented')

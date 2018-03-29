@@ -10,9 +10,10 @@ class TestProgressExporter:
         # check the defaults
         assert exp._total_time is None
 
-    @pytest.xfail(reason='not implemented')
+    @pytest.mark.xfail(reason='not implemented')
     def test_setup(self):
         exp = ProgressExporter()
+        raise NotImplementedError()
         # exp.setup(runner, state)
 
     @pytest.mark.xfail(reason='Not implemented')

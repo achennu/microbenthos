@@ -4,7 +4,6 @@ Base class definition for exporters
 
 import abc
 import logging
-import os
 
 
 class BaseExporter(object):
@@ -17,7 +16,7 @@ class BaseExporter(object):
     __version__ = ''
     is_eager = False
 
-    def __init__(self, name='exp', logger = None):
+    def __init__(self, name = 'exp', logger = None, **kwargs):
 
         if not logger:
             self.logger = logging.getLogger(__name__)
@@ -28,12 +27,14 @@ class BaseExporter(object):
         self.name = name
 
         if not self._exports_:
-            raise ValueError('Exporter "_exports_" should not be empty')
+            raise ValueError('{} "_exports_" should not be empty'.format(
+                self.__class__.__name__
+                ))
 
         if not self.__version__:
-            raise ValueError('Exporter "_exports_" should not be empty')
-
-        self._output_dir = None
+            raise ValueError('{} "__version__" should not be empty'.format(
+                self.__class__.__name__
+                ))
 
         #: flag indicating if export has started
         self.started = False
@@ -42,6 +43,8 @@ class BaseExporter(object):
         self.runner = None
 
         self.logger.info('{} info: {}'.format(self, self.get_info()))
+
+        self.logger.debug('ignoring kwargs: {}'.format(kwargs))
 
     def __repr__(self):
         return '{}({})'.format(self.__class__.__name__, self.name)
@@ -59,7 +62,6 @@ class BaseExporter(object):
         """
         self.logger.debug('Setting up {}'.format(self))
         self.runner = runner
-        self.output_dir = runner.output_dir
         self.prepare(state)
         self.started = True
 
@@ -87,21 +89,6 @@ class BaseExporter(object):
 
         """
         raise NotImplementedError('Should be implemented in subclass')
-
-    @property
-    def output_dir(self):
-        """
-        The output directory path set for the exporter
-        """
-        return self._output_dir
-
-    @output_dir.setter
-    def output_dir(self, path):
-        if os.path.isdir(path):
-            self._output_dir = path
-            self.logger.debug('output_dir set: {}'.format(self.output_dir))
-        else:
-            raise ValueError('Output directory does not exist')
 
     def close(self):
         """
