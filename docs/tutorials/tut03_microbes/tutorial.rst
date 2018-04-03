@@ -1,0 +1,269 @@
+.. _tut03:
+
+==================
+Microbial groups
+==================
+
+In the previous tutorial :ref:`tut02`, we defined a microbenthic domain with two reacting
+chemical solutes in the environment. We will now define specific microbial populations or groups
+which perform specific metabolic processes involving the solutes. This tutorial derives
+conceptually from de Wit et al (1995), but modifies it to focus on metabolic rates instead of
+biomass growth. The formulations of the constitutive relationships between metabolisms and
+environmental parameters are used from the paper, and the tutorial mainly indicates how these
+symbolic relationships can be used to construct and solve coupled partial differential equations.
+
+
+.. seealso::
+    Rutger de Wit, Frank P. van den Ende, Hans van Gemerden; Mathematical simulation of the
+    interactions among cyanobacteria, purple sulfur bacteria and chemotrophic sulfur bacteria in
+    microbial mat communities, FEMS Microbiology Ecology, Volume 17, Issue 2, 1 June 1995, Pages
+    117–135 (`DOI <https://doi.org/10.1111/j.1574-6941.1995.tb00136.x>`_)
+
+Cyanobacteria: biomass
+=======================
+
+We will define a distribution of cyanobacterial population in the microbenthic domain, which will
+perform
+
+* respiration
+* oxygenic photosynthesis
+* sulfide-driven anoxygenic photosynthesis
+
+Microbial groups are defined under the ``microbes`` key under ``model``. Microbial groups contain
+``features``, which represent variables related to the population, the primary one being biomass.
+The definition of the ``cyano`` group could be specified as:
+
+.. code-block:: yaml
+
+    microbes:
+        cyano:
+            init_params:
+                name: cyano
+                features:
+                    biomass:
+                        init_params:
+                            name: biomass
+                            create:
+                                value: !unit 0 kg/m**3
+                            seed:
+                                profile: normal
+                                params:
+                                    loc: !unit 1 mm
+                                    scale: !unit 2 mm
+                                    coeff: !unit 12 mg/cm**3
+
+We have specified a (typically required) feature called ``biomass`` that has the units of
+:math:`kg/m^3`, and is seeded with a normal distribution centered at 1 mm depth with a width of 2
+mm, reaching a maximum value of :math:`12 mg/cm^3`.
+
+Light absorption
+=================
+
+Phototrophs, such as cyanobacteria, absorb light energy to use in their photosynthetic reactions.
+The biomass-related depletion of the irradiance can be specified by modifying the irradiance
+channel ``par`` as follows.
+
+.. code-block:: yaml
+
+    channels:
+        - name: par
+          k0: !unit 15.3 1/cm
+          k_mods:
+            - [microbes.cyano.biomass, !unit 7687.5 cm**2/g]
+
+This specifies that an additional attenuation based on the biomass should occur in the
+photosynthetically active radiation.
+
+Oxygenic photosynthesis
+=========================
+
+Cyanobacteria perform oxygenic photosynthesis, i.e. they use the absorbed light energy to fix
+carbon into their biomass and release dioxygen as a side product. For the current case, we ignore
+any changes in biomass and consider the model dynamics for a short period of 4 hours. Oxygenic
+photosynthesis produces oxygen, and the rate of this production would depend on the available
+light and biomass at a specific depth in the microbial mat. So approximately, we consider the
+oxygenic photosynthesis rate as :math:`Qmax \cdot biomass \cdot optimum(par, Ks, Ki)`, where the
+``optimum`` function (unitless) describes the irradiance intensities which are optimal for the
+biomass. However, it is known that oxygenic photosynthesis is inhibited by the presence of
+sulfide and oxygen itself. These are represented through an ``inhibition`` function depending on a
+particular variable. So the formulae we need are:
+
+.. code-block:: yaml
+
+    formulae:
+
+        saturation:
+            vars: [x, Km]
+            expr: x / (Km + x)
+
+        optimum:
+            vars: [x, Ks, Ki]
+            expr: x/(x + Ks)/(1 + x/Ki)
+
+        inhibition:
+            vars: [x, Kmax, Khalf]
+            expr: (Kmax - x) / (2*Kmax - Khalf - x) * (x < Kmax)
+
+Using these in the ``model/formulae`` section, we can now define the oxygenic photosynthesis
+process in the ``cyano`` group as:
+
+.. code-block:: yaml
+
+    processes:
+
+        oxyPS:
+            cls: Process
+            init_params:
+
+                params:
+                    Ks: 1
+                    Ki: 10
+                    Qmax: !unit 8.4 mmol/g/h
+                    Kmax: !unit 0.35 mmol/l
+                    Khalf: !unit 0.3 mmol/l
+                    Kmax2: !unit 0.8 mmol/l
+                    Khalf2: !unit 0.7 mmol/l
+
+                expr:
+                    formula: "Qmax * biomass * sed_mask * optimum(par, Ks, Ki)
+                                * inhibition(h2s, Kmax, Khalf)
+                                * inhibition(oxy, Kmax2, Khalf2)"
+                implicit: false
+
+
+Note here that the ``biomass`` variable is sourced from the ``cyano`` microbial group, which
+behaves as the domain. Variables not found in the group are then looked up from the group
+containing the ``cyano`` group, that is the model. So the model domain is used to source the
+``par`` and ``h2s`` variables.
+
+This formulation is straightforward to write, but pops up a mathematical problem. The inhibition
+function contains a :math:`x < Kmax` term, which makes the function only piecewise polynomial.
+Piecewise functions cannot be generally considered differentiable. This affects the casting of
+the process expression as an implicit source term (see `fipy docs`_ about implicit terms), since
+it tries to estimate the first derivative of the function with respect to the variable. So here
+we can simply turn off this behavior on a per-process level, by setting ``implicit: false`` in
+the initialization parameters.
+
+.. _fipy docs: https://www.ctcms.nist.gov/fipy/examples/phase/generated/examples.phase.simple.html
+
+However, for complex non-linear source terms it is advantageous to be able to specify the pieces
+of the piece-wise response in the equation terms. MicroBenthos allows you to therefore specify
+the inhibition response of oxygen to the oxygen concentration itself by the formulation below.
+
+.. code-block:: yaml
+
+    expr:
+        formula:
+            base: "Qmax * biomass * sed_mask * optimum(par, Ks, Ki)
+                    * inhibition(h2s, Kmax, Khalf)"
+
+            pieces:
+                - expr: (Kmax2 - oxy) / (2*Kmax2 - Khalf2 - oxy)
+                  where: oxy < Kmax2
+
+In this formulation, we replaced the ``inhibition(oxy)`` term from before, and defined a
+piecewise response of the process ourselves. The formulation of ``inhibition`` is taken as
+before, but without the ``( x < Kmax )`` term, and is instead set as a piece mask in ``where``.
+Now, we do not need to set ``implicit: false``, as each of the defined pieces in ``expr`` is
+differentiable and MicroBenthos will handle the symbolic math accordingly to cast the overall
+expression as an implicit source, if required.
+
+
+Anoxygenic photosynthesis
+===========================
+
+Cyanobacteria also can use other electron donors than water, specifically, they can drive carbon
+fixation through sulfide-driven photosynthesis. This process uses :math:`H_2S` instead of
+:math:`H_2O`. We consider that this process is also driven by :math:`Qmax \cdot biomass \cdot
+optimum(par, Ks, Ki)`, and further modulated by metabolic response functions. We consider that
+the cyanobacterial population responds to the sulfide as an ``optimum`` function. So we write the
+process for anoxygenic photosynthesis as follows.
+
+.. code-block:: yaml
+
+    anoxyPS:
+        cls: Process
+        init_params:
+
+            expr:
+                formula: "Qmax * biomass * sed_mask * optimum(par, Ks, Ki)
+                * optimum(h2s, Ksh2s, Kih2s)"
+
+            params:
+                Ks: 1
+                Ki: 10
+                Qmax: !unit -1.2 mmol/g/h
+                Ksh2s: !unit 900 mumol/l
+                Kih2s: !unit 3 mmol/l
+
+Respiration
+=============
+
+We can also include biomass-dependent respiration by the cyanobacteria itself. Similar to the
+sedimentary aerobic respiration case, the process rate saturates with respect to oxygen.
+
+.. code-block:: yaml
+
+    respire:
+        cls: Process
+        init_params:
+            expr:
+                formula: Qmax * biomass * sed_mask * saturation(oxy, Km)
+            params:
+                Qmax: !unit -0.0002 mumol/g/h
+                Km: !unit 1e-6 mol/l
+
+We note in all the cases above, that each process essentially provides a local "namespace" to
+avoid clash of identically named parameters in other processes. Additionally, the microbial group
+provides a local store of variables, like the model domain, and passes forward the look up for
+missing variables to the model domain itself.
+
+
+Run it
+========
+
+This creates the equations to solve
+
+.. math::
+    :nowrap:
+
+    \begin{gather}
+
+    \frac{d}{dt} oxy = Doxy \cdot \frac{d^{2}}{d z^{2}}  oxy + \frac{Qmax \cdot biomass \cdot
+    oxy \cdot sed\_mask}{Km + oxy} \\
+    - \frac{Vmax \cdot oxy \cdot porosity \cdot sed\_mask}{Km + oxy} \\
+    + 2 \cdot h2s \cdot k \cdot oxy^{2} \cdot porosity \cdot sed\_mask \\
+    + \frac{Qmax \cdot biomass \cdot par \cdot sed\_mask \cdot \left(Kmax - h2s\right) \cdot
+    \left(Kmax_{2} - oxy\right)}
+    {\left(1 + \frac{par}{Ki}\right) \cdot \left(Ks + par\right)
+    \left(- Khalf + 2 Kmax - h2s\right) \left(- Khalf_{2} + 2 Kmax_{2} - oxy\right)} \\
+    \cdot \left(h2s < Kmax\right)\cdot \left(oxy < Kmax_{2}\right)
+    \end{gather}
+
+    \begin{gather}
+    \frac{d}{dt} h2s = Dh2s \cdot \frac{d^{2}}{d z^{2}}  h2s +  h2s \cdot k \cdot oxy^{2} \cdot
+    porosity \cdot sed\_mask \\
+    + \frac{Qmax \cdot biomass \cdot h2s \cdot par \cdot sed\_mask}{\left(1 + \frac{par}{Ki}\right)
+    \cdot \left(1 + \frac{h2s}{Kih2s}\right) \left(Ks + par\right) \left(Ksh2s + h2s\right)}
+
+    \end{gather}
+
+
+
+Running the model simulation with::
+
+    microbenthos -v simulate input_definition.yml --plot --show-eqns
+
+should show the equation in the console and open up a graphical view of the model as it is
+simulated.
+
+An extracted frame is shown below.
+
+.. image:: model_frame.png
+
+
+
+The full :download:`definition file <definition_input.yml>` is:
+
+.. literalinclude:: definition_input.yml
+    :language: yaml

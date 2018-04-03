@@ -90,7 +90,7 @@ class SimulationRunner(object):
         if model:
             self.model = model
 
-        if simulation:
+        if simulation is not None:
             self.simulation = simulation
 
         if progress:
@@ -323,8 +323,9 @@ class SimulationRunner(object):
         """
         Save the model and simulation definition to the output directory
         """
-        self.logger.info('Saving model definition: model.yml')
-        with open(os.path.join(self.output_dir, 'model.yml'), 'w') as fp:
+        DEFINITION_FILE = 'definition.yml'
+        self.logger.info('Saving model definition: {}'.format(DEFINITION_FILE))
+        with open(os.path.join(self.output_dir, DEFINITION_FILE), 'w') as fp:
             yaml.dump(dict(
                 model=self.model.definition_,
                 simulation=self.simulation.definition_
@@ -426,7 +427,7 @@ class SimulationRunner(object):
             * prepares the simulation
             * activates the exporter context (see :meth:`.exporters_activated`)
             * iterates over the :meth:`.simulation.evolution` and passes returned state to the
-            exporters
+              exporters
             * after that tears down the logfile
 
         Raises:

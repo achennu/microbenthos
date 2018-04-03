@@ -1,18 +1,21 @@
-MicroBenthos: in silico microbial geochemistry
-===============================================
+============
+MicroBenthos
+============
 
-Contents:
+.. include:: ../README.rst
+
+Contents
+=========
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
 
-   readme
    installation
    usage
-   apimain
-   contributing
+   design
    authors
-   history
+   contributing
+
 
 Indices and tables
 ==================

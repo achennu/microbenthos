@@ -95,7 +95,7 @@ class TestSimulationRunner:
         runner.model = model
         runner.simulation = sim
 
-        path = os.path.join(odir, 'model.yml')
+        path = os.path.join(odir, 'definition.yml')
         runner.save_definitions()
         assert os.path.isfile(path)
         with open(path) as fp:

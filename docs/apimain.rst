@@ -1,6 +1,6 @@
-==========================
+====
 API
-==========================
+====
 
 This is the complete class and function reference of :mod:`microbenthos`.
 

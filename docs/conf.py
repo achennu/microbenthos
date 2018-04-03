@@ -20,7 +20,7 @@ import sys
 # directory, add these directories to sys.path here. If the directory is
 # relative to the documentation root, use os.path.abspath to make it
 # absolute, like shown here.
-# sys.path.insert(0, os.path.abspath('.'))
+# sys.path.insert(0, os.path.abspath('../tutorials'))
 
 # Get the project root dir, which is the parent dir of this
 cwd = os.getcwd()
@@ -42,7 +42,8 @@ import microbenthos
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 extensions = ['sphinx.ext.autodoc', 'sphinx.ext.viewcode',
               'sphinxcontrib.napoleon', 'sphinx.ext.todo',
-              'sphinx.ext.intersphinx',
+              'sphinx.ext.intersphinx', 'sphinxcontrib.programoutput',
+              'sphinx.ext.mathjax',
               ]
 
 # Napoleon settings
@@ -58,6 +59,9 @@ napoleon_use_ivar = True
 napoleon_use_param = True  # set this True for use with sphinx_autodoc_typehints
 napoleon_use_keyword = True
 napoleon_use_rtype = False
+
+# mathjax path
+mathjax_path ="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.4/MathJax.js?config=TeX-MML-AM_CHTML"
 
 # to not sort members alphabetically
 autodoc_member_order = 'bysource'

@@ -1,0 +1,209 @@
+model:
+
+    domain:
+        cls: SedimentDBLDomain
+        init_params:
+            cell_size: !unit 50 mum
+            sediment_length: !unit 10 mm
+            dbl_length: !unit 2 mm
+            porosity: 0.6
+
+
+    environment:
+
+        irradiance:
+            cls: Irradiance
+            init_params:
+                hours_total: !unit 4h
+                day_fraction: 0.5
+
+                channels:
+                    - name: par
+                      k0: !unit 15.3 1/cm
+                      k_mods:
+                        - [microbes.cyano.biomass, !unit 7687.5 cm**2/g]
+
+        oxy:
+            cls: Variable
+            init_params:
+                name: oxy
+                create:
+                    hasOld: true
+                    value: !unit 0.0 mol/m**3
+
+                constraints:
+                    top: !unit 220.0 mumol/l
+                    bottom: !unit 0.0 mol/l
+
+                seed:
+                    profile: linear
+
+        D_oxy:
+            cls: Process
+            init_params:
+                expr:
+                    formula: porosity * D0_oxy
+
+                params:
+                    D0_oxy: !unit 0.03 cm**2/h
+
+        h2s:
+            cls: Variable
+            init_params:
+                name: h2s
+                create:
+                    hasOld: true
+                    value: !unit 0.0 mol/m**3
+
+                constraints:
+                    top: !unit 10.0 mumol/l
+                    bottom: !unit 1e-3 mol/l
+
+                seed:
+                    profile: linear
+
+                clip_min: 0.0
+
+        D_h2s:
+            cls: Process
+            init_params:
+                expr:
+                    formula: porosity * D0_h2s
+                params:
+                    D0_h2s: !unit 0.02 cm**2/h
+
+        aero_respire:
+            cls: Process
+            init_params:
+                expr:
+                    formula: -Vmax * porosity * sed_mask * saturation(oxy, Km)
+                params:
+                    Vmax: !unit 1.0 mmol/l/h
+                    Km: &aero_Km !unit 1e-5 mol/l
+
+        abio_sulfoxid:
+            cls: Process
+            init_params:
+                expr:
+                    formula: porosity * sed_mask * k * oxy * oxy * h2s
+                params:
+                    k: !unit -70.0 1/h/(mmol/l)**2
+
+    microbes:
+        cyano:
+            init_params:
+                name: cyano
+                features:
+                    biomass:
+                        init_params:
+                            name: biomass
+                            create:
+                                value: !unit 0 kg/m**3
+                            seed:
+                                profile: normal
+                                params:
+                                    loc: !unit 1 mm
+                                    scale: !unit 2 mm
+                                    coeff: !unit 12 mg/cm**3
+
+                processes:
+
+                    oxyPS:
+                        cls: Process
+                        init_params:
+
+                            params:
+                                Ks: 1
+                                Ki: 10
+                                Qmax: !unit 8.4 mmol/g/h
+                                Kmax: !unit 0.35 mmol/l
+                                Khalf: !unit 0.3 mmol/l
+                                Kmax2: !unit 0.8 mmol/l
+                                Khalf2: !unit 0.7 mmol/l
+
+#                            expr:
+#                                formula: "Qmax * biomass * sed_mask * optimum(par, Ks, Ki)
+#                                            * inhibition(h2s, Kmax, Khalf)
+#                                            * inhibition(oxy, Kmax2, Khalf2)"
+#                            implicit: false
+
+                            expr:
+                                formula:
+                                    base: "Qmax * biomass * sed_mask * optimum(par, Ks, Ki)
+                                            * inhibition(h2s, Kmax, Khalf)"
+
+                                    pieces:
+                                        - expr: (Kmax2 - oxy) / (2*Kmax2 - Khalf2 - oxy)
+                                          where: oxy < Kmax2
+
+
+                    anoxyPS:
+                        cls: Process
+                        init_params:
+
+                            expr:
+                                formula: "Qmax * biomass * sed_mask * optimum(par, Ks, Ki)
+                                * optimum(h2s, Ksh2s, Kih2s)"
+
+                            params:
+                                Ks: 1
+                                Ki: 10
+                                Qmax: !unit -1.2 mmol/g/h
+                                Ksh2s: !unit 900 mumol/l
+                                Kih2s: !unit 3 mmol/l
+
+                    respire:
+                        cls: Process
+                        init_params:
+                            expr:
+                                formula: Qmax * biomass * sed_mask * saturation(oxy, Km)
+                            params:
+                                Qmax: !unit -0.0002 mumol/g/h
+                                Km: !unit 1e-6 mol/l
+
+    equations:
+
+        oxyEqn:
+            transient: [domain.oxy, 1]
+
+            diffusion: [env.D_oxy, 1]
+
+            sources:
+                - [env.abio_sulfoxid, 2]
+
+                - [env.aero_respire, 1]
+
+                - [microbes.cyano.processes.oxyPS, 1]
+
+                - [microbes.cyano.processes.respire, 1]
+
+        h2sEqn:
+
+            transient: [domain.h2s, 1]
+
+            diffusion: [env.D_h2s, 1]
+
+            sources:
+                - [env.abio_sulfoxid, 1]
+
+                - [microbes.cyano.processes.anoxyPS, 1]
+
+    formulae:
+
+        saturation:
+            vars: [x, Km]
+            expr: x / (Km + x)
+
+        optimum:
+            vars: [x, Ks, Ki]
+            expr: x/(x + Ks)/(1 + x/Ki)
+
+        inhibition:
+            vars: [x, Kmax, Khalf]
+            expr: (Kmax - x) / (2*Kmax - Khalf - x) * (x < Kmax)
+
+simulation:
+
+    simtime_total: !unit 4h
+    simtime_lims: [0.01, 90]
+    max_residual: 1e-10

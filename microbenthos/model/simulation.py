@@ -314,7 +314,7 @@ class Simulation(CreateMixin):
             * a method :meth:`create_full_equation()`
 
             * an attribute :attr:`full_eqn` created by above method, which is a
-            :class:`~fipy.terms.binaryTerm._BinaryTerm` that has a :meth:`sweep()` method.
+              :class:`~fipy.terms.binaryTerm._BinaryTerm` that has a :meth:`sweep()` method.
 
             * method :meth:`model.update_vars()` which is called before each timestep
 
@@ -617,12 +617,12 @@ class Simulation(CreateMixin):
 
     def update_simtime_step(self, residual, num_sweeps):
         """
-        Update the simtime_step to be adaptive to the current residual and sweeps.
+        Update the :attr:`.simtime_step` to be adaptive to the current residual and sweeps.
 
         A multiplicative factor for the time-step is determined based on the number of sweeps and
         residual. If the `residual` is more than :attr:`.max_residual`, then the time-step is
         quartered. If not, it is boosted by up to double, depending on the `num_sweeps` and
-        :attr:`.max_sweeps. Once a new timestep is determined, it is limited to the time left in
+        :attr:`.max_sweeps`. Once a new timestep is determined, it is limited to the time left in
         the model simulation.
 
         Args:

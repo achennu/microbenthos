@@ -282,6 +282,12 @@ class ModelEquation(object):
 
         return sp.Eq(transient, diffusive + sources)
 
+    def as_latex_string(self):
+        """
+        Return a latex string of the equation through sympy
+        """
+        return sp.latex(self.as_symbolic())
+
     def as_pretty_string(self):
         """
         Return a pretty (unicode) string of the equation through sympy
