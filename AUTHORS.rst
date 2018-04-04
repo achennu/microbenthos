@@ -1,11 +1,16 @@
-=======
+========
 Credits
-=======
+========
 
 Development Lead
 ----------------
 
-* Arjun Chennu <achennu@mpi-bremen.de>
+* `Arjun Chennu <https://www.mpi-bremen.de/en/Arjun-Chennu.html>`_ (MPI Bremen)
+
+Consultation
+-------------
+
+* Judith Klatt (MPI Bremen)
 
 Contributors
 ------------

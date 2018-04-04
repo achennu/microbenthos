@@ -32,11 +32,11 @@ def chan(request, domain):
 
 
 @pytest.fixture(params=[
-        dict(name='par', k0=PhysicalField(15.3, '1/cm')),
-        dict(name='par', k0=PhysicalField(12.1, '1/cm'),
-             k_mods=[('cyano', PhysicalField(230, 'cm**2/g')),
-                     ('psb', PhysicalField(13, 'cm**2/g'))]),
-        ],
+    dict(name='par', k0=PhysicalField(15.3, '1/cm')),
+    dict(name='par', k0=PhysicalField(12.1, '1/cm'),
+         k_mods=[('cyano', PhysicalField(230, 'cm**2/g')),
+                 ('psb', PhysicalField(13, 'cm**2/g'))]),
+    ],
     ids=('par_k0', 'par_k0+k_mods')
     )
 def irrad(request, domain):
@@ -76,11 +76,6 @@ class TestIrradianceChannel:
 
         assert ch.intensities is not None
         assert ch.check_domain()
-
-    def test_setup(self, chan):
-        # check that setup takes no params
-        with pytest.raises(TypeError):
-            chan.setup(35)
 
     def test_setup_atten(self, chan):
         # test that calling setup multiple times raises RuntimeError if k_mods are present
@@ -149,6 +144,11 @@ class TestIrradiance:
         assert I.zenith_level == 100
         assert I._profile
 
+    def test_init_physicalfield(self):
+        ht = PhysicalField(8, 'h')
+        I = Irradiance(hours_total=ht)
+        assert I.hours_total == ht
+
     @pytest.mark.parametrize('hours_total', (3, 4, 10, 18, 24, 32, 48, 50))
     @pytest.mark.parametrize('day_fraction', (0, 0.1, 0.2, 0.5, 0.8, 0.9, 1.0))
     def test_fractions_hours(self, hours_total, day_fraction):
@@ -169,18 +169,30 @@ class TestIrradiance:
         # creates surface_irrad variable
         # also sets domain on channels
         # sets up channel
-        assert irrad.surface_irrad is None
-
         irrad.setup()
         assert isinstance(irrad.surface_irrad, Variable)
-        assert not isinstance(irrad.surface_irrad, CellVariable) # should be single-valued
+        assert not isinstance(irrad.surface_irrad, CellVariable)  # should be single-valued
         assert float(irrad.surface_irrad) == 0.0
 
-    @pytest.mark.xfail(reason='Not implemented')
     def test_update_time(self):
         # test that updating time changes the surface_irrad value
         # test for inputs float, PhysicalField and Variable
-        raise NotImplementedError
+
+        H = 4
+        irrad = Irradiance(hours_total=H)
+        irrad.set_domain(SedimentDBLDomain())
+        irrad.setup()
+
+        # irrad.setup(SedimentDBLDomain())
+        assert irrad.surface_irrad is not None
+        irrad.setup()
+        old = irrad.surface_irrad.copy()
+        irrad.on_time_updated(irrad.hours_total)
+        assert irrad.surface_irrad() == old
+
+        old = irrad.surface_irrad.copy()
+        irrad.on_time_updated(H / 2.0 * 3600.0)
+        assert irrad.surface_irrad() == irrad.zenith_level
 
     def test_snapshot(self, irrad):
         # Irradiance snapshot should have metadata & channels
@@ -204,4 +216,3 @@ class TestIrradiance:
             assert ch in channels
             # just check one field to confirm snapshot of channel
             assert channels[ch]['metadata']['k0'] == str(irrad.channels[ch].k0)
-

@@ -1,380 +1,384 @@
-import io
-
 import mock
 import pytest
-import yaml
-from fipy import Variable, PhysicalField
-from microbenthos import MicroBenthosModel, validate_dict, SedimentDBLDomain
-from microbenthos.model.model import ModelClock
+from fipy import PhysicalField
 
-MODEL_DEF = """
+from microbenthos import Expression, Entity, yaml, SedimentDBLDomain, DomainEntity
+from microbenthos.model.model import MicroBenthosModel, ModelClock, ModelEquation
 
-domain:
-    cls: SedimentDBLDomain
-    init_params:
-        cell_size: !unit 50 mum
-        sediment_length: !unit 10 mm
-        dbl_length: !unit 2 mm
-        porosity: 0.6
-        
-formulae:
+DOMAIN_DEF = yaml.load("""
+cls: SedimentDBLDomain
+init_params:
+    cell_size: !unit 50 mum
+    sediment_length: !unit 20 mm
+    dbl_length: !unit 1 mm
+    porosity: 0.6
+""")
 
-    inhibition_response:
-        variables: [x, Kmax, Khalf]
-        expr: (Kmax - x) / (2*Kmax - Khalf - x) * (x < Kmax)
-        
-environment:
+FORMULAE_DEF = yaml.load("""
+saturation:
+    vars: [x, Km]
+    expr: x / (Km + x)
+""")
 
-    oxy:
-        cls: Variable
-        init_params:
-            name: oxy
-            create:
-                hasOld: true
-                value: !unit 0.0 mol/m**3
-
-            constraints:
-                top: &oxy_top !unit 1e-12 mol/l
-                bottom: &oxy_bottom !unit 0 mol/l
-
-            seed:
-                profile: linear
-                params:
-                    start: *oxy_top
-                    stop: *oxy_bottom
-
-    h2s:
-        cls: Variable
-        init_params:
-            name: h2s
-            create:
-                hasOld: true
-                value: !unit 0.0 mol/m**3
-
-            constraints:
-                top: &h2s_top !unit 0 mol/l
-                bottom: &h2s_bottom !unit 1e-3 mol/l
-
-            seed:
-                profile: linear
-                params:
-                    start: *h2s_top
-                    stop: *h2s_bottom
-                    
-    D0_oxy:
-        cls: Variable
-        init_params:
-            name: D0_oxy
-            create:
-                value: !unit 1.3888e-9 m**2/s
-
-    D_oxy:
-        cls: ExprProcess
-        init_params:
-            formula: porosity * D0_oxy
-            varnames:
-                - porosity
-                - D0_oxy
-                
-    D0_h2s:
-        cls: Variable
-        init_params:
-            name: D0_h2s
-            create:
-                value: !unit 8.3333e-10 m**2/s
-
-    D_h2s:
-        cls: ExprProcess
-        init_params:
-            formula: porosity * D0_h2s
-            varnames:
-                - porosity
-                - D0_h2s
-                
-microbes:
-    cyano:
-        init_params:
-            name: cyano
-            features:
-                biomass:
-                    init_params:
-                        name: biomass
-                        create:
-                            value: !unit 0 mg/cm**3
-                            hasOld: true
-                        seed:
-                            profile: normal
-                            params:
-                                loc: !unit 1 mm
-                                scale: !unit 2 mm
-                                coeff: !unit 12 mg/cm**3
-                                
-            processes:
-                oxyPS:
-                    init_params:
-                        formula: Qmax * biomass * sed_mask
-                        varnames:
-                            - biomass
-                            - sed_mask
-                        params:
-                            Qmax: !unit 0.00841 mol/g/h
-                    
-                        responses:
-                            inhibit(oxy):
-                                cls: ExprProcess
-                                init_params:
-                                    formula: inhibition_response(oxy, Kmax, Khalf)
-                                    varnames:
-                                        - oxy
-                                    params:
-                                        Kmax: !unit "0.8e-3 mol/l"
-                                        Khalf: !unit "0.7e-3 mol/l"
+VARDEF = yaml.load("""
+cls: Variable
+init_params:
+    name: oxy
+    create:
+        hasOld: true
+        value: !unit 0.0 mol/m**3
+""")
 
 
-"""
+class TestMicroBenthosModel:
+    def fail(self):
+        pytest.xfail(reason='Not implemented')
 
-
-@pytest.fixture()
-def domain():
-    return SedimentDBLDomain()
-
-
-@pytest.fixture()
-def model_dict():
-    return validate_dict(yaml.load(MODEL_DEF), key='model')
-
-@pytest.fixture()
-def model():
-    pytest.xfail(reason='Inputs not updated to new schema yet')
-    m = MicroBenthosModel.from_dict(yaml.load(MODEL_DEF))
-    return m
-
-
-class TestModel:
     def test_init_empty(self):
-        m = MicroBenthosModel()
-        assert m
 
-    def test_init_domain(self, domain):
+        model = MicroBenthosModel()
 
-        m = MicroBenthosModel(domain=domain)
-        assert m
-        assert m.domain
+        assert model.domain is None
+        assert not model.equations
+        assert not model.env
+        assert not model.microbes
+        assert isinstance(model.clock, ModelClock)
+        assert model.clock() == 0
+        assert model.clock.unit.name() == 'h'
 
-    @pytest.mark.xfail(reason='Inputs not updated to new schema yet')
-    @pytest.mark.parametrize('obj', [
-        MODEL_DEF,
-        io.StringIO(unicode(MODEL_DEF)),
-        yaml.load(io.StringIO(unicode(MODEL_DEF)))
-        ],
-         ids=('string', 'stream', 'dict'))
-    def test_create_from(self, obj):
-        m = MicroBenthosModel.create_from(obj)
-        assert m.domain
-        assert m.all_entities_setup
+    def test_init_domain(self):
 
-    def test_snapshot(self, model):
+        model = MicroBenthosModel(domain={})
+        assert model.domain is None
+
+        model = MicroBenthosModel(domain=DOMAIN_DEF)
+        assert model.domain
+        assert model.domain.cell_size == DOMAIN_DEF['init_params']['cell_size']
+        with pytest.raises(RuntimeError):
+            model.create_full_equation()
+
+        # bad input
+        with pytest.raises(ValueError):
+            model = MicroBenthosModel(domain=3)
+
+    def test_domain(self):
+        model = MicroBenthosModel()
+        assert model.domain is None
+
+        DOM = object()
+        model.domain = DOM
+        assert model.domain is DOM
+
+        with pytest.raises(RuntimeError):
+            model.domain = DOM
+            # domain already set
+
+    def test_init_formulae(self):
+        model = MicroBenthosModel(formulae={})
+        assert not Expression._sympy_ns
+
+        model = MicroBenthosModel(formulae=FORMULAE_DEF)
+        for k in FORMULAE_DEF:
+            assert k in Expression._sympy_ns
+
+    def test_create_entity_from(self):
+        model = MicroBenthosModel()
+
+        with pytest.raises(RuntimeError):
+            entity = model.create_entity_from(VARDEF)
+            # no domain available
+        model.domain = SedimentDBLDomain()
+
+        entity = model.create_entity_from(VARDEF)
+        assert isinstance(entity, Entity)
+        assert entity.check_domain()
+        assert entity.is_setup
+
+    def test_add_formula(self):
+
+        BAD_FORMULA = dict(
+            vars=('x', 'Km'),
+            expr='x:3_j',  # unsympifyable
+            )
+
+        model = MicroBenthosModel()
+
+        for name, fdef in FORMULAE_DEF.items():
+            model.add_formula(name, **fdef)
+            assert name in Expression._sympy_ns
+
+        with pytest.raises(ValueError):
+            model.add_formula(name='blah', **BAD_FORMULA)
+
+    def test_entities_setup(self):
+        model = MicroBenthosModel()
+        model.entities_setup()
+        # no entities defined
+
+        entity = mock.MagicMock(DomainEntity)
+        model.env['var'] = entity
+        entity.is_setup = False
+
+        model.entities_setup()
+        entity.setup.assert_called_once_with(model=model)
+
+    def test_all_entities_setup(self):
+        model = MicroBenthosModel()
+
+        e1 = mock.MagicMock(DomainEntity)
+        e2 = mock.MagicMock(DomainEntity)
+
+        # for e in (e1, e2):
+        type(e1).is_setup = p = mock.PropertyMock(return_value=True)
+
+        # e1.is_setup.return_value = False
+        # e2.is_setup.return_value = True
+
+        model.env['e1'] = e1
+        model.microbes['e2'] = e2
+
+        assert model.all_entities_setup
+
+        for e in (e1, e2):
+            p.assert_called_once()
+
+        p.return_value = False
+
+        # e1.is_setup.return_value = True
+        assert not model.all_entities_setup
+
+    def test_snapshot(self):
+
+        model = MicroBenthosModel()
+
+        e1 = mock.MagicMock(DomainEntity)
+        e2 = mock.MagicMock(DomainEntity)
+        model.env['e1'] = e1
+        model.microbes['e2'] = e2
 
         state = model.snapshot()
 
-        statekeys = ('env', 'microbes', 'domain', 'equations', 'time')
-        assert set(statekeys) == set(state)
+        keys = set(('time', 'domain', 'env', 'microbes', 'equations'))
+        assert keys == set(state)
 
-        microbekeys = set(model.microbes)
-        assert microbekeys == set(state['microbes'])
+        assert 'e1' in state['env']
+        assert 'e2' in state['microbes']
 
-        envkeys = set(model.env)
-        assert envkeys == set(state['env'])
+    def test_can_restore_from(self):
 
-        eqnkeys = set(model.equations)
-        assert eqnkeys == set(state['equations'])
-        for eqnstate in state['equations'].values():
-            assert set(eqnstate) == {'transient', 'diffusion', 'sources'}
+        store = mock.Mock()
+        model = MicroBenthosModel()
 
-        assert set(state['time']) == {'data'}
+        with mock.patch('microbenthos.model.check_compatibility') as m:
 
-    def test_update_vars(self, model, model_dict):
+            model.can_restore_from(store)
 
-        hasold_list = []
-        for name, odef in model_dict['environment'].items():
-            print('Checking env.{} : {}'.format(name, odef.items()))
+            m.assert_called_once_with(model.snapshot(), store)
 
-            if odef['cls'] == 'Variable' and odef['init_params'].get('create', {}).get('hasOld'):
-                hasold_list.append('env.{}'.format(name))
+    def test_restore_from(self):
+        model = MicroBenthosModel()
 
-        for name, mdef in model_dict['microbes'].items():
-            print('Checking micrboes.{}'.format(name))
-            for feat, fdef in mdef['init_params']['features'].items():
-                if fdef['cls'] == 'Variable' and fdef['init_params'].get(
-                    'create', {}).get('hasOld'):
-                    hasold_list.append('microbes.{}.features.{}'.format(name, feat))
+        entity = mock.MagicMock(DomainEntity)
+        model.env['ent'] = entity
+        microbe = mock.MagicMock(DomainEntity)
+        model.microbes['microbe'] = microbe
 
-        updated = model.update_vars()
-        assert set(updated) == set(hasold_list)
+        from h5py import Group
+        store = mock.MagicMock(Group)
+        store.__getitem__.return_value = mock.MagicMock(Group)
 
-    @pytest.mark.parametrize(
-        'transient, diffusion, sources, error',
-        [
-            (
-                None,
-                None,
-                None,
-                ValueError
-                ),
-            (
-                ('env.oxy', 1),
-                None,
-                None,
-                ValueError
-                # either source or diffusion must be present
-                ),
+        with mock.patch.multiple(
+            'microbenthos.model',
+            check_compatibility=mock.DEFAULT,
+            truncate_model_data=mock.DEFAULT,
+            restore_var=mock.DEFAULT,
+            ) as mocks:
 
-            (
-                ('domain.oxy', 1),
-                ('env.D_oxy', 1),
-                None,
-                None
-                # only diffusion
-                ),
-            (
-                ('domain.oxy', 1),
-                None,
-                [('microbes.cyano.processes.oxyPS', 3)],
-                None
-                # only sources
-                ),
-            (
-                ('domain.oxy', 1),
-                ('env.D_oxy', 1),
-                [('microbes.cyano.processes.oxyPS', 3)],
-                None
-                # diffusion and sources
-                ),
-            (
-                ('domain.oxy', 1),
-                ('env.D_oxy', 1),
-                ('microbes.cyano.processes.oxyPS', 3),
-                ValueError
-                # sources should be list of tuples
-                ),
-            (
-                ('oxy', 1),
-                ('env.D_oxy', 1),
-                ('microbes.cyano.processes.oxyPS', 3),
-                ValueError
-                # transient is not dotted path, error in model.get_object
-                ),
+            check_compat = mocks['check_compatibility']
+            truncate = mocks['truncate_model_data']
+            restore_var = mocks['restore_var']
 
-            ]
-        )
-    def test_add_equation(self, model, transient, diffusion, sources, error):
-        # check that add quation input forms are correct
-        # a tuple of (modelpath, coeff) where coeff is int, float
-        # check that Equation obj is created
-        # check that equation definition is saved
+            restore_var.return_value = clockval = PhysicalField(0.5, 's')
+            truncate.return_value = 3
 
-        if error:
-            with pytest.raises(error):
-                model.add_equation('eqn',
-                                   transient=transient,
-                                   diffusion=diffusion,
-                                   sources=sources)
+            check_compat.side_effect = ValueError
 
+            with pytest.raises(TypeError):
+                model.restore_from(store, time_idx=-1)
+
+            check_compat.assert_called_once()
+
+            check_compat.reset_mock()
+            check_compat.side_effect = None
+
+            TIDX = -5
+            assert model.clock.value != clockval
+            snapshot = model.snapshot()
+            model.restore_from(store, time_idx=TIDX)
+
+            check_compat.assert_called_once_with(snapshot, store)
+            truncate.assert_called_once_with(store, time_idx=TIDX)
+            entity.restore_from.assert_called_once_with(store['env']['ent'], -1)
+            microbe.restore_from.assert_called_once_with(store['env']['micro'], -1)
+
+            assert model.clock.value == clockval
+
+    @mock.patch('microbenthos.model.ModelEquation')
+    def test_add_equation(self, MockEqn):
+
+        model = MicroBenthosModel()
+
+        call = dict(name='myEqn',
+                    track_budget=True
+                    )
+        call['transient'] = [3, 4, 5]
+
+        with pytest.raises(ValueError):
+            model.add_equation(**call)
+            # transient term should be a tuple of length 2
+
+        call['transient'] = CTERM = ('domain.var', 35)
+        with pytest.raises(ValueError):
+            model.add_equation(**call)
+            # one of diffusion or source term must be given
+
+        call['diffusion'] = 'ab'
+        with pytest.raises(ValueError):
+            model.add_equation(**call)
+            # diffusion should be a pair
+
+        call.pop('diffusion')
+        call['sources'] = []
+        with pytest.raises(ValueError):
+            model.add_equation(**call)
+            # sources should be a sequence of pair-tuples
+
+        call.pop('sources')
+        call['diffusion'] = CTERM
+        model.add_equation(**call)
+        assert call['name'] in model.equations
+        MockEqn.assert_called_once_with(model, *call['transient'], track_budget=call['track_budget'])
+        MockEqn().finalize.assert_called_once()
+        MockEqn().add_diffusion_term_from.assert_called_once_with(*call['diffusion'])
+        MockEqn().add_source_term_from.assert_not_called()
+
+        MockEqn.reset_mock()
+        model.equations.pop(call['name'])
+
+        call['sources'] = [CTERM] * 3
+        model.add_equation(**call)
+        assert call['name'] in model.equations
+        MockEqn.assert_called_once_with(model, *call['transient'],
+                                        track_budget=call['track_budget'])
+        MockEqn().finalize.assert_called_once()
+        MockEqn().add_diffusion_term_from.assert_called_once_with(*call['diffusion'])
+        MockEqn().add_source_term_from.call_count == len(call['sources'])
+        for mcall in MockEqn().add_source_term_from.call_args_list:
+            assert mcall[0] == CTERM
+            assert mcall[1] == {}  # no kwargs
+
+    def test_create_full_equation(self):
+
+        model = MicroBenthosModel()
+        with pytest.raises(RuntimeError):
+            model.create_full_equation()
+
+        Meqn = mock.MagicMock(ModelEquation)
+        eqn = Meqn()
+        model.equations['eqn'] = eqn
+        model.equations['eqn2'] = eqn
+
+        model.create_full_equation()
+        eqn.obj.__and__.assert_called_once_with(eqn.obj)
+
+        assert model.full_eqn is not None
+        import operator
+        import functools
+        assert model.full_eqn == functools.reduce(operator.and_, [eqn.obj for eqn in (eqn, eqn)])
+
+    @pytest.mark.parametrize('path, err',[
+        ('nodotted', TypeError),
+        ('dot.ted', None),
+        ])
+    def test_get_object(self, path, err):
+        model = mock.MagicMock(MicroBenthosModel)
+        model.logger = mock.Mock()
+
+
+        if err:
+            with pytest.raises(err):
+                MicroBenthosModel.get_object(model, path)
         else:
+            try:
+                ret = MicroBenthosModel.get_object(model, path)
+            except ValueError:
+                pass
 
-            model.add_equation('eqn',
-                               transient=transient,
-                               diffusion=diffusion,
-                               sources=sources)
-            assert 'eqn' in model.equations
-            with pytest.raises(RuntimeError):
-                # eqn already created raises runtime error
-                model.add_equation('eqn',
-                                   transient=transient,
-                                   diffusion=diffusion,
-                                   sources=sources)
+    @mock.patch('microbenthos.model.ModelClock')
+    def test_on_time_updated(self, MClock):
+        model = MicroBenthosModel()
+
+        MEntity = mock.MagicMock(DomainEntity)
+        enames = list('abcd')
+        mnames = list('xbcjkl')
+        for e in enames:
+            model.env[e] = MEntity()
+
+        for m in mnames:
+            model.microbes[m] = MEntity()
+
+        model.on_time_updated()
+        MClock.assert_called_once()
+        ent = MEntity()
+
+        ent.on_time_updated.call_count = len(enames) + len(mnames)
+        for call in ent.on_time_updated.call_args_list:
+            args, kwargs = call
+            assert args == (MClock()(),)
+            assert kwargs == {}
 
 
-class TestModelClock:
-    def test_init(self, model):
+    def test_update_vars(self):
+        model = MicroBenthosModel()
+
+        from microbenthos.core.entity import Variable
+
+        Mvar = mock.MagicMock(spec=Variable)
+        assert isinstance(Mvar, Variable)
+        # Mvar().var = var = mock.Mock()
+
+        varnames = list('abcd')
+        for v in varnames:
+            model.env[v] = Mvar()
+        model.env['nonvar'] = nonvar = mock.Mock()
+
+        model.update_vars()
+
+        nonvar.obj.assert_not_called()
+        assert Mvar().var.updateOld.call_count == len(varnames)
+
+    def test_update_equations(self):
+
+        model = MicroBenthosModel()
+
+        eqn = mock.Mock()
+
+        names = ['eqn1', 'eqn2', 'eqn3']
+        for n in names:
+            model.equations[n] = eqn
+
         with pytest.raises(TypeError):
-            assert ModelClock()
+            model.update_equations()
+            # requires dt argument
 
-        clock = ModelClock(model)
-        assert clock is not None
-        assert clock.value == 0
-        assert isinstance(clock, Variable)
+        dt = object()
+        model.update_equations(dt)
 
-    def test_model_clock(self, model):
-        assert isinstance(model.clock, Variable)
-        assert model.clock.unit.name() == 'h'
+        assert eqn.update_tracked_budget.call_count == len(names)
+        for args, kwargs in eqn.update_tracked_budget.call_args_list:
+            assert args == (dt,)
+            assert kwargs == {}
 
-    @pytest.mark.parametrize('dt, error', [
-        (-1, ValueError),
-        (0, ValueError),
-        (1, None),
-        (PhysicalField('3 s'), None),
-        (PhysicalField('2 min'), None),
-        (PhysicalField('1 h'), None),
 
-        ])
-    def test_increment(self, model, dt, error):
 
-        if error:
-            with pytest.raises(error):
-                model.clock.increment_time(dt)
-            return
 
-        old = model.clock.value.copy()
-        print('Incrementing {} by {}'.format(old, dt))
-        model.clock.increment_time(dt)
-        new = model.clock.value
-
-        assert new == old + PhysicalField(dt, 's'), 'Added {} to {} failed'.format(
-            PhysicalField('s'), old)
-
-    @pytest.mark.parametrize('t, error', [
-        (-1, ValueError),
-        (0, None),
-        (1, None),
-        (PhysicalField('3 s'), None),
-        (PhysicalField('2 min'), None),
-        (PhysicalField('1 h'), None),
-
-        ])
-    def test_set_time(self, model, t, error):
-
-        if error:
-            with pytest.raises(error):
-                model.clock.set_time(t)
-            return
-
-        print('Setting time to {}'.format(t))
-        model.clock.set_time(t)
-        new = model.clock.value
-
-        assert new == PhysicalField(t, 'h')
-
-    def test_model_update_called(self, model):
-
-        with mock.patch.object(model, 'on_time_updated') as mockobj:
-            model.clock.set_time(3)
-            mockobj.assert_called_once()
-
-            mockobj.reset_mock()
-
-            model.clock.increment_time(1)
-            mockobj.assert_called_once()
-
-    @mock.patch('microbenthos.Entity.on_time_updated', autospec=True)
-    def test_entity_update_called(self, mockobj, model):
-
-        count = len(model.env)
-        for m in model.microbes.values():
-            count += len(m.features)
-
-        model.clock.set_time(3)
-
-        mockobj.assert_called_with(mock.ANY, PhysicalField(3, 'h'))
-        print(mockobj.mock_calls)
-        assert len(mockobj.mock_calls) == count

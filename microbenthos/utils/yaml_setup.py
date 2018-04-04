@@ -1,6 +1,10 @@
+"""
+Imports yaml from PyYaml and adds serialization options for :class:`fipy.PhysicalField`.
+"""
 
-
+import yaml
 from fipy import PhysicalField
+
 
 # import ruamel.yaml
 # class PhysicalField_(PhysicalField):
@@ -24,8 +28,6 @@ from fipy import PhysicalField
 #
 # yaml = ruamel.yaml.YAML()
 # yaml.register_class(PhysicalField_)
-
-import yaml
 def unit_constructor(loader, node):
 
     value = loader.construct_scalar(node)

@@ -1,12 +1,15 @@
 from collections import Mapping
 
-import numpy as np
 from fipy import PhysicalField
+from fipy.tools import numerix as np
 
 from .base import ModelData
 
 
 class SnapshotModelData(ModelData):
+    """
+        Class that encapsulates the model data stored in snapshot :class:`dict`
+        """
     def check_store(self, obj):
         return isinstance(obj, Mapping)
 

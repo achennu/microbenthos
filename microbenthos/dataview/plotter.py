@@ -123,7 +123,6 @@ class ModelPlotter(object):
 
         self.fig = plt.figure('MicroBenthos Simulation', **kwargs)
 
-
         axes_depth = self.axes_depth
         axes_time = self.axes_time
 
@@ -254,12 +253,19 @@ class ModelPlotter(object):
             except:
                 self.logger.debug('Could not set {} axes to scientific notation'.format(ax.name))
 
-        self.logger.debug('Created figure with {} panels'.format(len(self.axes_all)))
+        self.logger.debug('Created figure')
 
     @property
     def axes_all(self):
-        return self.axes_depth + self.axes_time + list(
-            itertools.chain(self.axes_depth_linked.values()))
+        return itertools.chain(self.axes_depth_all, self.axes_time_all)
+
+    @property
+    def axes_depth_all(self):
+        return itertools.chain(self.axes_depth, self.axes_depth_linked.values())
+
+    @property
+    def axes_time_all(self):
+        return itertools.chain(self.axes_time, self.axes_time_linked.values())
 
     def setup_model(self):
         self.logger.debug('Setting model data: {}'.format(self.model))
@@ -394,8 +400,8 @@ class ModelPlotter(object):
         self.logger.debug('Plot order for {} ax: {}'.format(ax.name, plot_order))
 
         zeros = np.zeros_like(self.model.depths)
-        all_depth_axes = self.axes_depth + self.axes_depth_linked.values()
-        all_time_axes = self.axes_time + self.axes_time_linked.values()
+        # all_depth_axes = itertools.chain(self.axes_depth, self.axes_depth_linked.values())
+        # all_time_axes = itertools.chain(self.axes_time, self.axes_time_linked.values())
 
         for label in plot_order:
             path = label_paths[label]
@@ -420,9 +426,9 @@ class ModelPlotter(object):
 
                 self.artist_style[label] = style
 
-            if ax in all_depth_axes:
+            if ax in self.axes_depth_all:
                 artist = ax.plot(zeros, self.depths, label=label, **self.artist_style[label])[0]
-            elif ax in all_time_axes:
+            elif ax in self.axes_time_all:
                 self.artist_style[label].update(dict(markevery=1, ls=':', marker='.'))
                 artist = ax.plot([], [], label=label, **self.artist_style[label])[0]
 
@@ -474,8 +480,9 @@ class ModelPlotter(object):
         self.clock_artist.set_text(hmstr)
         self.logger.debug('Time: {}'.format(hmstr))
 
-        all_depth_axes = self.axes_depth + self.axes_depth_linked.values()
-        all_time_axes = self.axes_time + self.axes_time_linked.values()
+        # self.axes_all
+        # all_depth_axes = itertools.chain(self.axes_depth, self.axes_depth_linked.values())
+        # all_time_axes = itertools.chain(self.axes_time, self.axes_time_linked.values())
 
         for artist, dpath in self.artist_paths.items():
 
@@ -550,11 +557,11 @@ class ModelPlotter(object):
                 label = label_base
 
             # now ready to set data and label
-            if ax in all_depth_axes:
+            if ax in self.axes_depth_all:
                 artist.set_xdata(D)
                 artist.set_label(label)
 
-            elif ax in all_time_axes:
+            elif ax in self.axes_time_all:
                 xdata, ydata = artist.get_data()
                 t = self.model.get_data('/time', tidx=tidx)
                 artist.set_xdata(np.append(xdata, t.inUnitsOf('h').value))
@@ -579,8 +586,7 @@ class ModelPlotter(object):
         try:
             self.fig.canvas.draw_idle()
             self.fig.canvas.flush_events()
-            self.fig.canvas.draw()
-            self.fig.canvas.flush_events()
+            plt.pause(0.001)
         except KeyboardInterrupt:
             self.logger.warning('KeyboardInterrupt caught while updating canvas. Re-raising.')
             raise

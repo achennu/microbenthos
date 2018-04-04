@@ -5,6 +5,8 @@ import os
 import warnings
 from collections import OrderedDict
 
+import click
+
 from ..exporters import BaseExporter
 from ..model import MicroBenthosModel, Simulation
 from ..utils import yaml, find_subclasses_recursive
@@ -15,7 +17,7 @@ DUMP_KWARGS = dict(
     explicit_start=True,
     explicit_end=True,
     default_flow_style=False
-)
+    )
 
 
 class SimulationRunner(object):
@@ -31,30 +33,129 @@ class SimulationRunner(object):
         * export the model definition
         * export the run setup
         * setup the exporters
-        * run the simulation
+        * run the simulation evolution
         * clean up
     """
 
-    def __init__(self, output_dir=None, model=None, simulation=None):
+    def __init__(self,
+                 output_dir = None,
+                 resume = False,
+                 confirm = False,
+                 overwrite = False,
+                 model = None,
+                 simulation = None,
+                 progress = False,
+                 plot = False,
+                 video = False,
+                 frames = False,
+                 budget = False,
+                 exporters = None,
+                 show_eqns = False,
+                 ):
         self.logger = logging.getLogger(__name__)
         self.logger.info('Initializing {}'.format(self))
 
         self._model = None
         self._simulation = None
-        self._exporter_classes = None
+
+        exporters = exporters or []
         self.exporters = OrderedDict()
 
-        self.output_dir = output_dir
+        self.output_dir = output_dir or '.'
         self._log_fh = None
+
+        if resume == 0:
+            self.logger.warning(
+                'Resume = 0 implies to restart simulation. Setting overwrite=True instead')
+
+            resume = False
+            overwrite = True
+
+        if resume is True:
+            resume = -1
+            overwrite = False
+
+        self.resume = resume
+        self.overwrite = overwrite
+        self.confirm = confirm
+        self.show_eqns = show_eqns
+
+        # load up exporters
+        from microbenthos.utils import find_subclasses_recursive
+        from microbenthos.exporters import BaseExporter
+
+        self._exporter_classes = {e._exports_: e for e in
+                                  find_subclasses_recursive(BaseExporter)}
 
         if model:
             self.model = model
 
-        if simulation:
+        if simulation is not None:
             self.simulation = simulation
+
+        if progress:
+            exporters.append(dict(exptype='progress'))
+
+        if plot or video or frames:
+            exporters.append(dict(exptype='graphic',
+                                  write_video=video,
+                                  show=plot,
+                                  track_budget=budget,
+                                  write_frames=frames))
+
+            if self.resume and video:
+                self.logger.warning(
+                    'Video will begin from this simulation run, since resume is set!')
+
+        if exporters:
+            # add other exporters
+            for expdef in exporters:
+                self.add_exporter(output_dir=self.output_dir, **expdef)
 
     def __repr__(self):
         return 'SimulationRunner'
+
+    def _check_data_path(self, data_path = None):
+
+        data_path = data_path
+        EXISTS = os.path.exists(data_path)
+
+        # both overwrite and resume cannot be true by the user
+        self.logger.debug('Checking data outpath: {} (exists={})'.format(
+            data_path, EXISTS
+            ))
+
+        self.logger.debug('resume={} overwrite={} confirm={}'.format(
+            self.resume, self.overwrite, self.confirm
+            ))
+
+        if EXISTS:
+            if self.resume:
+                self.overwrite = False
+
+            if not self.resume and not self.overwrite:
+                if not self.confirm:
+                    click.secho(
+                        'Ambiguous case with --no-confirm: file exists and neither --overwrite nor'
+                        ' --resume were specified',
+                        fg='red')
+                    raise click.Abort()
+
+            # implies here that overwrite=True
+            if self.confirm and not self.overwrite:
+                click.confirm(
+                    'Overwrite existing file: {}?'.format(data_path),
+                    abort=True)
+                self.overwrite = True
+
+            if self.overwrite:
+                click.secho('Deleting output path: {}'.format(data_path), fg='red')
+                os.remove(data_path)
+
+            assert not os.path.exists(data_path)
+
+        else:
+            self._create_output_dir()
 
     @property
     def model(self):
@@ -86,7 +187,8 @@ class SimulationRunner(object):
         if self.simulation is None:
             self._simulation = Simulation.create_from(obj)
             self.logger.debug('Simulation set: {}'.format(self.simulation))
-            if self.model:
+
+            if not self.simulation.model and self.model:
                 self.simulation.model = self.model
         else:
             raise RuntimeError('Simulation already set in runner!')
@@ -95,14 +197,17 @@ class SimulationRunner(object):
         self._exporter_classes = {c._exports_: c for c in find_subclasses_recursive(BaseExporter)}
         self.logger.debug("Loaded exporter classes: {}".format(self._exporter_classes.keys()))
 
-    def add_exporter(self, exptype, name=None, **kwargs):
+    def add_exporter(self, exptype, name = None, **kwargs):
         """
         Add an exporter to the simulation run
 
         Args:
-            obj: Object to create instance from. See :attr:`BaseExporter.create_from`
-            name (str): The name to set for the exporter. If None, then the
-            :attr:`BaseExporter._exports_` is used.
+            exptype (str): The type of exporter. This should match the :attr:`_exports_ on the
+                class of the exporter. (See :class:`~microbenthos.exporters.exporter.BaseExporter`)
+
+            name (str): The name to set for the exporter
+
+            **kwargs: passed to the init of the exporter class.
 
         Returns:
             The name of the exporter created
@@ -112,21 +217,27 @@ class SimulationRunner(object):
             name = exptype
 
         if name in self.exporters:
-            raise ValueError('Exporter with name {!r} already exists!')
+            raise ValueError('Exporter with name {!r} already exists!'.format(name))
 
         if not self._exporter_classes:
             self._load_exporters()
 
         cls = self._exporter_classes.get(exptype)
         if cls is None:
-            raise ValueError('No exporter of type {!r} found. Available: {}'.format(exptype,
-                                                                                    self._exporter_classes.keys()))
+            raise ValueError('No exporter of type {!r} found. Available: {}'.format(
+                exptype, self._exporter_classes.keys()))
 
         instance = cls(name=name, **kwargs)
         self.logger.info('Adding exporter {!r}: {!r}'.format(name, instance))
         self.exporters[name] = instance
 
     def _create_output_dir(self):
+        """
+        Create the output directory
+
+        Raises:
+            OSError: if :attr:`.output_dir` is a file and not a dir
+        """
 
         if self.output_dir is None:
             raise ValueError('output_dir cannot be empty for creation')
@@ -139,7 +250,54 @@ class SimulationRunner(object):
                 self.logger.error('Error creating output_dir')
                 raise
 
-    def setup_logfile(self, mode='a'):
+    def resume_existing_simulation(self, data_outpath = None):
+        if self.resume is None:
+            self.logger.debug(
+                'resume={}, so will not resume from existing file'.format(self.resume))
+            return
+
+        data_outpath = data_outpath or self.data_outpath
+
+        if not os.path.exists(data_outpath):
+            self.logger.debug('Outpath does not exist, cannot resume...')
+            return
+
+        from fipy import PhysicalField
+        import h5py as hdf
+
+        # open the store and read out the time info
+        with hdf.File(data_outpath, 'r') as store:
+            tds = store['/time/data']
+            nt = len(tds)
+            target_time = tds[self.resume]
+            latest_time = tds[-1]
+            time_unit = tds.attrs['unit']
+
+        target_time = PhysicalField(target_time, time_unit)
+        latest_time = PhysicalField(latest_time, time_unit)
+
+        click.secho(
+            '\n\nModel resume set: rewind from latest {} ({}) to {} ({})?'.format(
+                latest_time, nt,
+                target_time, self.resume
+                ), fg='red')
+
+        if self.confirm:
+            click.confirm('Rewinding model clock can lead to data loss! Continue?',
+                          default=False, abort=True)
+
+        try:
+            with hdf.File(data_outpath, 'a') as store:
+                self.model.restore_from(store, time_idx=self.resume)
+            click.secho('Model restore successful. Clock = {}\n\n'.format(self.model.clock),
+                        fg='green')
+            self.simulation.simtime_step = 1
+            # set a small simtime to start
+        except:
+            click.secho('Simulation could not be restored from given data file!', fg='red')
+            raise  # click.Abort()
+
+    def setup_logfile(self, mode = 'a'):
         """
         Setup log file in the output directory
         """
@@ -165,12 +323,13 @@ class SimulationRunner(object):
         """
         Save the model and simulation definition to the output directory
         """
-        self.logger.info('Saving model definition: model.yml')
-        with open(os.path.join(self.output_dir, 'model.yml'), 'w') as fp:
+        DEFINITION_FILE = 'definition.yml'
+        self.logger.info('Saving model definition: {}'.format(DEFINITION_FILE))
+        with open(os.path.join(self.output_dir, DEFINITION_FILE), 'w') as fp:
             yaml.dump(dict(
                 model=self.model.definition_,
                 simulation=self.simulation.definition_
-            ), fp, **DUMP_KWARGS)
+                ), fp, **DUMP_KWARGS)
 
     def save_run_info(self):
         """
@@ -218,9 +377,8 @@ class SimulationRunner(object):
         Prepare the simulation by setting up the model
         """
         self.logger.info('Preparing simulation')
-        if not self.simulation.model:
-            if self.model:
-                self.simulation.model = self.model
+        if not self.simulation.model and self.model:
+            self.simulation.model = self.model
 
     @contextlib.contextmanager
     def exporters_activated(self):
@@ -250,15 +408,71 @@ class SimulationRunner(object):
                     self.logger.error('Error in closing exporter: {}'.format(expname))
                     raise
 
+    def get_data_exporters(self):
+        return filter(lambda e: e._exports_ == 'model_data', self.exporters.values())
+
     def run(self):
         """
-        Run the simulation run with the stored model and simulation setup. There needs to be
-        at least one exporter (typically a data exporter)
+        Run the simulation with the stored model and simulation setup.
 
+        This performs a sequence of operations:
 
-        Returns:
+            * shows equations if :attr:`.show_eqns` is set
+            * Announces simulation settings in output
+            * Runs :meth:`.check_simulation`
+            * creates output directory
+            * sets up the logfile
+            * saves definitions to yaml outputs of simulation & model
+            * saves the runtime info (library, exporter versions etc)
+            * prepares the simulation
+            * activates the exporter context (see :meth:`.exporters_activated`)
+            * iterates over the :meth:`.simulation.evolution` and passes returned state to the
+              exporters
+            * after that tears down the logfile
+
+        Raises:
+            RuntimeError: if no simulation exists
 
         """
+
+        self.logger.debug('Starting simulation run')
+
+        if not self.simulation:
+            raise RuntimeError('No simulation defined to run')
+
+        if not self.exporters:
+            self.logger.error(
+                'No exporters defined for simulation run. Consider adding "model_data" to export '
+                'data.')
+
+        for dexporter in self.get_data_exporters():
+            self.logger.debug('Checking outpath & resume of {}: {}'.format(dexporter,
+                                                                           dexporter.outpath))
+            self._check_data_path(dexporter.outpath)
+            self.resume_existing_simulation(dexporter.outpath)
+
+        if self.show_eqns:
+            click.secho('Solving the equation(s):', fg='green')
+            for neqn, eqn in self.model.equations.items():
+                click.secho(eqn.as_pretty_string(), fg='green')
+
+        click.secho(
+            'Simulation setup: solver={0.fipy_solver} '
+            'max_sweeps={0.max_sweeps} max_residual={0.residual_target} '
+            'timestep_lims=({1})'.format(
+                self.simulation, [str(s) for s in self.simulation.simtime_lims]),
+            fg='yellow')
+
+        click.echo('Simulation clock at {}. Run till {}'.format(
+            self.model.clock,
+            self.simulation.simtime_total))
+
+        if self.confirm:
+            click.confirm('Proceed with simulation run?',
+                          default=True, abort=True)
+
+        click.secho('Starting simulation...', fg='green')
+
         self.logger.debug('Preparing to run simulation')
 
         self.check_simulation()
@@ -294,7 +508,7 @@ class SimulationRunner(object):
                     if step:
                         num, state = step
 
-                        export_due = self.simulation.export_due() or (num == 0)
+                        export_due = self.simulation.snapshot_due() or (num == 0)
                         self.logger.info('Step #{}: Exporting model state'.format(num))
 
                         for exporter in self.exporters.values():
@@ -306,7 +520,7 @@ class SimulationRunner(object):
 
                         self.logger.info('Step #{}: Export done'.format(num))
                     else:
-                        self.logger.warning('Step #{}: Empty model state received!'.format(num))
+                        self.logger.warning('Empty model state received!')
 
                 except KeyboardInterrupt:
                     self.logger.error("Keyboard interrupt on simulation run!")
@@ -314,3 +528,5 @@ class SimulationRunner(object):
 
         self.teardown_logfile()
         warnings.resetwarnings()
+
+        click.secho('Simulation done.', fg='green')

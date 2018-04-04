@@ -35,6 +35,7 @@ class TestProcessEvent:
         model = mock.MagicMock(MicroBenthosModel)
         CLOCK_VAL = Variable(2.5, 'h')
         model.clock = mock.Mock(return_value=CLOCK_VAL)
+        model.clock.copy.return_value = CLOCK_VAL
 
         expr = mock.MagicMock(Expression)
         expr.expr.return_value = EXPR = object()
@@ -50,8 +51,6 @@ class TestProcessEvent:
             value=model.clock
             )
         assert isinstance(pe._prev_clock, Variable)
-        assert pe._prev_clock.name == '{}:prev_clock'.format(pe.name)
-
         expr.expr.assert_called_once()
 
         proc.evaluate.assert_called_once_with(EXPR)
@@ -69,8 +68,8 @@ class TestProcessEvent:
         CONDVAL.__invert__.return_value = NEG = object()
 
         PREVVAL = PhysicalField(2, 's')
-        pe._prev_clock = PREV = mock.Mock(return_value=PREVVAL)
-        clock = mock.Mock()
+        pe._prev_clock = PREV = mock.MagicMock(return_value=PREVVAL)
+        clock = mock.MagicMock()
         DIFF_VAL = PhysicalField(5, 's')
         clock.__sub__ = mock.Mock(return_value=DIFF_VAL)
 
@@ -81,17 +80,12 @@ class TestProcessEvent:
 
         pe.on_time_updated(clock)
 
-        PREV.assert_called_once()
-        clock.__sub__.assert_called_once_with(PREVVAL)
+        clock.copy().__sub__.assert_called_once()
         pe.condition.assert_called_once()
-        pe.event_time.assert_called_once()
-        try:
-            pe.event_time.setValue.assert_any_call(EVENTVAL + DIFF_VAL)
-        except AssertionError:
-            print('got calls {}'.format(pe.event_time.setValue.mock_calls))
+        pe.event_time.setValue.assert_called_once()
 
         CONDVAL.__invert__.assert_called_once()
 
         pe.event_time.value.__setitem__.assert_called_once_with(
             NEG, 0.0)
-        PREV.setValue.assert_called_once_with(clock)
+

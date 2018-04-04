@@ -3,21 +3,23 @@ import logging
 from .entity import DomainEntity, Variable
 
 
-# from .process import Process
-
-
 class MicrobialGroup(DomainEntity):
     """
-    Class to represent a category of micro-organisms, such as cyanobacteria, chemosynthetic
-    sulfur bacteria, etc. This class is useful when the distribution of their biomass within the
-    modelling domain needs to be specified and potentially modified over time, such as through
-    growth or migration.
+    Class to represent a category of microorganisms, such as cyanobacteria, sulfur bacteria, etc.
+
+    This class defines the interface to
+
+        * define :attr:`.features` such as :attr:`.biomass`, distributed through the domain
+        * setup :attr:`.processes` which the microbes perform on domain entities
     """
 
     def __init__(self, features = None, processes = None, **kwargs):
         """
-        Initialize a microbial group with a given name, and instantiate features and processes
-        for the microbes..
+        Initialize a microbial group
+
+        Args:
+            features (dict): the definitions for :meth:`.add_feature_from`
+            processes (dict): the definitions for :meth:`.add_process_from`
 
         """
         self.logger = kwargs.get('logger') or logging.getLogger(__name__)
@@ -27,8 +29,15 @@ class MicrobialGroup(DomainEntity):
         super(MicrobialGroup, self).__init__(**kwargs)
 
         self._biomass = None
+
+        #: container of the fipy Variables belonging to the microbes
         self.VARS = {}
+
+        #: the features of the microbes, which are instances of :class:`.Variable`.
         self.features = {}
+
+        #: the processes of the microbes, which are instances of
+        #: :class:`~microbenthos.core.process.Process`.
         self.processes = {}
 
         if features:
@@ -39,11 +48,6 @@ class MicrobialGroup(DomainEntity):
             for pname, pdict in dict(processes).items():
                 self.add_process_from(pname, **pdict)
 
-                # if self.biomass is None:
-                #     self.logger.warning('{} initialized but no biomass feature found!'.format(
-                # self))
-                # raise RuntimeError('{} needs feature "biomass"'.format(self))
-
         self.logger.debug('Initialized {}'.format(self))
 
     def __repr__(self):
@@ -51,6 +55,9 @@ class MicrobialGroup(DomainEntity):
                                               ','.join(self.processes.keys()))
 
     def __getitem__(self, item):
+        """
+        Item getter to behave like a domain
+        """
         if item in self.VARS:
             return self.VARS[item]
         else:
@@ -64,16 +71,12 @@ class MicrobialGroup(DomainEntity):
 
     def add_feature_from(self, name, **params):
         """
-        Add a feature to the microbial group.
-
-        This is used to define features such as biomass from a definition dictionary.
+        Create a feature and add it it :attr:`.features`
 
         Args:
             name (str): name of the feature
-            **params: parameters to initialize the feature
+            **params: parameters passed to :meth:`.from_dict`
 
-        Returns:
-            None
         """
         # feature variable should be stored here, not on domain
         if params['cls'].endswith('Variable'):
@@ -83,7 +86,6 @@ class MicrobialGroup(DomainEntity):
         self.logger.debug('Dispatch init of feature {!r}: {}'.format(name, params))
         instance = self.from_dict(params)
 
-
         if name in self.features:
             self.logger.warning('Overwriting feature {!r} with {}'.format(name, instance))
 
@@ -92,17 +94,12 @@ class MicrobialGroup(DomainEntity):
 
     def add_process_from(self, name, **params):
         """
-        Add a process to the microbial group.
-
-        This is used to define processes such as biomass growth or metabolism from a definition
-        dictionary.
+        Create a process and add it it :attr:`.processes`
 
         Args:
             name (str): name of the process
-            **params: parameters to initialize the feature
+            **params: parameters passed to :meth:`.from_dict`
 
-        Returns:
-            None
         """
         self.logger.debug('Dispatch init of process {!r}'.format(name, params))
         params['init_params']['name'] = '{}:{}'.format(self.name, name)
@@ -116,20 +113,30 @@ class MicrobialGroup(DomainEntity):
 
     @property
     def biomass(self):
+        """
+        The feature "biomass" stored in :attr:`.features`. This is considered as an essential
+        feature for a microbial group. However, no error is raised if not defined currently.
+
+        Returns:
+            :class:`fipy.CellVariable`: biomass variable stored on the domain
+
+        """
         ret = self.features.get('biomass')
         if ret is None:
             self.logger.warning('Essential feature "biomass" of {} missing!'.format(self))
         else:
-             if ret.var is not None:
-                 ret = ret.var
+            if ret.var is not None:
+                ret = ret.var
         return ret
 
     def on_domain_set(self):
         """
-        Features, which are handlers for domain variables, receive the domain instances. However
-        processes receive `self` as the domain, so that variable lookup happens first locally on
-        the instance and then passed on to the domain.
-        Returns:
+        Set up the domain on the microbial group.
+
+        Note:
+            Features, which are handlers for domain variables, receive the domain instances. However
+            processes receive `self` as the domain, so that variable lookup happens first locally on
+            the instance and then passed on to the domain.
 
         """
 
@@ -145,6 +152,8 @@ class MicrobialGroup(DomainEntity):
         """
         If the domain is available, then setup all the features and processes.
 
+        Store any :class:`fipy.CellVariables` created in :attr:`.features` into :attr:`.VARS`.
+
         """
         self.logger.debug('Setup of {}'.format(self))
         if self.check_domain():
@@ -157,17 +166,29 @@ class MicrobialGroup(DomainEntity):
                     self.logger.debug('Stored var {!r} into VARS'.format(obj))
 
     def on_time_updated(self, clocktime):
+        """
+        When model clock updated, delegate to feature and process instances
+        """
         self.logger.debug('Updating {}'.format(self))
         for obj in self.features.values() + self.processes.values():
             obj.on_time_updated(clocktime)
 
-    def snapshot(self, base=False):
+    def snapshot(self, base = False):
         """
-        Returns a snapshot of the object's state
+        Returns a snapshot of the state with the structure:
+
+            * "metadata"
+                * "name": :attr:`.name`
+
+            * "features"
+                * "name" : :meth:`.snapshot()` of :attr:`.features`
+
+            * "processes"
+                * "name" : :meth:`.snapshot()` of :attr:`.processes`
 
         Returns:
-            Dictionary with keys: `data`, `metadata`, where the value of each `data` entry is
-            either another such dictionary or a numeric array
+            dict: state of the microbial group
+
         """
         self.logger.debug('Snapshot: {}'.format(self))
         self.check_domain()
@@ -187,6 +208,9 @@ class MicrobialGroup(DomainEntity):
         return state
 
     def restore_from(self, state, tidx):
+        """
+        Simply delegate to :meth:`~Variable.restore_from` of the features and processes
+        """
 
         for name, obj in self.features.items():
             obj.restore_from(state['features'][name], tidx)

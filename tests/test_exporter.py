@@ -1,27 +1,26 @@
 import pytest
-import mock
+
 from microbenthos.exporters import BaseExporter
-
-class Exporter(BaseExporter):
-    _exports_ = 'a'
-    __version__ = 'b'
-
-    def prepare(self, sim):
-        pass
-
-    def finish(self):
-        pass
-
-    def process(self, num, state):
-        pass
 
 
 class TestExporter:
-
     def test_init(self):
         with pytest.raises(TypeError):
             BaseExporter()
             # abstract base class
+
+        class Exporter(BaseExporter):
+            _exports_ = 'a'
+            __version__ = 'b'
+
+            def prepare(self, sim):
+                pass
+
+            def finish(self):
+                pass
+
+            def process(self, num, state):
+                pass
 
         exp = Exporter()
 
@@ -33,4 +32,3 @@ class TestExporter:
         Exporter.__version__ = ''
         with pytest.raises(ValueError):
             Exporter()
-

@@ -1,13 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from setuptools import setup
+from setuptools import setup, find_packages
 
-with open('README.rst') as readme_file:
-    readme = readme_file.read()
+def get_description():
+    import os
+    CURR = os.path.dirname(__file__)
 
-with open('HISTORY.rst') as history_file:
-    history = history_file.read()
+    with open(os.path.join(CURR, 'README.rst')) as readme_file:
+        readme = readme_file.read()
+
+    return readme
 
 requirements = [
     'click>=6.0',
@@ -28,17 +31,27 @@ test_requirements = [
     'mock',
 ]
 
+docs_requirements = [
+    'sphinx>=1.7',
+    'sphinx_rtd_theme',
+    'sphinxcontrib-programoutput',
+    'sphinx-autodoc-typehints',
+    ]
+
 setup(
     name='microbenthos',
-    version='0.7.1',
-    description="In silico microbenthic simulations for studies of biogeochemistry and microbial ecology",
-    long_description=readme + '\n\n' + history,
+    version='0.8',
+    description="Modeling framework for microbenthic habitats useful for studies in "
+                "biogeochemistry and marine microbial ecology.",
+    long_description=get_description(),
     author="Arjun Chennu",
-    author_email='achennu@mpi-bremen.de',
+    author_email='arjun.chennu@gmail.com',
     url='https://github.com/achennu/microbenthos',
-    packages=[
-        'microbenthos',
-    ],
+    packages=find_packages(exclude=['tests']),
+    include_package_data=True,
+    package_data={
+        'microbenthos.utils': ['schema.yml',]
+        },
     package_dir={'microbenthos':
                  'microbenthos'},
     entry_points={
@@ -46,10 +59,10 @@ setup(
             'microbenthos=microbenthos.cli:cli'
         ]
     },
-    include_package_data=True,
     install_requires=requirements,
     extras_require=dict(
         test=test_requirements,
+        docs=docs_requirements,
         ),
     license="MIT license",
     zip_safe=False,

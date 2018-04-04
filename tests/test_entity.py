@@ -22,14 +22,26 @@ class TestEntity:
         e.on_time_updated(2)
         e.on_time_updated(3.5)
         e.on_time_updated(PhysicalField('35 s'))
+        # should this raise an error? No, because this is only reacts to the model clock
+        e.on_time_updated(PF('5 kg'))
 
-    @pytest.mark.xfail(reason='not implemented')
     def test_from_params(self):
-        raise NotImplementedError('For Entity.from_params()')
+        NAME = 'holla'
+        params = dict(
+            cls='Entity',
+            init_params=dict(name=NAME)
+            )
+        e = Entity.from_params(**params)
+        assert e.name == NAME
 
-    @pytest.mark.xfail(reason='not implemented')
     def test_from_dict(self):
-        raise NotImplementedError('For Entity.validate_dict()')
+        NAME = 'holla'
+        params = dict(
+            cls='Entity',
+            init_params=dict(name=NAME)
+            )
+        e = Entity.from_dict(params)
+        assert e.name == NAME
 
 
 class TestDomainEntity:
@@ -122,9 +134,10 @@ class TestVariable:
             ]
         )
     def test_create_var(self, value, unit, hasOld):
+        # creation casts it into base units
         create = dict(value=value, unit=unit, hasOld=hasOld)
         name = 'myVar'
-        v = Variable(name, create=create)
+        v = Variable(name=name, create=create)
 
         domain = SedimentDBLDomain()
         v.set_domain(domain)
@@ -132,7 +145,7 @@ class TestVariable:
         assert v.var is domain[name]
         assert v.var.name == v.name
         assert v.var.shape == domain.mesh.shape
-        assert (v.var == PhysicalField(value, unit)).all()
+        assert (v.var() == PhysicalField(value, unit).inBaseUnits()).all()
 
     @pytest.mark.parametrize(
         'constraints',
@@ -180,7 +193,6 @@ class TestVariable:
         if 'sediment' in constraints:
             assert (v.var[domain.idx_surface:] == constraints['sediment']).all()
 
-    @pytest.mark.xfail(reason='Constraint with mesh.faces doesnt show up in variables')
     @pytest.mark.parametrize(
         'varunit, conunit',
         [
@@ -220,8 +232,7 @@ class TestVariable:
         else:
             v.setup()
             v.var.updateOld()
-            assert numerix.allclose(v.var.numericValue[0], conval.numericValue)
-            assert v.var[0].unit.name() == varunit
+            assert v.var.faceValue[0] == conval
 
     def test_seed(self):
         v = Variable(name='myvar',
@@ -292,18 +303,6 @@ class TestVariable:
                 val = val.numericValue
 
             assert numerix.allclose(v.var.numericValue, val)
-
-    @pytest.mark.xfail(reason='Not implemented')
-    def test_seed_linear(self, seed, error):
-
-        create = dict(value=3., unit='m**2')
-
-        d = dict(profile='linear', params=seed)
-        v = Variable(name='mvar', create=create, seed=d)
-        domain = mock.Mock(SedimentDBLDomain)
-        v.domain = domain
-        v.var = mock.Mock()
-        raise NotImplementedError()
 
     @pytest.mark.parametrize(
         'params,constraints,error',
