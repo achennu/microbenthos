@@ -1,0 +1,14 @@
+formats:
+    - htmlzip
+    - pdf
+
+#requirements_file: requirements_docs.txt
+
+build:
+    image: latest
+
+python:
+    version: 2.7
+    pip_install: true
+    extra_requirements:
+        - docs
