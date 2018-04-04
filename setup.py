@@ -15,15 +15,15 @@ def get_description():
 requirements = [
     'click>=6.0',
     'logutils',
+    'sympy',
     'cerberus',
     'PyYaml',
     'h5py',
     'tqdm',
     'matplotlib>=2.1',
-    'scipy>=1.0',
-    'sympy',
+    'scipy>=1.0.0',
     'numpy',
-    #'fipy',
+    'fipy',
 ]
 
 test_requirements = [
