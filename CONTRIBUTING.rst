@@ -57,38 +57,40 @@ If you are proposing a feature:
 Get Started!
 ------------
 
-Ready to contribute? Here's how to set up `microbenthos` for local development.
+Ready to contribute? Here's how to set up `microbenthos` for local development. Note that this
+project uses the `git-flow <https://nvie.com/posts/a-successful-git-branching-model/>`_ model for
+development.
 
 1. Fork the `microbenthos` repo on GitHub.
 2. Clone your fork locally::
 
     $ git clone git@github.com:your_name_here/microbenthos.git
 
-3. Install your local copy into a virtualenv. Assuming you have virtualenvwrapper installed, this is how you set up your fork for local development::
-
-    $ mkvirtualenv microbenthos
-    $ cd microbenthos/
-    $ python setup.py develop
+3. Install your local copy into a virtual environment. See :ref:`devinstall`.
 
 4. Create a branch for local development::
 
     $ git checkout -b name-of-your-bugfix-or-feature
+    # or if using git flow
+    # git flow feature start my-feature
 
-   Now you can make your changes locally.
+   Now you can make your changes locally. Make sure to add tests to verify your changes. All
+   tests should be passing.
 
-5. When you're done making changes, check that your changes pass flake8 and the tests, including testing other Python versions with tox::
+5. When you're done making changes, check that your changes pass flake8 and the tests.
 
     $ flake8 microbenthos tests
-    $ python setup.py test or py.test
-    $ tox
+    $ py.test -v tests
 
-   To get flake8 and tox, just pip install them into your virtualenv.
+6. Commit your changes and push your branch to GitHub:
 
-6. Commit your changes and push your branch to GitHub::
+    .. code-block:: console
 
-    $ git add .
-    $ git commit -m "Your detailed description of your changes."
-    $ git push origin name-of-your-bugfix-or-feature
+        git add .
+        git commit -m "Your detailed description of your changes."
+        git push origin name-of-your-bugfix-or-feature
+        # or if using git flow
+        git flow feature finish my-feature
 
 7. Submit a pull request through the GitHub website.
 
@@ -104,11 +106,3 @@ Before you submit a pull request, check that it meets these guidelines:
 3. The pull request should work for Python 2.7, and 3.5+. Check
    https://travis-ci.org/achennu/microbenthos/pull_requests
    and make sure that the tests pass for all supported Python versions.
-
-Tips
-----
-
-To run a subset of tests::
-
-$ py.test tests.test_microbenthos
-

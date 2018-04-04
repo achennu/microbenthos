@@ -32,7 +32,7 @@ test_requirements = [
 ]
 
 docs_requirements = [
-    'sphinx',
+    'sphinx>=1.7',
     'sphinx_rtd_theme',
     'sphinxcontrib-programoutput',
     'sphinx-autodoc-typehints',
@@ -41,10 +41,11 @@ docs_requirements = [
 setup(
     name='microbenthos',
     version='0.7.1',
-    description="In silico microbenthic simulations for studies of biogeochemistry and microbial ecology",
+    description="Modeling framework for microbenthic habitats useful for studies in "
+                "biogeochemistry and marine microbial ecology.",
     long_description=get_description(),
     author="Arjun Chennu",
-    author_email='achennu@mpi-bremen.de',
+    author_email='arjun.chennu@gmail.com',
     url='https://github.com/achennu/microbenthos',
     packages=find_packages(exclude=['tests']),
     include_package_data=True,
@@ -73,8 +74,6 @@ setup(
         'License :: OSI Approved :: MIT License',
         'Natural Language :: English',
         'Programming Language :: Python :: 2.7',
-        'Programming Language :: Python :: 3.5',
-        'Programming Language :: Python :: 3.6',
     ],
     test_suite='pytest',
     # tests_require=test_requirements

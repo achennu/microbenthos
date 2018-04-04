@@ -13,14 +13,26 @@
     :target: https://pyup.io/repos/github/achennu/microbenthos/
     :alt: Updates
 
-MicroBenthos is a modeling framework useful for studies of benthic microbial systems,
+MicroBenthos is a modeling framework (in python) useful for studies of benthic microbial systems,
 such as microbial mats, marine sediments, etc. It enables in silico experiments in microbial
 ecophysiology and biogeochemistry through computational simulations of geochemical processes,
 microbial metabolism and mass transport physics.
 
 * Free software: MIT license
 * Documentation: https://microbenthos.readthedocs.io
-* Written in python
+
+Simulation example
+-------------------
+
+From `youtube <https://www.youtube.com/watch?v=CnHjVJKXo0A>`_
+
+.. raw:: html
+
+    <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;
+    max-width: 90%; height: auto;">
+        <iframe src="https://www.youtube.com/embed/CnHjVJKXo0A" frameborder="0" allowfullscreen
+        style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></iframe>
+    </div>
 
 Features
 --------
@@ -48,4 +60,6 @@ Features
 * Extensible:
     New modalities of microbial systems can be created with simple programming around a defined
     structure.
+
+
 

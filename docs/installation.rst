@@ -1,5 +1,7 @@
 .. highlight:: shell
 
+.. _installation:
+
 ============
 Installation
 ============
@@ -83,3 +85,34 @@ Once you have a copy of the source, you can install it with:
 
 .. _github repo: https://github.com/achennu/microbenthos
 .. _tarball: https://github.com/achennu/microbenthos/tarball/master
+
+
+.. _devinstall:
+
+Development install
+--------------------
+
+MicroBenthos uses :mod:`pytest` to run automated unit testing. If you want to run the included
+tests, then install the test requirements::
+
+    $ pip install microbenthos[test]
+
+To run the tests, change to the tests directory of the source tree.
+
+.. code-block:: shell
+
+    $ cd microbenthos/tests
+    $ pytest .
+
+MicroBenthos currently includes 250+ tests of its API entities.
+
+MicroBenthos documentation is rendered using :mod:`sphinx`. To generate the documentation from
+the source tree, install the docs requirements and then run the build command.
+
+.. code-block:: shell
+
+    $ pip install microbenthos[docs]
+
+    $ # change to the docs directory of microbenthos
+    $ cd microbenthos/docs
+    $ make html
