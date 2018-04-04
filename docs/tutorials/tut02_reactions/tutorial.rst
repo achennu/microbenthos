@@ -55,7 +55,7 @@ sediment is consumed through aerobic respiration in the ``environment``.
                 Vmax: !unit 1.0 mmol/l/h
                 Km: &aero_Km !unit 1e-5 mol/l
 
-This specification states that thye respiration process at a rate of ``Vmax``. Since respiration
+This specification states that the respiration process at a rate of ``Vmax``. Since respiration
 does not occur within the sediment grains but within the porespaces, we multiply it by
 ``porosity``, which is defined from the model domain. We want that the reaction occurs only in
 the sediment and not in the water column, so we use the variable ``sed_mask``. This
