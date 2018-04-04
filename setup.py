@@ -32,7 +32,7 @@ test_requirements = [
 ]
 
 docs_requirements = [
-    'sphinx>=1.7',
+    'sphinx',
     'sphinx_rtd_theme',
     'sphinxcontrib-programoutput',
     'sphinx-autodoc-typehints',
@@ -40,7 +40,7 @@ docs_requirements = [
 
 setup(
     name='microbenthos',
-    version='0.8',
+    version='0.8.1',
     description="Modeling framework for microbenthic habitats useful for studies in "
                 "biogeochemistry and marine microbial ecology.",
     long_description=get_description(),
