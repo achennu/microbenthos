@@ -47,7 +47,7 @@ setup(
     long_description=get_description(),
     author="Arjun Chennu",
     author_email='arjun.chennu@gmail.com',
-    url='https://github.com/achennu/microbenthos',
+    url='https://microbenthos.readthedocs.io',
     packages=find_packages(exclude=['tests']),
     include_package_data=True,
     package_data={
