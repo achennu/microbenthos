@@ -11,6 +11,7 @@ Consultation
 -------------
 
 * Judith Klatt (MPI Bremen)
+* Jonathan Guyer (FiPy developer)
 
 Contributors
 ------------
