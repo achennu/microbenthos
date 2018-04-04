@@ -32,7 +32,7 @@ test_requirements = [
 ]
 
 docs_requirements = [
-    'sphinx>=1.7',
+    'sphinx',
     'sphinx_rtd_theme',
     'sphinxcontrib-programoutput',
     'sphinx-autodoc-typehints',
