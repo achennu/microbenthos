@@ -10,8 +10,8 @@ Development Lead
 Consultation
 -------------
 
-* Judith Klatt (MPI Bremen)
-* Jonathan Guyer (FiPy developer)
+* Judith M. Klatt (MPI Bremen)
+* Jonathan E. Guyer (FiPy developer)
 
 Contributors
 ------------
