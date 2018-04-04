@@ -16,6 +16,7 @@ microbial metabolism and mass transport physics.
 
 * Free software: MIT license
 * Documentation: https://microbenthos.readthedocs.io
+* Source code: https://github.com/achennu/microbenthos
 
 Simulation example
 -------------------

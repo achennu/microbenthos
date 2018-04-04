@@ -41,13 +41,13 @@ docs_requirements = [
 
 setup(
     name='microbenthos',
-    version='0.8.1',
+    version='0.8.2',
     description="Modeling framework for microbenthic habitats useful for studies in "
                 "biogeochemistry and marine microbial ecology.",
     long_description=get_description(),
     author="Arjun Chennu",
     author_email='arjun.chennu@gmail.com',
-    url='https://github.com/achennu/microbenthos',
+    url='https://microbenthos.readthedocs.io',
     packages=find_packages(exclude=['tests']),
     include_package_data=True,
     package_data={
