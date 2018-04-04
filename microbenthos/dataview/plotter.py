@@ -586,8 +586,7 @@ class ModelPlotter(object):
         try:
             self.fig.canvas.draw_idle()
             self.fig.canvas.flush_events()
-            self.fig.canvas.draw()
-            self.fig.canvas.flush_events()
+            plt.pause(0.001)
         except KeyboardInterrupt:
             self.logger.warning('KeyboardInterrupt caught while updating canvas. Re-raising.')
             raise
