@@ -1,0 +1,23 @@
+{
+  "@context": "https://raw.githubusercontent.com/codemeta/codemeta/master/codemeta.jsonld",
+  "@type": "Code",
+  "author": [
+    {
+      "@id": "0000-0002-0389-5589",
+      "@type": "Person",
+      "email": "achennu@mpi-bremen.de",
+      "name": "Arjun Chennu",
+      "affiliation": "Max Planck Institute for Marine Microbiology"
+    }
+  ],
+  "identifier": "",
+  "codeRepository": "https://github.com/achennu/microbenthos",
+  "datePublished": "2018-04-04",
+  "dateModified": "2018-04-04",
+  "dateCreated": "2018-04-04",
+  "description": "Modeling framework for microbenthic habitats useful for studies in biogeochemistry and marine microbial ecology",
+  "keywords": "biogeochemistry, marine biology, microbial ecology, modeling, simulation, microbial mats, sediments, reactive-diffusive system",
+  "license": "MIT",
+  "title": "MicroBenthos",
+  "version": "0.8.2"
+}
