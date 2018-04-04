@@ -5,16 +5,9 @@
 .. image:: https://travis-ci.org/achennu/microbenthos.svg?branch=master
     :target: https://travis-ci.org/achennu/microbenthos
 
-.. image:: https://travis-ci.org/achennu/microbenthos.svg?branch=develop
-    :target: https://travis-ci.org/achennu/microbenthos
-
 .. image:: https://readthedocs.org/projects/microbenthos/badge/?version=latest
     :target: https://microbenthos.readthedocs.io/en/latest/?badge=latest
     :alt: Documentation Status
-
-.. image:: https://pyup.io/repos/github/achennu/microbenthos/shield.svg
-    :target: https://pyup.io/repos/github/achennu/microbenthos/
-    :alt: Updates
 
 MicroBenthos is a modeling framework (in python) useful for studies of benthic microbial systems,
 such as microbial mats, marine sediments, etc. It enables in silico experiments in microbial
