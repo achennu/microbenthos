@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from setuptools import setup
+from setuptools import setup, find_packages
 
 def get_description():
     import os
@@ -10,10 +10,7 @@ def get_description():
     with open(os.path.join(CURR, 'README.rst')) as readme_file:
         readme = readme_file.read()
 
-    with open(os.path.join(CURR, 'HISTORY.rst')) as history_file:
-        history = history_file.read()
-
-    return readme + '\n\n' + history
+    return readme
 
 requirements = [
     'click>=6.0',
@@ -34,6 +31,13 @@ test_requirements = [
     'mock',
 ]
 
+docs_requirements = [
+    'sphinx',
+    'sphinx_rtd_theme',
+    'sphinxcontrib-programoutput',
+    'sphinx-autodoc-typehints',
+    ]
+
 setup(
     name='microbenthos',
     version='0.7.1',
@@ -42,9 +46,11 @@ setup(
     author="Arjun Chennu",
     author_email='achennu@mpi-bremen.de',
     url='https://github.com/achennu/microbenthos',
-    packages=[
-        'microbenthos',
-    ],
+    packages=find_packages(exclude=['tests']),
+    include_package_data=True,
+    package_data={
+        'microbenthos.utils': ['schema.yml',]
+        },
     package_dir={'microbenthos':
                  'microbenthos'},
     entry_points={
@@ -52,10 +58,10 @@ setup(
             'microbenthos=microbenthos.cli:cli'
         ]
     },
-    include_package_data=True,
     install_requires=requirements,
     extras_require=dict(
         test=test_requirements,
+        docs=docs_requirements,
         ),
     license="MIT license",
     zip_safe=False,
@@ -67,6 +73,8 @@ setup(
         'License :: OSI Approved :: MIT License',
         'Natural Language :: English',
         'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.6',
     ],
     test_suite='pytest',
     # tests_require=test_requirements

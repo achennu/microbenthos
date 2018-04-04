@@ -1,8 +1,8 @@
 import logging
-import os
 from collections import Mapping
 
 import cerberus
+import pkg_resources
 from fipy import PhysicalField
 from sympy import sympify, Symbol
 
@@ -244,13 +244,13 @@ def get_schema(schema_stream = None):
     Returns the inbuilt model schema
     """
 
-    INBUILT = os.path.join(os.path.dirname(__file__), 'schema.yml')
+    # INBUILT = pkg_resources.resource_stream(__name__, 'schema.yml')
 
     if schema_stream:
         schema = yaml.load(schema_stream)
     else:
-        with open(INBUILT) as fp:
-            schema = yaml.load(fp)
+        with pkg_resources.resource_stream(__name__, 'schema.yml') as INBUILT:
+            schema = yaml.load(INBUILT)
 
     return schema
 
