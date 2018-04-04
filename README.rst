@@ -2,7 +2,10 @@
 .. image:: https://img.shields.io/pypi/v/microbenthos.svg
     :target: https://pypi.python.org/pypi/microbenthos
 
-.. image:: https://img.shields.io/travis/achennu/microbenthos.svg
+.. image:: https://travis-ci.org/achennu/microbenthos.svg?branch=master
+    :target: https://travis-ci.org/achennu/microbenthos
+
+.. image:: https://travis-ci.org/achennu/microbenthos.svg?branch=develop
     :target: https://travis-ci.org/achennu/microbenthos
 
 .. image:: https://readthedocs.org/projects/microbenthos/badge/?version=latest

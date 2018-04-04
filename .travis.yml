@@ -2,20 +2,13 @@
 # This file will be regenerated if you run travis_pypi_setup.py
 
 language: python
-python: 3.5
-
-env:
-  - TOXENV=py35
-  - TOXENV=py34
-  - TOXENV=py33
-  - TOXENV=py27
-  - TOXENV=py26
-  - TOXENV=pypy
+python:
+    - 2.7
 
 # command to install dependencies, e.g. pip install -r requirements.txt --use-mirrors
-install: pip install -U tox
+install: pip install --extra-index-url https://testpypi.python.org/pypi microbenthos[test]
 
 # command to run tests, e.g. python setup.py test
-script: tox -e ${TOXENV}
+script: pytest tests/
 
 
