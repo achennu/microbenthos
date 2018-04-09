@@ -1,6 +1,6 @@
 import logging
 
-from .entity import DomainEntity, Variable
+from . import DomainEntity, Variable
 
 
 class MicrobialGroup(DomainEntity):

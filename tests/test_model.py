@@ -341,7 +341,7 @@ class TestMicroBenthosModel:
     def test_update_vars(self):
         model = MicroBenthosModel()
 
-        from microbenthos.core.entity import Variable
+        from microbenthos.core import Variable
 
         Mvar = mock.MagicMock(spec=Variable)
         assert isinstance(Mvar, Variable)
