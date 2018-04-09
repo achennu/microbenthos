@@ -22,7 +22,7 @@ model:
                       k0: !unit 15.3 1/cm
 
         oxy:
-            cls: Variable
+            cls: ModelVariable
             init_params:
                 name: oxy
                 create:
@@ -30,8 +30,12 @@ model:
                     value: !unit 0.0 mol/m**3
 
                 constraints:
-                    top: !unit 0.2 mol/l
-                    bottom: !unit 0 mol/l
+                    top: !unit 230 mumol/l
+                    bottom: !unit 0.0 mol/l
+
+                seed:
+                    profile: linear
+
 
         D_oxy:
             cls: Process
@@ -41,9 +45,9 @@ model:
 
                 params:
                     D0_oxy: !unit 0.03 cm**2/h
-
+        # start: h2s
         h2s:
-            cls: Variable
+            cls: ModelVariable
             init_params:
                 name: h2s
                 create:
@@ -54,10 +58,10 @@ model:
                     top: !unit 10.0 mumol/l
                     bottom: !unit 1e-3 mol/l
 
+                clip_min: 0.0
+
                 seed:
                     profile: linear
-
-                clip_min: 0.0
 
         D_h2s:
             cls: Process
@@ -66,7 +70,9 @@ model:
                     formula: porosity * D0_h2s
                 params:
                     D0_h2s: !unit 0.02 cm**2/h
+        # stop: h2s
 
+        # start: aero_respire
         aero_respire:
             cls: Process
             init_params:
@@ -75,18 +81,23 @@ model:
                 params:
                     Vmax: !unit 1.0 mmol/l/h
                     Km: &aero_Km !unit 1e-5 mol/l
+        # stop: aero_respire
 
+        # start: abio_sulfoxid
         abio_sulfoxid:
             cls: Process
             init_params:
                 expr:
-                    formula: porosity * sed_mask * k * oxy * oxy * h2s
+                    formula: porosity * k * oxy * oxy * h2s * sed_mask
                 params:
                     k: !unit -70.0 1/h/(mmol/l)**2
+        # stop: abio_sulfoxid
 
+    # start: equations
     equations:
 
         oxyEqn:
+
             transient: [domain.oxy, 1]
 
             diffusion: [env.D_oxy, 1]
@@ -104,16 +115,17 @@ model:
 
             sources:
                 - [env.abio_sulfoxid, 1]
+    # stop: equations
 
+    # start: formulae
     formulae:
 
         saturation:
             vars: [x, Km]
             expr: x / (Km + x)
+    # stop: formulae
 
 simulation:
-
     simtime_total: !unit 8h
-    # simtime_days: 2
-    simtime_lims: [0.01, 120]
-    max_residual: 1e-10
+    simtime_lims: [0.1, 180]
+    max_residual: 1e-13

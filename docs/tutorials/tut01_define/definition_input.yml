@@ -1,3 +1,4 @@
+# start: model
 model:
 
     domain:
@@ -8,7 +9,7 @@ model:
             dbl_length: !unit 2 mm
             porosity: 0.6
 
-
+    # start: environment
     environment:
 
         irradiance:
@@ -21,8 +22,9 @@ model:
                     - name: par
                       k0: !unit 15.3 1/cm
 
+        # start: oxygen model variable
         oxy:
-            cls: Variable
+            cls: ModelVariable
             init_params:
                 name: oxy
                 create:
@@ -30,7 +32,7 @@ model:
                     value: !unit 0.0 mol/m**3
 
                 constraints:
-                    top: !unit 0.2 mol/l
+                    top: !unit 230 mumol/l
                     bottom: !unit 0 mol/l
 
                 seed:
@@ -38,6 +40,7 @@ model:
                     # params:
                     #    start: 0.1 mol/l
                     #    stop: 1e-25 mol/l
+        # stop: oxygen model variable
 
         D_oxy:
             cls: Process
@@ -47,15 +50,19 @@ model:
 
                 params:
                     D0_oxy: !unit 0.03 cm**2/h
-
+        # stop: oxy diffusion
+    # start: equations
     equations:
         oxyEqn:
             transient: [domain.oxy, 1]
 
             diffusion: [env.D_oxy, 1]
+    # stop: equations
 
+# start: simulation
 simulation:
 
     simtime_total: !unit 8h
     # simtime_days: 2
     simtime_lims: [0.01, 300]
+# stop: simulation

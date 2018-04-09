@@ -17,14 +17,16 @@ model:
                 hours_total: !unit 4h
                 day_fraction: 0.5
 
+                # start: channels
                 channels:
                     - name: par
                       k0: !unit 15.3 1/cm
                       k_mods:
                         - [microbes.cyano.biomass, !unit 7687.5 cm**2/g]
+                # stop: channels
 
         oxy:
-            cls: Variable
+            cls: ModelVariable
             init_params:
                 name: oxy
                 create:
@@ -32,7 +34,7 @@ model:
                     value: !unit 0.0 mol/m**3
 
                 constraints:
-                    top: !unit 220.0 mumol/l
+                    top: !unit 230.0 mumol/l
                     bottom: !unit 0.0 mol/l
 
                 seed:
@@ -48,7 +50,7 @@ model:
                     D0_oxy: !unit 0.03 cm**2/h
 
         h2s:
-            cls: Variable
+            cls: ModelVariable
             init_params:
                 name: h2s
                 create:
@@ -89,6 +91,7 @@ model:
                 params:
                     k: !unit -70.0 1/h/(mmol/l)**2
 
+    # start: microbes
     microbes:
         cyano:
             init_params:
@@ -105,7 +108,8 @@ model:
                                     loc: !unit 1 mm
                                     scale: !unit 2 mm
                                     coeff: !unit 12 mg/cm**3
-
+                                    # stop: microbes
+                # start: oxyPS1
                 processes:
 
                     oxyPS:
@@ -121,12 +125,13 @@ model:
                                 Kmax2: !unit 0.8 mmol/l
                                 Khalf2: !unit 0.7 mmol/l
 
-#                            expr:
-#                                formula: "Qmax * biomass * sed_mask * optimum(par, Ks, Ki)
-#                                            * inhibition(h2s, Kmax, Khalf)
-#                                            * inhibition(oxy, Kmax2, Khalf2)"
-#                            implicit: false
-
+                            expr:
+                                formula: "Qmax * biomass * sed_mask * optimum(par, Ks, Ki)
+                                            * inhibition(h2s, Kmax, Khalf)
+                                            * inhibition(oxy, Kmax2, Khalf2)"
+                            implicit: false
+                            # stop: oxyPS1
+                            # start: oxyPS2
                             expr:
                                 formula:
                                     base: "Qmax * biomass * sed_mask * optimum(par, Ks, Ki)
@@ -135,8 +140,9 @@ model:
                                     pieces:
                                         - expr: (Kmax2 - oxy) / (2*Kmax2 - Khalf2 - oxy)
                                           where: oxy < Kmax2
+                            # stop: oxyPS2
 
-
+                    # start: anoxyPS
                     anoxyPS:
                         cls: Process
                         init_params:
@@ -151,7 +157,9 @@ model:
                                 Qmax: !unit -1.2 mmol/g/h
                                 Ksh2s: !unit 900 mumol/l
                                 Kih2s: !unit 3 mmol/l
+                    # stop: anoxyPS
 
+                    # start: respire
                     respire:
                         cls: Process
                         init_params:
@@ -160,6 +168,7 @@ model:
                             params:
                                 Qmax: !unit -0.0002 mumol/g/h
                                 Km: !unit 1e-6 mol/l
+                    # stop: respire
 
     equations:
 
@@ -188,6 +197,7 @@ model:
 
                 - [microbes.cyano.processes.anoxyPS, 1]
 
+    # start: formulae
     formulae:
 
         saturation:
@@ -201,9 +211,9 @@ model:
         inhibition:
             vars: [x, Kmax, Khalf]
             expr: (Kmax - x) / (2*Kmax - Khalf - x) * (x < Kmax)
+    # stop: formulae
 
 simulation:
-
-    simtime_total: !unit 4h
-    simtime_lims: [0.01, 90]
-    max_residual: 1e-10
+    simtime_total: !unit 8h
+    simtime_lims: [0.1, 180]
+    max_residual: 1e-13

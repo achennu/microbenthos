@@ -33,24 +33,12 @@ Microbial groups are defined under the ``microbes`` key under ``model``. Microbi
 ``features``, which represent variables related to the population, the primary one being biomass.
 The definition of the ``cyano`` group could be specified as:
 
-.. code-block:: yaml
-
-    microbes:
-        cyano:
-            init_params:
-                name: cyano
-                features:
-                    biomass:
-                        init_params:
-                            name: biomass
-                            create:
-                                value: !unit 0 kg/m**3
-                            seed:
-                                profile: normal
-                                params:
-                                    loc: !unit 1 mm
-                                    scale: !unit 2 mm
-                                    coeff: !unit 12 mg/cm**3
+.. literalinclude:: definition_input.yml
+    :language: yaml
+    :lineno-match:
+    :start-after: # start: microbes
+    :end-before: # stop: microbes
+    :emphasize-lines: 2,5,6,11-
 
 We have specified a (typically required) feature called ``biomass`` that has the units of
 :math:`kg/m^3`, and is seeded with a normal distribution centered at 1 mm depth with a width of 2
@@ -63,13 +51,12 @@ Phototrophs, such as cyanobacteria, absorb light energy to use in their photosyn
 The biomass-related depletion of the irradiance can be specified by modifying the irradiance
 channel ``par`` as follows.
 
-.. code-block:: yaml
-
-    channels:
-        - name: par
-          k0: !unit 15.3 1/cm
-          k_mods:
-            - [microbes.cyano.biomass, !unit 7687.5 cm**2/g]
+.. literalinclude:: definition_input.yml
+    :language: yaml
+    :lineno-match:
+    :start-after: # start: channels
+    :end-before: # stop: channels
+    :emphasize-lines: 4,5
 
 This specifies that an additional attenuation based on the biomass should occur in the
 photosynthetically active radiation.
@@ -88,47 +75,24 @@ biomass. However, it is known that oxygenic photosynthesis is inhibited by the p
 sulfide and oxygen itself. These are represented through an ``inhibition`` function depending on a
 particular variable. So the formulae we need are:
 
-.. code-block:: yaml
-
-    formulae:
-
-        saturation:
-            vars: [x, Km]
-            expr: x / (Km + x)
-
-        optimum:
-            vars: [x, Ks, Ki]
-            expr: x/(x + Ks)/(1 + x/Ki)
-
-        inhibition:
-            vars: [x, Kmax, Khalf]
-            expr: (Kmax - x) / (2*Kmax - Khalf - x) * (x < Kmax)
+.. literalinclude:: definition_input.yml
+    :language: yaml
+    :lineno-match:
+    :start-after: # start: formulae
+    :end-before: # stop: formulae
+    :emphasize-lines: 3,7,11
 
 Using these in the ``model/formulae`` section, we can now define the oxygenic photosynthesis
 process in the ``cyano`` group as:
 
-.. code-block:: yaml
 
-    processes:
-
-        oxyPS:
-            cls: Process
-            init_params:
-
-                params:
-                    Ks: 1
-                    Ki: 10
-                    Qmax: !unit 8.4 mmol/g/h
-                    Kmax: !unit 0.35 mmol/l
-                    Khalf: !unit 0.3 mmol/l
-                    Kmax2: !unit 0.8 mmol/l
-                    Khalf2: !unit 0.7 mmol/l
-
-                expr:
-                    formula: "Qmax * biomass * sed_mask * optimum(par, Ks, Ki)
-                                * inhibition(h2s, Kmax, Khalf)
-                                * inhibition(oxy, Kmax2, Khalf2)"
-                implicit: false
+.. literalinclude:: definition_input.yml
+    :language: yaml
+    :lineno-match:
+    :start-after: # start: oxyPS1
+    :end-before: # stop: oxyPS1
+    :emphasize-lines: 3,7,15-20
+    :dedent: 16
 
 
 Note here that the ``biomass`` variable is sourced from the ``cyano`` microbial group, which
@@ -150,16 +114,13 @@ However, for complex non-linear source terms it is advantageous to be able to sp
 of the piece-wise response in the equation terms. MicroBenthos allows you to therefore specify
 the inhibition response of oxygen to the oxygen concentration itself by the formulation below.
 
-.. code-block:: yaml
-
-    expr:
-        formula:
-            base: "Qmax * biomass * sed_mask * optimum(par, Ks, Ki)
-                    * inhibition(h2s, Kmax, Khalf)"
-
-            pieces:
-                - expr: (Kmax2 - oxy) / (2*Kmax2 - Khalf2 - oxy)
-                  where: oxy < Kmax2
+.. literalinclude:: definition_input.yml
+    :language: yaml
+    :lineno-match:
+    :start-after: # start: oxyPS2
+    :end-before: # stop: oxyPS2
+    :emphasize-lines: 6-
+    :dedent: 16
 
 In this formulation, we replaced the ``inhibition(oxy)`` term from before, and defined a
 piecewise response of the process ourselves. The formulation of ``inhibition`` is taken as
@@ -179,22 +140,13 @@ optimum(par, Ks, Ki)`, and further modulated by metabolic response functions. We
 the cyanobacterial population responds to the sulfide as an ``optimum`` function. So we write the
 process for anoxygenic photosynthesis as follows.
 
-.. code-block:: yaml
-
-    anoxyPS:
-        cls: Process
-        init_params:
-
-            expr:
-                formula: "Qmax * biomass * sed_mask * optimum(par, Ks, Ki)
-                * optimum(h2s, Ksh2s, Kih2s)"
-
-            params:
-                Ks: 1
-                Ki: 10
-                Qmax: !unit -1.2 mmol/g/h
-                Ksh2s: !unit 900 mumol/l
-                Kih2s: !unit 3 mmol/l
+.. literalinclude:: definition_input.yml
+    :language: yaml
+    :lineno-match:
+    :start-after: # start: anoxyPS
+    :end-before: # stop: anoxyPS
+    :emphasize-lines: 6-7
+    :dedent: 16
 
 Respiration
 =============
@@ -202,16 +154,13 @@ Respiration
 We can also include biomass-dependent respiration by the cyanobacteria itself. Similar to the
 sedimentary aerobic respiration case, the process rate saturates with respect to oxygen.
 
-.. code-block:: yaml
-
-    respire:
-        cls: Process
-        init_params:
-            expr:
-                formula: Qmax * biomass * sed_mask * saturation(oxy, Km)
-            params:
-                Qmax: !unit -0.0002 mumol/g/h
-                Km: !unit 1e-6 mol/l
+.. literalinclude:: definition_input.yml
+    :language: yaml
+    :lineno-match:
+    :start-after: # start: respire
+    :end-before: # stop: respire
+    :emphasize-lines: 5
+    :dedent: 16
 
 We note in all the cases above, that each process essentially provides a local "namespace" to
 avoid clash of identically named parameters in other processes. Additionally, the microbial group
@@ -252,7 +201,7 @@ This creates the equations to solve
 
 Running the model simulation with::
 
-    microbenthos -v simulate input_definition.yml --plot --show-eqns
+    microbenthos -v simulate definition_input.yml --plot --show-eqns
 
 should show the equation in the console and open up a graphical view of the model as it is
 simulated.

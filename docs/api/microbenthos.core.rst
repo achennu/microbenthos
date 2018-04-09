@@ -20,6 +20,14 @@ microbenthos.core.entity module
     :undoc-members:
     :show-inheritance:
 
+microbenthos.core.variable module
+----------------------------------
+
+.. automodule:: microbenthos.core.variable
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 microbenthos.core.expression module
 -----------------------------------
 
