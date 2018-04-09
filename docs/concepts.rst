@@ -7,6 +7,9 @@ So the starting point for creating microbenthic models is to write down the cons
 relationships between chemical or metabolic processes and their dependencies on environmental
 conditions.
 
+.. image:: console-screenshot-equations.png
+    :alt: Example of partial differential equations that can be built and solved
+
 The special case of microbenthic systems emerges from the extremely steep gradients of most
 environmental parameters within a few millimeters, i.e. irradiance intensity, oxygen, sulfide,
 biomass, etc. Microbial mats constitute very dense, laminated populations of different microbial

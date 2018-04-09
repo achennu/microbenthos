@@ -15,16 +15,12 @@ a microbial mat or sedimentary system. This is a diffusive system, i.e. the mass
 chemical solutes is primarily through physical diffusion. We define the model under the ``model``
 key, and specify the domain properties.
 
-.. code-block:: yaml
-
-    model:
-        domain:
-            cls: SedimentDBLDomain
-            init_params:
-                cell_size: !unit 50 mum
-                sediment_length: !unit 10 mm
-                dbl_length: !unit 2 mm
-                porosity: 0.6
+.. literalinclude:: definition_input.yml
+    :language: yaml
+    :lineno-match:
+    :start-after: # start: model
+    :end-before: # start: environment
+    :emphasize-lines: 6-10
 
 This specifies that the domain should be a :class:`~microbenthos.core.domain.SedimentDBLDomain`,
 with each cell of size 50 micrometers. We specify that the sediment sub-domain is 10 mm long, and
@@ -40,23 +36,17 @@ The model ``environment`` is a container for various entities that live and inte
 domain. The environment can contain specifications of
 
 * :class:`~microbenthos.core.irradiance.Irradiance`
-* :class:`~microbenthos.core.entity.DomainVariable`
+* :class:`~microbenthos.core.variable.ModelVariable`
 * :class:`~microbenthos.core.process.Process`
 
 We can specify a solar irradiance within the ``environment`` with
 
-.. code-block:: yaml
-
-    environment:
-        irradiance:
-            cls: Irradiance
-            init_params:
-                hours_total: !unit 4h
-                day_fraction: 0.5
-
-                channels:
-                    - name: par
-                      k0: !unit 15.3 1/cm
+.. literalinclude:: definition_input.yml
+    :language: yaml
+    :lineno-match:
+    :start-after: # start: environment
+    :end-before: # start: oxygen model variable
+    :emphasize-lines: 6-7, 10-11
 
 This will render an irradiance source with a diel period (or daylength) of 4 hours with 50% of
 the duration being illuminated. Essentially the irradiance source varies in a cosinusoidal
@@ -74,27 +64,15 @@ Variables
 Suppose we want to construct a model where one of the variables we are solving for is the
 distribution of oxygen. In the ``environment`` we define the variable
 
-.. code-block:: yaml
+.. literalinclude:: definition_input.yml
+    :language: yaml
+    :lineno-match:
+    :start-after: # start: oxygen model variable
+    :end-before: # stop: oxygen model variable
+    :emphasize-lines: 5-7,9-11,13-14
 
-    oxy:
-        cls: Variable
-        init_params:
-            name: oxy
-            create:
-                hasOld: true
-                value: !unit 0.0 mol/m**3
 
-            constraints:
-                top: !unit 0.2 mol/l
-                bottom: !unit 0.0 mol/l
-
-            seed:
-                profile: linear
-                # params:
-                #    start: !unit 0.01 mol/l
-                #    stop: !unit 0.1 mol/l
-
-With this block, we have specified a :class:`~microbenthos.core.entity.DomainVariable` called
+With this block, we have specified a :class:`~microbenthos.core.entity.ModelVariable` called
 ``oxy``. The ``hasOld: true`` is necessary to retain the values of the previous time-step during
 the simulation evolution. The value is set to ``0.0 mol/m**3`` here (See `using units`_). For
 numerical approximation of the model equations, we have to specify the boundary conditions for
@@ -122,16 +100,12 @@ We have only specified a numerical placeholder for the oxygen variable as ``oxy`
 it to behave as a chemical solute diffusing through the model domain, we have to specify the
 process that will enable this.
 
-.. code-block:: yaml
-
-    D_oxy:
-        cls: Process
-        init_params:
-            expr:
-                formula: porosity * D0_oxy
-
-            params:
-                D0_oxy: !unit 0.03 cm**2/h
+.. literalinclude:: definition_input.yml
+    :language: yaml
+    :lineno-match:
+    :start-after: # stop: oxygen model variable
+    :end-before: # stop: oxy diffusion
+    :emphasize-lines: 5, 7-8
 
 Process definitions allow you to write a formula simply as a string, to represent a symbolic
 expression that relates various domain variables and parameters. Here we specify the diffusion
@@ -150,15 +124,12 @@ example, we have only defined one variable which should exhibit diffusive transp
 have not included any other sources or responses to irradiance. That will come in subsequent
 tutorials, but let's proceed to build the single equation here.
 
-.. code-block:: yaml
-
-    equations:
-
-        oxyEqn:
-
-            transient: [domain.oxy, 1]
-
-            diffusion: [env.D_oxy, 1]
+.. literalinclude:: definition_input.yml
+    :language: yaml
+    :lineno-match:
+    :start-after: # start: equations
+    :end-before: # stop: equations
+    :emphasize-lines: 3, 5
 
 We specify an equation named ``oxyEqn`` which contains a transient term, pointing to the variable
 we want to solve for ``domain.oxy`` (this could also be ``env.oxy``), and specify a diffusive
@@ -176,7 +147,7 @@ This creates the equation to solve
 
 Running the model simulation with::
 
-    microbenthos -v simulate input_definition.yml --plot --show-eqns
+    microbenthos -v simulate definition_input.yml --plot --show-eqns
 
 should show the equation in the console and open up a graphical view of the model as it is
 simulated.
@@ -193,13 +164,12 @@ Additionally, we can specify the parameters for the simulation evolution under t
 ``simulation``
 key.
 
-.. code-block:: yaml
+.. literalinclude:: definition_input.yml
+    :language: yaml
+    :lineno-match:
+    :start-after: # start: simulation
+    :end-before: # stop: simulation
 
-    simulation:
-
-        simtime_total: !unit 8h
-        # simtime_days: 2
-        simtime_lims: [0.01, 300]
 
 We specify with ``simtime_total`` that the total time for the simulation run is 8 hours.
 Alternatively, one can set ``simtime_days`` to a number which will set the ``simtime_total`` as the

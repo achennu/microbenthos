@@ -10,32 +10,11 @@ differential equations.
 
 Firstly, we define another diffusive solute hydrogen sulfide :math:`H_2S` under ``environment``.
 
-.. code-block:: yaml
-
-    h2s:
-        cls: Variable
-        init_params:
-            name: h2s
-            create:
-                hasOld: true
-                value: !unit 0.0 mol/m**3
-
-            constraints:
-                top: !unit 10.0 mumol/l
-                bottom: !unit 1e-3 mol/l
-
-            seed:
-                profile: linear
-
-            clip_min: 0.0
-
-    D_h2s:
-        cls: Process
-        init_params:
-            expr:
-                formula: porosity * D0_h2s
-            params:
-                D0_h2s: !unit 0.02 cm**2/h
+.. literalinclude:: definition_input.yml
+    :language: yaml
+    :lineno-match:
+    :start-after: # start: h2s
+    :end-before: # stop: h2s
 
 Respiration
 ------------
@@ -44,16 +23,12 @@ We will now specify reactions that involve the ``oxy`` and ``h2s`` variables, wh
 as "source" terms in the differential equations. First we specify that the oxygen within the
 sediment is consumed through aerobic respiration in the ``environment``.
 
-.. code-block:: yaml
-
-    aero_respire:
-        cls: Process
-        init_params:
-            expr:
-                formula: -Vmax * porosity * sed_mask * saturation(oxy, Km)
-            params:
-                Vmax: !unit 1.0 mmol/l/h
-                Km: &aero_Km !unit 1e-5 mol/l
+.. literalinclude:: definition_input.yml
+    :language: yaml
+    :lineno-match:
+    :start-after: # start: aero_respire
+    :end-before: # stop: aero_respire
+    :emphasize-lines: 4-8
 
 This specification states that the respiration process at a rate of ``Vmax``. Since respiration
 does not occur within the sediment grains but within the porespaces, we multiply it by
@@ -66,13 +41,11 @@ down at high enough levels (parameterized by ``Km``) of oxygen. What is the form
 ``init_params``. Alternatively, if a formula is to be reused then in a ``formulae``
 section of the ``model`` as follows.
 
-.. code-block:: yaml
-
-    formulae:
-
-        saturation:
-            vars: [x, Km]
-            expr: x / (Km + x)
+.. literalinclude:: definition_input.yml
+    :language: yaml
+    :lineno-match:
+    :start-after: # start: formulae
+    :end-before: # stop: formulae
 
 
 Abiotic sulfide oxidation
@@ -82,15 +55,12 @@ Another process that occurs in sedimentary system is the abiotic oxidation of su
 oxygen reacts with hydrogen sulfide in a 2:1 stoichiometry. We can define this process also in
 the ``environment``.
 
-.. code-block:: yaml
-
-    abio_sulfoxid:
-        cls: Process
-        init_params:
-            expr:
-                formula: porosity * sed_mask * k * oxy * oxy * h2s
-            params:
-                k: !unit -70.0 1/h/(mmol/l)**2
+.. literalinclude:: definition_input.yml
+    :language: yaml
+    :lineno-match:
+    :start-after: # start: abio_sulfoxid
+    :end-before: # stop: abio_sulfoxid
+    :emphasize-lines: 4-7
 
 This reaction process therefore couples the equations of the two variables ``oxy`` and ``h2s``,
 that so far had no shared process terms. The definition of this process should therefore appear
@@ -98,28 +68,12 @@ in both equations.
 
 The equations for this model will therefore be:
 
-.. code-block:: yaml
-
-    equations:
-
-        oxyEqn:
-            transient: [domain.oxy, 1]
-
-            diffusion: [env.D_oxy, 1]
-
-            sources:
-                - [env.abio_sulfoxid, 2]
-
-                - [env.aero_respire, 1]
-
-        h2sEqn:
-
-            transient: [domain.h2s, 1]
-
-            diffusion: [env.D_h2s, 1]
-
-            sources:
-                - [env.abio_sulfoxid, 1]
+.. literalinclude:: definition_input.yml
+    :language: yaml
+    :lineno-match:
+    :start-after: # start: equations
+    :end-before: # stop: equations
+    :emphasize-lines: 3-12, 14-21
 
 Note that the stoichiometry of the sulfide oxidation process is represented by a coefficient of 2
 in the oxygen equation, indicating that for each H2S consumed two O2 are consumed by this
@@ -143,7 +97,7 @@ This creates the equation to solve
 
 Running the model simulation with::
 
-    microbenthos -v simulate input_definition.yml --plot --show-eqns
+    microbenthos -v simulate definition_input.yml --plot --show-eqns
 
 should show the equation in the console and open up a graphical view of the model as it is
 simulated.
