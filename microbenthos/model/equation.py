@@ -5,7 +5,7 @@ import sympy as sp
 from fipy import CellVariable, TransientTerm, PhysicalField, Variable, DiffusionTerm, \
     ImplicitSourceTerm
 from fipy.tools import numerix as np
-from microbenthos import Variable as mVariable, Process, snapshot_var, restore_var
+from microbenthos import ModelVariable, Process, snapshot_var, restore_var
 
 
 class ModelEquation(object):
@@ -35,7 +35,7 @@ class ModelEquation(object):
         self.model = model
 
         var = self.model.get_object(varpath)
-        if isinstance(var, mVariable):
+        if isinstance(var, ModelVariable):
             var = var.var
         if not isinstance(var, CellVariable):
             raise ValueError('Var {!r} is {}, not CellVariable'.format(varpath, type(var)))
@@ -158,7 +158,7 @@ class ModelEquation(object):
         """
 
         obj = self.model.get_object(path)
-        if isinstance(obj, mVariable):
+        if isinstance(obj, ModelVariable):
             expr = obj.var
         elif isinstance(obj, Variable):
             expr = obj

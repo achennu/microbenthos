@@ -4,7 +4,7 @@ import pytest
 from microbenthos import MicrobialGroup, SedimentDBLDomain
 
 VARdict = dict(
-    cls='Variable',
+    cls='ModelVariable',
     init_params=dict(
         name='biomass',
         create=dict(value=35)

@@ -6,8 +6,7 @@ from functools import reduce
 import fipy.tools.numerix as np
 import h5py as hdf
 import sympy as sp
-from fipy import Variable, \
-    PhysicalField
+from fipy import Variable, PhysicalField
 from sympy import Lambda, symbols
 
 sp.init_printing()

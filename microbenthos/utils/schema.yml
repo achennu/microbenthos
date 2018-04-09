@@ -62,8 +62,8 @@ seed_linear: &seed_linear
 variables: &var_schema
     cls:
         <<: *cls_schema
-        allowed: [microbenthos.Variable, Variable]
-        default: Variable
+        allowed: [microbenthos.ModelVariable, ModelVariable]
+        default: ModelVariable
 
     init_params:
         type: dict
