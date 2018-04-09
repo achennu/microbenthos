@@ -82,7 +82,7 @@ Resume simulation
 ------------------
 
 Previously run simulations can be resumed, by using the ``--resume`` flag. The flag takes
-an integer pararmeter, which is the index along the time dimension from which to resume from.
+an integer parameter, which is the index along the time dimension from which to resume.
 This follows `python indexing`_ semantics. Briefly, 0 refers to the first time point, and 1, 2,
 3, ... to the subsequent time points. -1 refers to the last saved time point, -2 to the one
 before that, etc.
