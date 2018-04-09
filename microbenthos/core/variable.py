@@ -508,13 +508,3 @@ class ModelVariable(DomainEntity):
         except:
             self.logger.exception('Data restore failed')
             raise ValueError('{}: restore of "data" failed!'.format(self))
-
-
-class Variable(ModelVariable):
-    def __init__(self, *args, **kwargs):
-        import warnings
-        warnings.warn(
-            'The "Variable" class is marked as deprecated. Use "ModelVariable" instead. This '
-            'class will be removed in a future version.')
-
-        super(Variable, self).__init__(*args, **kwargs)

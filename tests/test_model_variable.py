@@ -3,7 +3,7 @@ import pytest
 from fipy import PhysicalField
 from fipy.tools import numerix
 
-from microbenthos import Variable, SedimentDBLDomain
+from microbenthos import ModelVariable, SedimentDBLDomain
 
 PF = PhysicalField
 
@@ -11,7 +11,7 @@ PF = PhysicalField
 class TestVariable:
     def test_init_empty(self):
         with pytest.raises(TypeError):
-            Variable()
+            ModelVariable()
 
     @pytest.mark.parametrize(
         'unit, err',
@@ -27,16 +27,16 @@ class TestVariable:
 
         if err:
             with pytest.raises(err):
-                Variable.check_create(**D)
+                ModelVariable.check_create(**D)
         else:
-            Variable.check_create(**D)
+            ModelVariable.check_create(**D)
 
     def test_create_check_name(self):
         # supplying name in create params should raise an error
         with pytest.raises(ValueError):
-            Variable.check_create(name='heh ho')
+            ModelVariable.check_create(name='heh ho')
 
-        Variable.check_create()
+        ModelVariable.check_create()
 
     @pytest.mark.parametrize(
         'constraints, err',
@@ -61,9 +61,9 @@ class TestVariable:
     def test_constraints_check(self, constraints, err):
         if err:
             with pytest.raises(err):
-                Variable.check_constraints(constraints)
+                ModelVariable.check_constraints(constraints)
         else:
-            Variable.check_constraints(constraints)
+            ModelVariable.check_constraints(constraints)
 
     @pytest.mark.parametrize(
         'value, unit, hasOld',
@@ -78,7 +78,7 @@ class TestVariable:
         # creation casts it into base units
         create = dict(value=value, unit=unit, hasOld=hasOld)
         name = 'myVar'
-        v = Variable(name=name, create=create)
+        v = ModelVariable(name=name, create=create)
 
         domain = SedimentDBLDomain()
         v.set_domain(domain)
@@ -112,7 +112,7 @@ class TestVariable:
 
         constraints = dict(constraints)
 
-        v = Variable(name=name, create=create, constraints=constraints)
+        v = ModelVariable(name=name, create=create, constraints=constraints)
 
         domain = SedimentDBLDomain()
         v.set_domain(domain)
@@ -155,7 +155,7 @@ class TestVariable:
             top=conval,
             )
 
-        v = Variable(name=name, create=create, constraints=constraints)
+        v = ModelVariable(name=name, create=create, constraints=constraints)
 
         domain = SedimentDBLDomain()
         v.set_domain(domain)
@@ -176,7 +176,7 @@ class TestVariable:
             assert v.var.faceValue[0] == conval
 
     def test_seed(self):
-        v = Variable(name='myvar',
+        v = ModelVariable(name='myvar',
                      create=dict(unit='mol/l'),
                      seed=None)
         assert True
@@ -201,7 +201,7 @@ class TestVariable:
                 scale=scale,
                 coeff=coeff)
             )
-        v = Variable(name=name, create=create, seed=seed)
+        v = ModelVariable(name=name, create=create, seed=seed)
 
         domain = SedimentDBLDomain()
         v.domain = domain
@@ -272,7 +272,7 @@ class TestVariable:
         unit = 'km/kg'
         N = 10
 
-        v = Variable(name='mvar', create=dict(value=3.2, unit=unit),
+        v = ModelVariable(name='mvar', create=dict(value=3.2, unit=unit),
                      seed=seed, constraints=constraints,
                      )
         v.domain = mock.Mock(SedimentDBLDomain)

@@ -1,6 +1,6 @@
 import logging
 
-from . import DomainEntity, Variable
+from . import DomainEntity, ModelVariable
 
 
 class MicrobialGroup(DomainEntity):
@@ -33,7 +33,7 @@ class MicrobialGroup(DomainEntity):
         #: container of the fipy Variables belonging to the microbes
         self.VARS = {}
 
-        #: the features of the microbes, which are instances of :class:`.Variable`.
+        #: the features of the microbes, which are instances of :class:`.ModelVariable`.
         self.features = {}
 
         #: the processes of the microbes, which are instances of
@@ -152,7 +152,7 @@ class MicrobialGroup(DomainEntity):
         """
         If the domain is available, then setup all the features and processes.
 
-        Store any :class:`fipy.CellVariables` created in :attr:`.features` into :attr:`.VARS`.
+        Store any :class:`fipy.CellVariable` created in :attr:`.features` into :attr:`.VARS`.
 
         """
         self.logger.debug('Setup of {}'.format(self))
@@ -161,7 +161,7 @@ class MicrobialGroup(DomainEntity):
                 self.logger.debug('Setting up {}'.format(obj))
                 obj.setup(**kwargs)
 
-                if isinstance(obj, Variable):
+                if isinstance(obj, ModelVariable):
                     self.VARS[obj.name] = obj.var
                     self.logger.debug('Stored var {!r} into VARS'.format(obj))
 
@@ -209,7 +209,7 @@ class MicrobialGroup(DomainEntity):
 
     def restore_from(self, state, tidx):
         """
-        Simply delegate to :meth:`~Variable.restore_from` of the features and processes
+        Simply delegate to :meth:`~ModelVariable.restore_from` of the features and processes
         """
 
         for name, obj in self.features.items():

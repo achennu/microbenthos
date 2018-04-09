@@ -21,7 +21,7 @@ saturation:
 """)
 
 VARDEF = yaml.load("""
-cls: Variable
+cls: ModelVariable
 init_params:
     name: oxy
     create:
@@ -341,10 +341,10 @@ class TestMicroBenthosModel:
     def test_update_vars(self):
         model = MicroBenthosModel()
 
-        from microbenthos.core import Variable
+        from microbenthos.core import ModelVariable
 
-        Mvar = mock.MagicMock(spec=Variable)
-        assert isinstance(Mvar, Variable)
+        Mvar = mock.MagicMock(spec=ModelVariable)
+        assert isinstance(Mvar, ModelVariable)
         # Mvar().var = var = mock.Mock()
 
         varnames = list('abcd')
