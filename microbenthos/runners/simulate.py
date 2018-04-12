@@ -64,7 +64,7 @@ class SimulationRunner(object):
         self.output_dir = output_dir or '.'
         self._log_fh = None
 
-        if resume == 0:
+        if resume == 0 or resume is None:
             self.logger.warning(
                 'Resume = 0 implies to restart simulation. Setting overwrite=True instead')
 
@@ -73,6 +73,9 @@ class SimulationRunner(object):
 
         if resume is True:
             resume = -1
+            # overwrite = False
+
+        if resume:
             overwrite = False
 
         self.resume = resume
@@ -120,7 +123,6 @@ class SimulationRunner(object):
         data_path = data_path
         EXISTS = os.path.exists(data_path)
 
-        # both overwrite and resume cannot be true by the user
         self.logger.debug('Checking data outpath: {} (exists={})'.format(
             data_path, EXISTS
             ))
@@ -130,9 +132,6 @@ class SimulationRunner(object):
             ))
 
         if EXISTS:
-            if self.resume:
-                self.overwrite = False
-
             if not self.resume and not self.overwrite:
                 if not self.confirm:
                     click.secho(
@@ -141,18 +140,21 @@ class SimulationRunner(object):
                         fg='red')
                     raise click.Abort()
 
-            # implies here that overwrite=True
-            if self.confirm and not self.overwrite:
-                click.confirm(
-                    'Overwrite existing file: {}?'.format(data_path),
-                    abort=True)
-                self.overwrite = True
+            if self.resume:
+                self.overwrite = False
+
+            if self.overwrite:
+                if self.confirm:
+                    click.confirm(
+                        'Overwrite existing file: {}?'.format(data_path),
+                        abort=True)
+                    self.overwrite = True
 
             if self.overwrite:
                 click.secho('Deleting output path: {}'.format(data_path), fg='red')
                 os.remove(data_path)
 
-            assert not os.path.exists(data_path)
+                assert not os.path.exists(data_path)
 
         else:
             self._create_output_dir()
@@ -251,8 +253,8 @@ class SimulationRunner(object):
                 raise
 
     def resume_existing_simulation(self, data_outpath = None):
-        if self.resume is None:
-            self.logger.debug(
+        if not self.resume:
+            self.logger.info(
                 'resume={}, so will not resume from existing file'.format(self.resume))
             return
 
@@ -446,7 +448,7 @@ class SimulationRunner(object):
                 'data.')
 
         for dexporter in self.get_data_exporters():
-            self.logger.debug('Checking outpath & resume of {}: {}'.format(dexporter,
+            self.logger.info('Checking outpath & resume of {}: {}'.format(dexporter,
                                                                            dexporter.outpath))
             self._check_data_path(dexporter.outpath)
             self.resume_existing_simulation(dexporter.outpath)
