@@ -8,6 +8,8 @@ file is parsed and validated by :class:`~microbenthos.utils.loader.MicroBenthosS
 Upon running with :ref:`cmd_simulate`, the validated definition file is written out to
 ``definition.yml``.
 
+See the :download:`definition file <definition_input.yml>` for this tutorial.
+
 Domain
 -------
 Here we go through the basic steps to define a model. First we have to define a model domain for
