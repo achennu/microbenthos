@@ -237,6 +237,8 @@ def setup_completion(shell, show_code):
               help='The max residual allowed for the time steps')
 @click.option('-sSolver', '--fipy-solver', help='Solver type to use from fipy',
               callback=_fipy_solver_callback)
+@click.option('-sSnapshot', '--snapshot-interval', type=click.IntRange(1, None),
+              help='Interval in seconds between simulation snapshots')
 @click.option('-O', '--overwrite', help='Overwrite file, if exists',
               is_flag=True)
 @click.option('-c', '--compression', type=click.IntRange(0, 9), default=6,
@@ -267,6 +269,7 @@ def setup_completion(shell, show_code):
 def cli_simulate(model_file, output_dir, exporter, overwrite, compression,
                  confirm, progress,
                  simtime_total, simtime_lims, max_sweeps, max_residual, fipy_solver,
+                 snapshot_interval,
                  plot, video, frames, budget, resume, show_eqns):
     """
     Run simulation from definition file
@@ -290,6 +293,7 @@ def cli_simulate(model_file, output_dir, exporter, overwrite, compression,
         max_sweeps=max_sweeps,
         simtime_lims=simtime_lims,
         max_residual=max_residual,
+        snapshot_interval=snapshot_interval,
         )
     for k, v in sim_kwargs.items():
         if v is None:

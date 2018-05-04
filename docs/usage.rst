@@ -82,7 +82,7 @@ Resume simulation
 ------------------
 
 Previously run simulations can be resumed, by using the ``--resume`` flag. The flag takes
-an integer pararmeter, which is the index along the time dimension from which to resume from.
+an integer parameter, which is the index along the time dimension from which to resume  .
 This follows `python indexing`_ semantics. Briefly, 0 refers to the first time point, and 1, 2,
 3, ... to the subsequent time points. -1 refers to the last saved time point, -2 to the one
 before that, etc.
@@ -99,6 +99,9 @@ Or to start from the 100th time point::
 
     microbenthos simulate definition_input.yml --resume 100
 
+Note that a supplied ``--resume`` directive takes precedence over ``--overwrite``. Also, that
+``--resume 0`` is equivalent to ``--overwrite``.
+
 
 .. _python indexing: https://docs.python.org/2.7/library/stdtypes.html#sequence-types-str-unicode-list-tuple-bytearray-buffer-xrange
 
@@ -110,6 +113,7 @@ To create an animated visualization from a saved model data file, use the ``expo
     microbenthos export video simulation_data.h5 --show
 
 The ``--show`` option creates the current frame being rendered to also be shown on the screen.
-See :ref:`cmd_video` for details.
+See :ref:`cmd_video` for details. Note that some :mod:`matplotlib` backends (such as Tk) may show
+the canvas on the screen anyway.
 
 

@@ -40,7 +40,10 @@ class HDFModelData(ModelData):
         if not path.endswith('/data'):
             path += '/data'
         ds = self.store[path]
-        ds.id.refresh()
+        try:
+            ds.id.refresh()
+        except AttributeError:
+            pass
 
         self.logger.debug('Found {}: {}'.format(path, ds))
         ds_unit = str(ds.attrs['unit'].decode('utf-8'))

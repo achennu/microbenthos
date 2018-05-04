@@ -12,6 +12,7 @@ biomass growth. The formulations of the constitutive relationships between metab
 environmental parameters are used from the paper, and the tutorial mainly indicates how these
 symbolic relationships can be used to construct and solve coupled partial differential equations.
 
+See the :download:`definition file <definition_input.yml>` for this tutorial.
 
 .. seealso::
     Rutger de Wit, Frank P. van den Ende, Hans van Gemerden; Mathematical simulation of the

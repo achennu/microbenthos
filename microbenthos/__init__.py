@@ -3,7 +3,7 @@ from __future__ import division, print_function
 
 __author__ = """Arjun Chennu"""
 __email__ = 'achennu@mpi-bremen.de'
-__version__ = '0.9'
+__version__ = '0.9.1'
 
 import logging
 

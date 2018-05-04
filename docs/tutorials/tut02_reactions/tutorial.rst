@@ -8,6 +8,8 @@ construct a single differential equation. We will now create chemical reactions 
 solutes and study the dynamics and distributions of their variables by solving couple partial
 differential equations.
 
+See the :download:`definition file <definition_input.yml>` for this tutorial.
+
 Firstly, we define another diffusive solute hydrogen sulfide :math:`H_2S` under ``environment``.
 
 .. literalinclude:: definition_input.yml
