@@ -78,7 +78,7 @@ class ModelPlotter(object):
 
         plt.style.use((style, {'axes.grid': False}))
 
-        figsize = figsize or (8, 6)
+        figsize = figsize or (12, 6.75)
         dpi = dpi or 100
 
         self._fig_kwds = dict(figsize=figsize, dpi=dpi)
