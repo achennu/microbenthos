@@ -35,7 +35,7 @@ class ProgressExporter(BaseExporter):
         self._prev_t = sim.model.clock.inUnitsOf(self._clock_unit)
 
         self._pbar = tqdm.tqdm(
-            total=sim.simtime_total.value,
+            total=round(sim.simtime_total.value, 2),
             desc=self._desc,
             # unit=self._clock_unit.name(),
             dynamic_ncols=True,
@@ -77,8 +77,8 @@ class ProgressExporter(BaseExporter):
             res='{:.2g} / {:.2g}'.format(residual, self.sim.residual_target),
             sweeps='{:02d}/{:3.2f}'.format(
                 sweeps,
-                self.sim.recent_sweeps,
-                # self.sim.max_sweeps
+                # self.sim.recent_sweeps,
+                self.sim.max_sweeps
                 )
             )
         self._pbar.update(round(dt_unitless, 2))
