@@ -48,7 +48,7 @@ class Simulation(CreateMixin):
                  snapshot_interval = 60,
                  fipy_solver = 'scipy',
                  max_sweeps = 50,
-                 max_residual = 1e-14,
+                 max_residual = 1e-6,
                  ):
         """
         Args:
@@ -112,7 +112,7 @@ class Simulation(CreateMixin):
             raise ValueError('Max residual should be a small positive number, not {:.3g}'.format(
                 self.max_residual))
 
-        self._residualQ = deque([], maxlen=10)
+        self._residualQ = deque([], maxlen=5)
 
         self._max_sweeps = None
         self.max_sweeps = max_sweeps
@@ -254,7 +254,7 @@ class Simulation(CreateMixin):
             float: The residual target for the current time-step
 
         """
-        return min(self.recent_residuals * 3, self.max_residual)
+        return max(self.max_residual/1e6, min(self.recent_residuals*10, self.max_residual))
 
     @property
     def max_sweeps(self):
