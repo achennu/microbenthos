@@ -1,0 +1,22 @@
+name: microbenthos
+
+channels:
+    - defaults
+    - conda-forge
+
+dependencies:
+    - python
+    - nomkl
+    - numpy
+    - scipy
+    - pysparse  # this is py2.7 only
+    - h5py
+    - sympy
+    - matplotlib
+    - pyyaml
+    - pip:
+          - git+http://github.com/usnistgov/fipy
+          - click
+          - logutils
+          - cerberus
+          - tqdm
