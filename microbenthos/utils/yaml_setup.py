@@ -1,7 +1,7 @@
 """
 Imports yaml from PyYaml and adds serialization options for :class:`fipy.PhysicalField`.
 """
-
+from __future__ import unicode_literals
 import yaml
 from fipy import PhysicalField
 
@@ -31,7 +31,7 @@ from fipy import PhysicalField
 def unit_constructor(loader, node):
 
     value = loader.construct_scalar(node)
-    if isinstance(value, (str, unicode)):
+    if isinstance(value, str):
         ret = PhysicalField(str(value))
     elif isinstance(value, (tuple, list)):
         ret = PhysicalField(*value)
@@ -43,5 +43,6 @@ def unit_constructor(loader, node):
 def unit_representer(dumper, data):
     return dumper.represent_scalar(u"!unit", u"%s" % str(data))
 
-yaml.add_constructor(u"!unit", unit_constructor)
-yaml.add_representer(PhysicalField, unit_representer)
+
+yaml.UnsafeLoader.add_constructor(u"!unit", unit_constructor)
+yaml.Dumper.add_representer(PhysicalField, unit_representer)

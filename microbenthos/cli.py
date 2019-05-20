@@ -279,7 +279,7 @@ def cli_simulate(model_file, output_dir, exporter, overwrite, compression,
     from microbenthos.utils import yaml
 
     click.echo('Loading model from {}'.format(model_file.name))
-    defs = yaml.load(model_file)
+    defs = yaml.unsafe_load(model_file)
     if 'simulation' not in defs:
         defs['simulation'] = {}
 
@@ -430,7 +430,7 @@ def export_model(model_file, key, verbose):
 
     from microbenthos.utils import yaml, validate_dict
 
-    defs = yaml.load(model_file)
+    defs = yaml.unsafe_load(model_file)
     if key:
         try:
             defs = defs[key]
