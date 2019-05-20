@@ -3,7 +3,7 @@ from collections import namedtuple
 
 import sympy as sp
 from fipy import CellVariable, TransientTerm, PhysicalField, Variable, DiffusionTerm, \
-    ImplicitSourceTerm
+    ImplicitSourceTerm, AdvectionTerm, FirstOrderAdvectionTerm
 from fipy.tools import numerix as np
 from microbenthos import ModelVariable, Process, snapshot_var, restore_var
 
@@ -50,6 +50,7 @@ class ModelEquation(object):
 
         self._term_transient = None
         self._term_diffusion = None
+        self._term_advection = None
         #: container (dict) of the formulae of the sources (sympy expressions)
         self.source_formulae = {}
         #: container (dict) of the expressions of the sources (fipy variable binOp)
@@ -63,8 +64,16 @@ class ModelEquation(object):
 
         self.diffusion_def = ()
         """:type : (str, float)
+
+        The model path to the diffussion coeff and a numeric coefficient 
+        to multiply in the equation
+        """
+
+        self.advection_def = ()
+        """:type : (str, float)
         
-        The model path to the diffussion coeff and a numeric coefficient to multiply in the equation
+        The model path to the advection coeff and a numeric coefficient 
+        to multiply in the equation
         """
 
         #: the fipy term that is used in the model full_eqn
@@ -222,6 +231,64 @@ class ModelEquation(object):
 
         self._term_diffusion = term
         self.logger.info('Diffusion term set: {}'.format(term))
+
+    def _add_advection_term(self, coeff):
+        """
+        Add a linear advection term to the equation
+
+        Args:
+            coeff (int, float, term): Coefficient for term
+
+        """
+        if self.finalized:
+            raise RuntimeError('Equation already finalized, cannot add terms')
+
+        # term = AdvectionTerm(var=self.var, coeff=coeff)
+        term = FirstOrderAdvectionTerm(var=self.var, coeff=coeff)
+        self.logger.debug('Created advection term with coeff: {!r}'.format(
+            coeff))
+        self.term_advection = term
+
+    def add_advection_term_from(self, path, coeff):
+        """
+        Add advection term from the object path
+
+        Args:
+            path (str): Path to model store
+            coeff (int, float): Multiplier coefficient for object
+
+        Returns:
+            Object stored on model store
+
+        Raises:
+            ValueError if object not found at path
+
+        """
+        self.logger.debug('Adding advection term from {!r}'.format(path))
+
+        obj = self._get_term_obj(path)
+        term = obj.as_term()
+
+        self._add_advection_term(coeff=term * coeff)
+        self.advection_def = (path, coeff)
+
+    @property
+    def term_advection(self):
+        """
+        The advection term for the equation
+
+        Returns:
+            Instance of :class:`fipy.AdvectionTerm`
+        """
+        return self._term_diffusion
+
+    @term_advection.setter
+    def term_advection(self, term):
+        if self.term_advection is not None:
+            raise RuntimeError('Advection term has already been set!')
+
+        self._term_advection = term
+        self.logger.info('Advection term set: {}'.format(term))
 
     def add_source_term_from(self, path, coeff = 1):
         """
