@@ -1,3 +1,4 @@
+import itertools
 import logging
 
 from . import DomainEntity, ModelVariable
@@ -5,11 +6,13 @@ from . import DomainEntity, ModelVariable
 
 class MicrobialGroup(DomainEntity):
     """
-    Class to represent a category of microorganisms, such as cyanobacteria, sulfur bacteria, etc.
+    Class to represent a category of microorganisms, such as cyanobacteria,
+    sulfur bacteria, etc.
 
     This class defines the interface to
 
-        * define :attr:`.features` such as :attr:`.biomass`, distributed through the domain
+        * define :attr:`.features` such as :attr:`.biomass`, distributed
+        through the domain
         * setup :attr:`.processes` which the microbes perform on domain entities
     """
 
@@ -33,7 +36,8 @@ class MicrobialGroup(DomainEntity):
         #: container of the fipy Variables belonging to the microbes
         self.VARS = {}
 
-        #: the features of the microbes, which are instances of :class:`.ModelVariable`.
+        #: the features of the microbes, which are instances of
+        # :class:`.ModelVariable`.
         self.features = {}
 
         #: the processes of the microbes, which are instances of
@@ -51,7 +55,8 @@ class MicrobialGroup(DomainEntity):
         self.logger.debug('Initialized {}'.format(self))
 
     def __repr__(self):
-        return '{}:Feat({}):Procs({})'.format(self.name, ','.join(self.features.keys()),
+        return '{}:Feat({}):Procs({})'.format(self.name,
+                                              ','.join(self.features.keys()),
                                               ','.join(self.processes.keys()))
 
     def __getitem__(self, item):
@@ -83,13 +88,16 @@ class MicrobialGroup(DomainEntity):
             params['init_params']['create']['store'] = False
             self.logger.debug('Set variable store = False')
 
-        self.logger.debug('Dispatch init of feature {!r}: {}'.format(name, params))
+        self.logger.debug(
+            'Dispatch init of feature {!r}: {}'.format(name, params))
         instance = self.from_dict(params)
 
         if name in self.features:
-            self.logger.warning('Overwriting feature {!r} with {}'.format(name, instance))
+            self.logger.warning(
+                'Overwriting feature {!r} with {}'.format(name, instance))
 
-        self.logger.debug('{} added feature {}: {}'.format(self, name, instance))
+        self.logger.debug(
+            '{} added feature {}: {}'.format(self, name, instance))
         self.features[name] = instance
 
     def add_process_from(self, name, **params):
@@ -106,16 +114,20 @@ class MicrobialGroup(DomainEntity):
         instance = self.from_params(**params)
 
         if name in self.processes:
-            self.logger.warning('Overwriting process {!r} with {}'.format(name, instance))
+            self.logger.warning(
+                'Overwriting process {!r} with {}'.format(name, instance))
 
-        self.logger.debug('{} added process {}: {}'.format(self, name, instance))
+        self.logger.debug(
+            '{} added process {}: {}'.format(self, name, instance))
         self.processes[name] = instance
 
     @property
     def biomass(self):
         """
-        The feature "biomass" stored in :attr:`.features`. This is considered as an essential
-        feature for a microbial group. However, no error is raised if not defined currently.
+        The feature "biomass" stored in :attr:`.features`. This is considered
+        as an essential
+        feature for a microbial group. However, no error is raised if not
+        defined currently.
 
         Returns:
             :class:`fipy.CellVariable`: biomass variable stored on the domain
@@ -123,7 +135,8 @@ class MicrobialGroup(DomainEntity):
         """
         ret = self.features.get('biomass')
         if ret is None:
-            self.logger.warning('Essential feature "biomass" of {} missing!'.format(self))
+            self.logger.warning(
+                'Essential feature "biomass" of {} missing!'.format(self))
         else:
             if ret.var is not None:
                 ret = ret.var
@@ -134,8 +147,10 @@ class MicrobialGroup(DomainEntity):
         Set up the domain on the microbial group.
 
         Note:
-            Features, which are handlers for domain variables, receive the domain instances. However
-            processes receive `self` as the domain, so that variable lookup happens first locally on
+            Features, which are handlers for domain variables, receive the
+            domain instances. However
+            processes receive `self` as the domain, so that variable lookup
+            happens first locally on
             the instance and then passed on to the domain.
 
         """
@@ -152,12 +167,16 @@ class MicrobialGroup(DomainEntity):
         """
         If the domain is available, then setup all the features and processes.
 
-        Store any :class:`fipy.CellVariable` created in :attr:`.features` into :attr:`.VARS`.
+        Store any :class:`fipy.CellVariable` created in :attr:`.features`
+        into :attr:`.VARS`.
 
         """
         self.logger.debug('Setup of {}'.format(self))
         if self.check_domain():
-            for obj in self.features.values() + self.processes.values():
+            for obj in itertools.chain(
+                self.features.values(),
+                self.processes.values()
+                ):
                 self.logger.debug('Setting up {}'.format(obj))
                 obj.setup(**kwargs)
 
@@ -170,7 +189,10 @@ class MicrobialGroup(DomainEntity):
         When model clock updated, delegate to feature and process instances
         """
         self.logger.debug('Updating {}'.format(self))
-        for obj in self.features.values() + self.processes.values():
+        for obj in itertools.chain(
+            self.features.values(),
+            self.processes.values()
+            ):
             obj.on_time_updated(clocktime)
 
     def snapshot(self, base = False):
@@ -209,7 +231,8 @@ class MicrobialGroup(DomainEntity):
 
     def restore_from(self, state, tidx):
         """
-        Simply delegate to :meth:`~ModelVariable.restore_from` of the features and processes
+        Simply delegate to :meth:`~ModelVariable.restore_from` of the
+        features and processes
         """
 
         for name, obj in self.features.items():

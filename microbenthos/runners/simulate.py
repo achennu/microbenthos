@@ -279,7 +279,7 @@ class SimulationRunner(object):
         latest_time = PhysicalField(latest_time, time_unit)
 
         click.secho(
-            '\n\nModel resume set: rewind from latest {} ({}) to {} ({})?'.format(
+            'Model resume set: rewind from latest {} ({}) to {} ({})?'.format(
                 latest_time, nt,
                 target_time, self.resume
                 ), fg='red')
@@ -291,8 +291,9 @@ class SimulationRunner(object):
         try:
             with hdf.File(data_outpath, 'a') as store:
                 self.model.restore_from(store, time_idx=self.resume)
-            click.secho('Model restore successful. Clock = {}\n\n'.format(self.model.clock),
-                        fg='green')
+            click.secho(
+                'Model restore successful. Clock = {}'.format(self.model.clock),
+                fg='green')
             self.simulation.simtime_step = 1
             # set a small simtime to start
         except:
@@ -395,7 +396,8 @@ class SimulationRunner(object):
             try:
                 exporter.setup(self, state)
             except:
-                self.logger.error('Error in setting up exporter: {}'.format(expname))
+                self.logger.exception('Error in setting up exporter: {}'.format(
+                    expname))
                 raise
 
         yield
@@ -526,7 +528,7 @@ class SimulationRunner(object):
 
                 except KeyboardInterrupt:
                     self.logger.error("Keyboard interrupt on simulation run!")
-                    break
+                    raise
 
         self.teardown_logfile()
         warnings.resetwarnings()

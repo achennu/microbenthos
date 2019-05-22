@@ -39,3 +39,25 @@ def setup_console_logging(name = None, level = 20):
 
     logger.addHandler(handler)
     logger.info('Set up console logging: {} level={}'.format(name, logger.getEffectiveLevel()))
+
+def add_console_logging(verbose, start_level = logging.ERROR):
+    if verbose is None:
+        return
+
+    level = (start_level - int(verbose) * 10)
+    level = min(level, logging.CRITICAL)
+    level = max(level, logging.DEBUG)
+
+    try:
+        from logutils.colorize import ColorizingStreamHandler as StreamHandler
+        StreamHandler.level_map[logging.DEBUG] = (None, 'black', False)
+        StreamHandler.level_map[logging.INFO] = (None, 'blue', False)
+    except:
+        from logging import StreamHandler
+    finally:
+        sh = StreamHandler()
+        sh.setLevel(level=level)
+        logger.addHandler(sh)
+        logger.debug(f'Set console logging to level {level}')
+
+    return level

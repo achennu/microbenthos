@@ -1,3 +1,4 @@
+import itertools
 import logging
 import operator
 from collections import Mapping
@@ -6,7 +7,7 @@ from functools import reduce
 import fipy.tools.numerix as np
 import h5py as hdf
 import sympy as sp
-from fipy import Variable, PhysicalField
+from fipy import PhysicalField, Variable
 from sympy import Lambda, symbols
 
 sp.init_printing()
@@ -19,9 +20,11 @@ from .equation import ModelEquation
 
 class MicroBenthosModel(CreateMixin):
     """
-    The theater where all the actors of microbenthos come together in a concerted
+    The theater where all the actors of microbenthos come together in a
+    concerted
     play driven by the clock. This is the class that encapsulates the nested
-    structure and function of the various entities, variables, microbial groups and binds them
+    structure and function of the various entities, variables, microbial
+    groups and binds them
     with the domain.
     """
     schema_key = 'model'
@@ -39,25 +42,30 @@ class MicroBenthosModel(CreateMixin):
 
         """
         super(MicroBenthosModel, self).__init__()
-        # the __init__ call is deliberately empty. will implement cooeperative inheritance only
+        # the __init__ call is deliberately empty. will implement
+        # cooeperative inheritance only
         # when necessary
         self.logger = logging.getLogger(__name__)
         self.logger.info('Initializing {}'.format(self.__class__.__name__))
 
         self._domain = None
 
-        #: container (dict) of the :class:`~microbenthos.core.microbes.MicrobialGroup` in the model
+        #: container (dict) of the
+        # :class:`~microbenthos.core.microbes.MicrobialGroup` in the model
         self.microbes = {}
         #: container (dict) of the environmental variables and processes
         self.env = {}
-        #: the full :mod:`fipy` equation of the model, coupling all individual :attr:`.equations`
+        #: the full :mod:`fipy` equation of the model, coupling all
+        # individual :attr:`.equations`
         self.full_eqn = None
-        #: container (dict) of the various soure expressions of the :attr:`.equations`
+        #: container (dict) of the various soure expressions of the
+        # :attr:`.equations`
         self.source_exprs = {}
         #: container (dict) of the :class:`.ModelEquation` defined in the model
         self.equations = {}
 
-        #: a :class:`fipy.Variable` subclass that serves as the :class:`ModelClock`
+        #: a :class:`fipy.Variable` subclass that serves as the
+        # :class:`ModelClock`
         self.clock = ModelClock(self, value=0.0, unit='h', name='clock')
 
         self._setup(**kwargs)
@@ -86,7 +94,10 @@ class MicroBenthosModel(CreateMixin):
             self.logger.debug('Formula {!r}: {}'.format(name, func))
             Expression._sympy_ns[name] = func
         except:
-            self.logger.exception('Invalid input for formula {}: vars={} expr={}'.format(name, vars, expr))
+            self.logger.exception(
+                'Invalid input for formula {}: vars={} expr={}'.format(name,
+                                                                       vars,
+                                                                       expr))
             raise ValueError('Invalid input for formula')
 
     @property
@@ -109,7 +120,8 @@ class MicroBenthosModel(CreateMixin):
 
     def create_entity_from(self, defdict):
         """
-        Create a model entity from dictionary, and set it up with the model and domain.
+        Create a model entity from dictionary, and set it up with the model
+        and domain.
 
         See Also: :meth:`.Entity.from_dict`
 
@@ -125,7 +137,8 @@ class MicroBenthosModel(CreateMixin):
 
     def _create_entity_into(self, target, name, defdict):
         """
-        Create an entity from its definition dictionary and store it into the target dictionary
+        Create an entity from its definition dictionary and store it into the
+        target dictionary
 
         Args:
             target (str): Target dict such as ``"env"``, ``"microbes"``
@@ -135,7 +148,8 @@ class MicroBenthosModel(CreateMixin):
         """
         tdict = getattr(self, target)
         if name in tdict:
-            self.logger.warning("Entity {!r} exists in {}! Overwriting!".format(name, target))
+            self.logger.warning(
+                "Entity {!r} exists in {}! Overwriting!".format(name, target))
         defdict['init_params']['name'] = name
         entity = self.create_entity_from(defdict)
         tdict[name] = entity
@@ -144,9 +158,11 @@ class MicroBenthosModel(CreateMixin):
     def _setup(self, **definition):
         """
         Set up the model instance from the `definition` dictionary, which is
-        assumed to be validated by :class:`~microbenthos.utils.loader.MicroBenthosSchemaValidator`.
+        assumed to be validated by
+        :class:`~microbenthos.utils.loader.MicroBenthosSchemaValidator`.
         """
-        self.logger.debug('Setting up model from definition: {}'.format(definition.keys()))
+        self.logger.debug(
+            'Setting up model from definition: {}'.format(definition.keys()))
 
         domain_def = definition.get('domain')
         if domain_def:
@@ -157,7 +173,8 @@ class MicroBenthosModel(CreateMixin):
             elif isinstance(domain_def, SedimentDBLDomain):
                 self.domain = domain_def
             else:
-                raise ValueError('Domain input {} of wrong type!'.format(type(domain_def)))
+                raise ValueError(
+                    'Domain input {} of wrong type!'.format(type(domain_def)))
 
         # Load up the formula namespace
         if 'formulae' in definition:
@@ -195,12 +212,15 @@ class MicroBenthosModel(CreateMixin):
 
     def entities_setup(self):
         """
-        Check that the model entities are setup fully, if not attempt it for each entity in
+        Check that the model entities are setup fully, if not attempt it for
+        each entity in
         :attr:`.env` and :attr:.microbes`
         """
-        for entity in self.env.values() + self.microbes.values():
+        for entity in itertools.chain(self.env.values(),
+                                      self.microbes.values()):
             if not entity.is_setup:
-                self.logger.info('Setting up dangling entity: {!r}'.format(entity))
+                self.logger.info(
+                    'Setting up dangling entity: {!r}'.format(entity))
                 entity.setup(model=self)
 
     @property
@@ -208,16 +228,22 @@ class MicroBenthosModel(CreateMixin):
         """
         Flag that indicates if all entities have been setup
         """
-        return all([e.is_setup for e in self.env.values() + self.microbes.values()])
+        return all([e.is_setup for e in itertools.chain(
+            self.env.values(),
+            self.microbes.values())])
 
     def snapshot(self, base = False):
         """
         Create a snapshot of the model state.
 
-        This method recursively calls the :meth:`snapshot` method of all contained entities,
-        and compiles them into a nested dictionary. The dictionary has the structure of the
-        model, as well as nodes with the numeric data and metadata. The state of the model can
-        then be serialized, for example through :func:`.save_snapshot`, or processed through
+        This method recursively calls the :meth:`snapshot` method of all
+        contained entities,
+        and compiles them into a nested dictionary. The dictionary has the
+        structure of the
+        model, as well as nodes with the numeric data and metadata. The state
+        of the model can
+        then be serialized, for example through :func:`.save_snapshot`,
+        or processed through
         various exporters (in :mod:`~microbenthos.exporters`).
 
         Args:
@@ -227,7 +253,8 @@ class MicroBenthosModel(CreateMixin):
             dict: model state snapshot
 
         See Also:
-            :func:`.save_snapshot` for details about the nested structure of the state and how it is
+            :func:`.save_snapshot` for details about the nested structure of
+            the state and how it is
             processed.
 
         """
@@ -269,14 +296,18 @@ class MicroBenthosModel(CreateMixin):
 
         Args:
             store (:class:`h5py:Group`): The root of the model data store
-            time_idx (int): the index along the time series to restore. Uses python syntax,
+            time_idx (int): the index along the time series to restore. Uses
+            python syntax,
             i.e first element is 0, second is 1, last element is -1, etc.
 
         Warning:
             This is a potentially destructive operation! After checking that we
-            :meth:`.can_restore_from` the  given `store`, :func:`truncate_model_data` is called.
-            This method modifies the data structure in the supplied store by truncating the
-            datasets to the length of the time series as determined from `time_idx`. Only in the
+            :meth:`.can_restore_from` the  given `store`,
+            :func:`truncate_model_data` is called.
+            This method modifies the data structure in the supplied store by
+            truncating the
+            datasets to the length of the time series as determined from
+            `time_idx`. Only in the
             case of ``time_idx=-1`` it may not modify the  data.
 
         Raises:
@@ -284,10 +315,12 @@ class MicroBenthosModel(CreateMixin):
             Exception: as raised by :func:`.truncate_model_data`.
 
         See Also:
-            :func:`.check_compatibility` to see how the store is assessed to be compatible
+            :func:`.check_compatibility` to see how the store is assessed to
+            be compatible
             with the instantiated model.
 
-            :func:`.truncate_model_data` for details on how the store is truncated.
+            :func:`.truncate_model_data` for details on how the store is
+            truncated.
         """
         self.logger.info('Restoring model from store: {}'.format(tuple(store)))
 
@@ -331,17 +364,21 @@ class MicroBenthosModel(CreateMixin):
             check_compatibility(self.snapshot(), store)
             return True
         except:
-            self.logger.warning('Model & stored data not compatible', exc_info=True)
+            self.logger.warning('Model & stored data not compatible',
+                                exc_info=True)
             return False
 
-    def add_equation(self, name, transient, sources = None, diffusion = None, track_budget = False):
+    def add_equation(self, name, transient, sources = None, diffusion = None,
+                     track_budget = False):
         """
         Create a transient reaction-diffusion equation for the model.
 
-        The term definitions are provided as `(model_path, coeff)` pairs to be created for the
+        The term definitions are provided as `(model_path, coeff)` pairs to
+        be created for the
         transient term, diffusion term and source terms.
 
-        If all inputs are correct, it creates and finalizes a :class:`.ModelEquation` instance,
+        If all inputs are correct, it creates and finalizes a
+        :class:`.ModelEquation` instance,
         stored in :attr:`.equations`.
 
         Args:
@@ -349,19 +386,23 @@ class MicroBenthosModel(CreateMixin):
             transient (tuple): Single definition for transient term
             sources (list): A list of definitions for source terms
             diffusion (tuple): Single definition for diffusion term
-            track_budget (bool): flag whether the variable budget should be tracked over time
+            track_budget (bool): flag whether the variable budget should be
+            tracked over time
 
         """
         self.logger.debug(
-            'Creating equation for transient={}, diffusion={} and sources={}'.format(transient,
-                                                                                     diffusion,
-                                                                                     sources))
+            'Creating equation for transient={}, diffusion={} and sources={'
+            '}'.format(
+                transient,
+                diffusion,
+                sources))
         if name in self.equations:
-            raise RuntimeError('Equation with name {!r} already exists!'.format(name))
+            raise RuntimeError(
+                'Equation with name {!r} already exists!'.format(name))
 
         def is_pair_tuple(obj):
             try:
-                assert isinstance(obj, (tuple, list))
+                # assert isinstance(obj, (tuple, list))
                 _, __ = obj
                 return True
             except:
@@ -371,16 +412,20 @@ class MicroBenthosModel(CreateMixin):
             raise ValueError('Transient term must be a (path, coeff) tuple!')
 
         if not diffusion and not sources:
-            raise ValueError('One or both of diffusion and source terms must be given.')
+            raise ValueError(
+                'One or both of diffusion and source terms must be given.')
 
         if diffusion:
             if not is_pair_tuple(diffusion):
                 raise ValueError('Diffusion term must be a (path, coeff) tuple')
 
         if sources:
-            improper = filter(lambda x: not is_pair_tuple(x), sources)
+            improper = list(filter(lambda x: not is_pair_tuple(x), sources))
             if improper:
-                raise ValueError('Source terms not (path, coeff) tuples: {}'.format(improper))
+                self.logger.error(f'Equation sources improper: {sources}')
+                raise ValueError(
+                    'Source terms not (path, coeff) tuples: {}'.format(
+                        improper))
 
         eqn = ModelEquation(self, *transient, track_budget=track_budget)
 
@@ -398,15 +443,18 @@ class MicroBenthosModel(CreateMixin):
 
     def create_full_equation(self):
         """
-        Create the full equation (:attr:`.full_eqn`) of the model by coupling the
+        Create the full equation (:attr:`.full_eqn`) of the model by coupling
+        the
         individual :attr:`.equations`.
         """
         if not self.equations:
             raise RuntimeError('No equations available for model!')
 
-        self.logger.info('Creating full equation from {}'.format(self.equations.keys()))
+        self.logger.info(
+            'Creating full equation from {}'.format(self.equations.keys()))
 
-        full_eqn = reduce(operator.and_, [eqn.obj for eqn in self.equations.values()])
+        full_eqn = reduce(operator.and_,
+                          [eqn.obj for eqn in self.equations.values()])
         self.logger.info('Full model equation: {!r}'.format(full_eqn))
 
         self.full_eqn = full_eqn
@@ -423,7 +471,8 @@ class MicroBenthosModel(CreateMixin):
         #             old = self.source_exprs[name]
         #             if old is not expr:
         #                 raise RuntimeError(
-        #                     'Another source with same name {!r} exists from different '
+        #                     'Another source with same name {!r} exists from
+        #                     different '
         #                     'equation!'.format(
         #                         name))
 
@@ -444,7 +493,8 @@ class MicroBenthosModel(CreateMixin):
         parts = path.split('.')
 
         if len(parts) == 1:
-            raise TypeError('Path should dotted string, but got {!r}'.format(path))
+            raise TypeError(
+                'Path should dotted string, but got {!r}'.format(path))
 
         S = self
         for p in parts:
@@ -455,7 +505,8 @@ class MicroBenthosModel(CreateMixin):
                     S = S[p]
                 except (KeyError, TypeError):
                     raise ValueError(
-                        'Unknown model path {!r}'.format('.'.join(parts[:parts.index(p) + 1])))
+                        'Unknown model path {!r}'.format(
+                            '.'.join(parts[:parts.index(p) + 1])))
             else:
                 S = S_
 
@@ -478,11 +529,13 @@ class MicroBenthosModel(CreateMixin):
 
     def update_vars(self):
         """
-        Update all stored variables which have an `hasOld` setting. This is used while sweeping
+        Update all stored variables which have an `hasOld` setting. This is
+        used while sweeping
         for solutions.
         """
 
-        self.logger.debug('Updating model variables. Current time: {}'.format(self.clock))
+        self.logger.debug(
+            'Updating model variables. Current time: {}'.format(self.clock))
         updated = []
         for name, obj in self.env.items():
             path = 'env.{}'.format(name)
@@ -492,13 +545,15 @@ class MicroBenthosModel(CreateMixin):
                     self.logger.debug("Updated old: {}".format(path))
 
                     if obj.clip_min is not None or obj.clip_max is not None:
-                        obj.var.value = np.clip(obj.var.value, obj.clip_min, obj.clip_max)
+                        obj.var.value = np.clip(obj.var.value, obj.clip_min,
+                                                obj.clip_max)
                         self.logger.info('Clipped {} between {} and {}'.format(
                             obj, obj.clip_min, obj.clip_max
                             ))
                     updated.append(path)
                 except AssertionError:
-                    self.logger.debug('{} = {!r}.var.updateOld failed'.format(path, obj))
+                    self.logger.debug(
+                        '{} = {!r}.var.updateOld failed'.format(path, obj))
 
             else:
                 self.logger.debug('env.{!r} not model variable'.format(obj))
@@ -512,7 +567,8 @@ class MicroBenthosModel(CreateMixin):
                         self.logger.debug("Updated old: {}".format(path))
                         updated.append(path)
                     except AssertionError:
-                        self.logger.debug('{} = {!r}.var.updateOld failed'.format(path, obj))
+                        self.logger.debug(
+                            '{} = {!r}.var.updateOld failed'.format(path, obj))
                 else:
                     self.logger.debug(
                         '{}={!r} is not model variable'.format(path, obj))
@@ -526,7 +582,9 @@ class MicroBenthosModel(CreateMixin):
         Args:
             dt (PhysicalField): the time step duration
         """
-        self.logger.debug('Updating model equations. Current time: {} dt={}'.format(self.clock, dt))
+        self.logger.debug(
+            'Updating model equations. Current time: {} dt={}'.format(
+                self.clock, dt))
 
         for eqn in self.equations.values():
             eqn.update_tracked_budget(dt)
@@ -534,7 +592,8 @@ class MicroBenthosModel(CreateMixin):
 
 class ModelClock(Variable):
     """
-    Subclass of :class:`fipy.Variable` to implement hooks and serve as clock of the model.
+    Subclass of :class:`fipy.Variable` to implement hooks and serve as clock
+    of the model.
     """
 
     def __init__(self, model, **kwargs):

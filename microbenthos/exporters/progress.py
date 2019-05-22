@@ -33,14 +33,14 @@ class ProgressExporter(BaseExporter):
         self.logger.debug('Preparing progressbar for simulation: {}'.format(sim.simtime_total))
         self._clock_unit = sim.simtime_total.unit
         self._prev_t = sim.model.clock.inUnitsOf(self._clock_unit)
-
+        total_time = round(float(sim.simtime_total.value), 1)
         self._pbar = tqdm.tqdm(
-            total=sim.simtime_total.value,
+            total=total_time,
             desc=self._desc,
             # unit=self._clock_unit.name(),
             dynamic_ncols=True,
             position=self._position,
-            initial=round(self._prev_t.value, 2),
+            initial=round(float(self._prev_t.value), 2),
             leave=True,
             )
 
@@ -60,7 +60,7 @@ class ProgressExporter(BaseExporter):
         # curr = PhysicalField(time, tdict['unit']).inUnitsOf(simtime_total.unit)
         curr = PhysicalField(time, tdict['unit']).inUnitsOf(self._clock_unit)
         dt = curr - self._prev_t
-        dt_unitless = round((curr - self._prev_t).value, 2)
+        dt_unitless = round(float((curr - self._prev_t).value), 2)
 
         # clock_info = '{0:.2f}/{1:.2f} {2}'.format(
         #     float(curr.value),
@@ -81,7 +81,7 @@ class ProgressExporter(BaseExporter):
                 # self.sim.max_sweeps
                 )
             )
-        self._pbar.update(round(dt_unitless, 2))
+        self._pbar.update(round(dt_unitless, 1))
         self._prev_t = curr
 
     def finish(self):

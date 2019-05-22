@@ -124,9 +124,9 @@ class Process(DomainEntity):
             params = self.params
 
         expr_symbols = filter(lambda a: isinstance(a, sp.Symbol), expr.atoms())
-        param_symbols = tuple(sp.symbols(params.keys()))
+        param_symbols = tuple(sp.symbols(tuple(params.keys())))
 
-        event_name_symbols = tuple(sp.symbols(self.events.keys()))
+        event_name_symbols = tuple(sp.symbols(tuple(self.events.keys())))
         var_symbols = tuple(set(expr_symbols).difference(
             set(param_symbols).union(set(event_name_symbols))))
         # self.logger.debug('Params available: {}'.format(param_symbols))
