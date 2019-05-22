@@ -1,7 +1,7 @@
 import itertools
 import logging
 import operator
-from collections import Mapping
+from collections.abc import Mapping
 from functools import reduce
 
 import fipy.tools.numerix as np
@@ -391,18 +391,19 @@ class MicroBenthosModel(CreateMixin):
 
         """
         self.logger.debug(
-            'Creating equation for transient={}, diffusion={} and sources={'
-            '}'.format(
+            'Creating equation for transient={}, diffusion={} and '
+            'sources={}'.format(
                 transient,
                 diffusion,
                 sources))
+
         if name in self.equations:
             raise RuntimeError(
                 'Equation with name {!r} already exists!'.format(name))
 
         def is_pair_tuple(obj):
             try:
-                # assert isinstance(obj, (tuple, list))
+                assert isinstance(obj, (tuple, list))
                 _, __ = obj
                 return True
             except:

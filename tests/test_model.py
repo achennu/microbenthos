@@ -5,7 +5,7 @@ from fipy import PhysicalField
 from microbenthos import Expression, Entity, yaml, SedimentDBLDomain, DomainEntity
 from microbenthos.model.model import MicroBenthosModel, ModelClock, ModelEquation
 
-DOMAIN_DEF = yaml.load("""
+DOMAIN_DEF = yaml.unsafe_load("""
 cls: SedimentDBLDomain
 init_params:
     cell_size: !unit 50 mum
@@ -14,13 +14,13 @@ init_params:
     porosity: 0.6
 """)
 
-FORMULAE_DEF = yaml.load("""
+FORMULAE_DEF = yaml.unsafe_load("""
 saturation:
     vars: [x, Km]
     expr: x / (Km + x)
 """)
 
-VARDEF = yaml.load("""
+VARDEF = yaml.unsafe_load("""
 cls: ModelVariable
 init_params:
     name: oxy

@@ -99,7 +99,7 @@ class TestSimulationRunner:
         runner.save_definitions()
         assert os.path.isfile(path)
         with open(path) as fp:
-            definition = yaml.load(fp)
+            definition = yaml.unsafe_load(fp)
         assert 'model' in definition
         assert 'simulation' in definition
 
@@ -112,7 +112,7 @@ class TestSimulationRunner:
         assert os.path.isfile(path)
 
         with open(path) as fp:
-            definition = yaml.load(fp)
+            definition = yaml.unsafe_load(fp)
         assert 'libraries' in definition
         assert 'exporters' in definition
         assert 'runner' in definition

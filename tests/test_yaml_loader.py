@@ -9,7 +9,7 @@ def test_load_unit():
     km: !unit {}
     """.format(val)
 
-    val_ = yaml.load(s)['km']
+    val_ = yaml.unsafe_load(s)['km']
 
     assert val_ == PhysicalField(val)
 
@@ -39,8 +39,7 @@ def test_dump_unit():
 
     ])
 def test_exp_notation(inp, num):
-
-    val = yaml.load(inp)
+    val = yaml.unsafe_load(inp)
     assert val == inp
 
 
