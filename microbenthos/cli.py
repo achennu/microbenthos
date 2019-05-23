@@ -5,6 +5,7 @@ The command line interface for :mod:`microbenthos`
 import os
 
 import click
+from pathlib import Path
 
 try:
     import click_completion
@@ -223,6 +224,8 @@ def setup_completion(shell, show_code):
 @click.option('-o', '--output-dir', type=click.Path(file_okay=False),
               default=os.getcwd(),
               help='Output directory for simulation')
+@click.option('--output-same', is_flag=True,
+              help='Output to same location as definition file')
 @click.option('-x', '--exporter', multiple=True,
               callback=_exporter_callback,
               help='Add an exporter to run. Form: -x <name> <export_type> ["<option1>=val,'
@@ -245,8 +248,12 @@ def setup_completion(shell, show_code):
               help='Compression level for data (default: 6)')
 @click.option('--confirm/--no-confirm', ' /-Y', default=True,
               help='Confirm before running simulation')
-@click.option('--progress/--no-progress', help='Show progress bar',
-              default=True)
+@click.option('--progress', type=click.IntRange(0, None),
+              default=1,
+              help='Show progress bar (0 to disable)',
+              )
+@click.option('--progress-tag', default='evolution',
+              help='Tag for progress bar')
 @click.option('--plot/--no-plot', help='Show graphical plot of model data',
               default=False)
 @click.option('--video/--no-video',
@@ -265,9 +272,9 @@ def setup_completion(shell, show_code):
               )
 @click.option('-eqns', '--show-eqns', is_flag=True,
               help='Show equations that will be solved')
-@click.argument('model_file', type=click.File())
+@click.argument('model_file', type=click.Path(dir_okay=False, exists=True))
 def cli_simulate(model_file, output_dir, exporter, overwrite, compression,
-                 confirm, progress,
+                 confirm, progress: int, progress_tag, output_same,
                  simtime_total, simtime_lims, max_sweeps, max_residual, fipy_solver,
                  snapshot_interval,
                  plot, video, frames, budget, resume, show_eqns):
@@ -278,8 +285,9 @@ def cli_simulate(model_file, output_dir, exporter, overwrite, compression,
     click.secho('Starting MicroBenthos simulation', fg='green')
     from microbenthos.utils import yaml
 
-    click.echo('Loading model from {}'.format(model_file.name))
-    defs = yaml.unsafe_load(model_file)
+    click.echo('Loading model from {}'.format(model_file))
+    with open(model_file, 'r') as fp:
+        defs = yaml.unsafe_load(fp)
     if 'simulation' not in defs:
         defs['simulation'] = {}
 
@@ -301,6 +309,10 @@ def cli_simulate(model_file, output_dir, exporter, overwrite, compression,
         else:
             defs['simulation'][k] = v
 
+    if output_same:
+        output_dir = str(Path(model_file).parent)
+        click.secho(f'Output directory set to: {output_dir}')
+
     from microbenthos.runners import SimulationRunner
     runner = SimulationRunner(output_dir=output_dir,
                               model=defs['model'],
@@ -309,6 +321,7 @@ def cli_simulate(model_file, output_dir, exporter, overwrite, compression,
                               overwrite=overwrite,
                               confirm=confirm,
                               progress=progress,
+                              progress_tag=progress_tag,
                               plot=plot,
                               video=video,
                               frames=frames,

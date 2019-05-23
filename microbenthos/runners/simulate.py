@@ -45,6 +45,7 @@ class SimulationRunner(object):
                  model = None,
                  simulation = None,
                  progress = False,
+                 progress_tag = 'evolution',
                  plot = False,
                  video = False,
                  frames = False,
@@ -97,7 +98,8 @@ class SimulationRunner(object):
             self.simulation = simulation
 
         if progress:
-            exporters.append(dict(exptype='progress'))
+            exporters.append(dict(exptype='progress', position=int(progress),
+                                  desc=str(progress_tag)))
 
         if plot or video or frames:
             exporters.append(dict(exptype='graphic',
@@ -413,7 +415,8 @@ class SimulationRunner(object):
                     raise
 
     def get_data_exporters(self):
-        return filter(lambda e: e._exports_ == 'model_data', self.exporters.values())
+        return list(filter(
+            lambda e: e._exports_ == 'model_data', self.exporters.values()))
 
     def run(self):
         """
@@ -528,7 +531,7 @@ class SimulationRunner(object):
 
                 except KeyboardInterrupt:
                     self.logger.error("Keyboard interrupt on simulation run!")
-                    raise
+                    raise SystemExit
 
         self.teardown_logfile()
         warnings.resetwarnings()
