@@ -244,8 +244,8 @@ def setup_completion(shell, show_code):
               help='Interval in seconds between simulation snapshots')
 @click.option('-O', '--overwrite', help='Overwrite file, if exists',
               is_flag=True)
-@click.option('-c', '--compression', type=click.IntRange(0, 9), default=6,
-              help='Compression level for data (default: 6)')
+@click.option('-c', '--compression', type=click.IntRange(0, 9), default=9,
+              help='Compression level for data (default: 9)')
 @click.option('--confirm/--no-confirm', ' /-Y', default=True,
               help='Confirm before running simulation')
 @click.option('--progress', type=click.IntRange(0, None),
@@ -369,10 +369,14 @@ def export():
 @click.option('--bitrate', help='Bitrate for video encoding (default: 1400)',
               type=click.IntRange(800, 4000), default=1400)
 @click.option('--artist-tag', help='Artist tag in metadata')
+@click.option('--progress', type=click.IntRange(0, None),
+              default=0,
+              help='Position of progress bar',
+              )
 def export_video(datafile, outfile, overwrite,
                  style, dpi, figsize, writer,
                  show, budget,
-                 fps, bitrate, artist_tag,
+                 fps, bitrate, artist_tag, progress,
                  ):
     """
     Export video from model data
@@ -421,7 +425,11 @@ def export_video(datafile, outfile, overwrite,
 
         with writer.saving(plot.fig, outfile, dpi=dpi):
 
-            for i in tqdm(range(len(dm.times)), leave=False, desc=os.path.basename(dirname)):
+            for i in tqdm(range(len(dm.times)),
+                          position=progress,
+                          leave=False,
+                          desc=os.path.basename(dirname)
+                          ):
                 plot.update_artists(tidx=i)
                 plot.draw()
                 writer.grab_frame()
