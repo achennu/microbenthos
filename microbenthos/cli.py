@@ -230,10 +230,10 @@ def setup_completion(shell, show_code):
               callback=_exporter_callback,
               help='Add an exporter to run. Form: -x <name> <export_type> ["<option1>=val,'
                    '<option2>=val2"]')
-@click.option('-sTime', '--simtime_total', callback=_simtime_total_callback,
+@click.option('-sTime', '--simtime-total', callback=_simtime_total_callback,
               help='Total simulation time. Example: "10h"')
 @click.option('-sLims', '--simtime-lims', callback=_simtime_lims_callback,
-              help='Simulation time step limits. Example: "1s 500s"')
+              help='Simulation time step limits. Example: "0.1 500"')
 @click.option('-sSweeps', '--max-sweeps', type=click.IntRange(3),
               help='Max number of sweeps of equation in each timestep')
 @click.option('-sRes', '--max-residual', type=float,
@@ -351,6 +351,10 @@ def export():
               help='Name of the output file')
 @click.option('-O', '--overwrite', help='Overwrite file, if exists',
               is_flag=True)
+@click.option('--from-time', type=str,
+              help='Clock time to start video ("5 h" or "0.25 d" or "0.45 day")')
+@click.option('--till-time', type=str,
+              help='Clock time to end video ("5 h" or "0.25 d" or "0.45 day")')
 @click.option('--style', callback=_matplotlib_style_callback,
               help='Plot style name from matplotlib')
 @click.option('--writer', callback=_matplotlib_writer_callback,
@@ -375,7 +379,7 @@ def export():
               )
 def export_video(datafile, outfile, overwrite,
                  style, dpi, figsize, writer,
-                 show, budget,
+                 show, budget, till_time, from_time,
                  fps, bitrate, artist_tag, progress,
                  ):
     """
@@ -383,6 +387,11 @@ def export_video(datafile, outfile, overwrite,
     """
 
     from matplotlib import animation
+    from microbenthos.dataview import HDFModelData, ModelPlotter
+    from tqdm import tqdm
+    import h5py as hdf
+    from pint import UnitRegistry
+
     dirname = os.path.dirname(datafile)
     outfile = outfile or os.path.join(dirname, 'simulation.mp4')
 
@@ -407,12 +416,39 @@ def export_video(datafile, outfile, overwrite,
     writer = Writer(fps=fps, bitrate=bitrate,
                     metadata=dict(artist=artist_tag, copyright=str(year)))
 
-    from microbenthos.dataview import HDFModelData, ModelPlotter
-    from tqdm import tqdm
-    import h5py as hdf
+    ureg = UnitRegistry()
+    ureg.define('hour = 60 * minute = h = hr')
 
     with hdf.File(datafile, 'r') as hf:
         dm = HDFModelData(store=hf)
+
+        dp_ = dm.diel_period
+        # this is a fipy PhysicalField
+        diel_period_definition = f'diel_period = {float(dp_.value)} * {dp_.unit.name()} = ' \
+            f'day = d = dp'
+        ureg.define(diel_period_definition)
+        click.echo(f'Defined: {diel_period_definition}')
+
+        clock_times = ureg.Quantity(dm.times.value, dm.times.unit.name())
+
+        if from_time:
+            from_time_ = ureg(from_time)
+            tidx1 = abs(clock_times - from_time_).argmin()
+        else:
+            tidx1 = 0
+            from_time_ = None
+
+        if till_time:
+            till_time_ = ureg(till_time)
+            tidx2 = abs(clock_times - till_time_).argmin() + 1
+        else:
+            tidx2 = len(clock_times)
+            till_time_ = None
+
+        click.secho(f'Export times: FROM "{from_time}" = "{from_time_}" = index {tidx1} '
+                    f'TILL "{till_time}" = "{till_time_}" = index {tidx2} || '
+                    f'DIEL_PERIOD = {ureg("1 d").to("h")}', fg='yellow')
+        sim_times = dm.times[tidx1:tidx2]
 
         plot = ModelPlotter(model=dm, style=style, figsize=figsize, dpi=dpi,
                             track_budget=budget)
@@ -425,7 +461,7 @@ def export_video(datafile, outfile, overwrite,
 
         with writer.saving(plot.fig, outfile, dpi=dpi):
 
-            for i in tqdm(range(len(dm.times)),
+            for i in tqdm(range(tidx1, tidx2),
                           position=progress,
                           leave=False,
                           desc=os.path.basename(dirname)
