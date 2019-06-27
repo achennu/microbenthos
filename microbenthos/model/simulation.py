@@ -51,16 +51,16 @@ class Simulation(CreateMixin):
     """
     schema_key = 'simulation'
 
-    FIPY_SOLVERS = ('scipy', 'trilinos', 'pysparse')
+    FIPY_SOLVERS = ('scipy', 'pyAMG', 'trilinos', 'pysparse')
 
     def __init__(self,
                  simtime_total = 6,
                  simtime_days = None,
-                 simtime_lims = (0.01, 240),
+                 simtime_lims=(0.01, 120),
                  snapshot_interval = 60,
                  fipy_solver = 'scipy',
-                 max_sweeps = 50,
-                 max_residual = 1e-14,
+                 max_sweeps=20,
+                 max_residual=1e-10,
                  ):
         """
         Args:
@@ -94,9 +94,8 @@ class Simulation(CreateMixin):
                 state for exporters
                 (default: 60)
 
-            fipy_solver (str): Name of the fipy solver to use. One of ``(
-            'scipy', 'trilinos',
-                'pysparse')`` (default: "scipy")
+            fipy_solver (str): Name of the fipy solver to use. One of
+                            ``('scipy', 'pyAMG', 'trilinos','pysparse')`` (default: "scipy")
 
         """
         super(Simulation, self).__init__()
@@ -495,12 +494,12 @@ class Simulation(CreateMixin):
             'Running timestep {} + {}'.format(self.model.clock, dt))
 
         num_sweeps = 0
-        res = 100.0
 
         EQN = self.model.full_eqn
         retry = True
         fails = 0
 
+        res = 100.0
         res_target = self.residual_target
 
         while (res > res_target) and (num_sweeps < self.max_sweeps) \
@@ -604,6 +603,9 @@ class Simulation(CreateMixin):
             tic = time.time()
             residual, num_sweeps = self.run_timestep()
             toc = time.time()
+
+            if residual == 0:
+                raise RuntimeError(f'Residual perfect 0. Problem in domain!')
 
             self._sweepsQ.appendleft(num_sweeps)
             self._residualQ.appendleft(residual)
@@ -728,7 +730,7 @@ class Simulation(CreateMixin):
             num_sweeps (int): the number of sweeps from the last equation step
 
         """
-        self.logger.debug(
+        self.logger.info(
             'Updating step {} after {}/{} sweeps and {:.3g}/{:.3g} '
             'residual'.format(
                 self.simtime_step, num_sweeps, self.max_sweeps, residual,
@@ -742,7 +744,7 @@ class Simulation(CreateMixin):
         Smax = self.max_sweeps
         old_step = self.simtime_step
         num_sweeps = max(1.0, num_sweeps)
-        mult = 1.0
+        mult = 1.05
         restarget = self.residual_target
 
         if residual >= self.max_residual:
@@ -766,7 +768,8 @@ class Simulation(CreateMixin):
         new_step = self.simtime_step * max(0.01, mult)
         self.simtime_step = min(new_step,
                                 self.simtime_total - self.model.clock())
+        self.logger.info(f'Residual={residual} restarget={restarget} max={self.max_residual}')
         self.logger.info('Time-step update {} x {:.2g} = {}'.format(
             old_step, mult, self.simtime_step))
 
-        self.logger.debug('Updated simtime_step: {}'.format(self.simtime_step))
+        # self.logger.debug('Updated simtime_step: {}'.format(self.simtime_step))

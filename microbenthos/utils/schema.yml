@@ -500,11 +500,11 @@ simulation:
         type: integer
         min: 10
         max: 1000
-        default: 50
+        default: 20
 
     fipy_solver:
         type: string
-        allowed: [scipy, trilinos, pysparse]
+        allowed: [scipy, pyAMG, trilinos, pysparse]
         default: scipy
 
 

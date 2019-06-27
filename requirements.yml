@@ -6,9 +6,9 @@ dependencies:
     - python=3
     - numpy
     - scipy
+    - pyamg
     - h5py
     - sympy
-    - matplotlib
     - pyyaml
     - fipy
     - pip
@@ -17,3 +17,4 @@ dependencies:
     - tqdm
     - pip:
           - logutils
+          - matplotlib

@@ -73,7 +73,7 @@ class ProgressExporter(BaseExporter):
 
         self._pbar.set_postfix(
             # clock=clock_info,
-            dt=self.srepr(dt.inUnitsOf('s')),
+            dt=self.srepr(dt.inUnitsOf('s'), prec=4),
             res='{:.2g} / {:.2g}'.format(residual, self.sim.residual_target),
             sweeps='{:02d}/{:3.2f}'.format(
                 sweeps,
@@ -81,7 +81,7 @@ class ProgressExporter(BaseExporter):
                 # self.sim.max_sweeps
                 )
             )
-        self._pbar.update(round(dt_unitless, 1))
+        self._pbar.update(dt_unitless)
         self._prev_t = curr
 
     def finish(self):
