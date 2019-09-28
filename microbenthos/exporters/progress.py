@@ -46,7 +46,7 @@ class ProgressExporter(BaseExporter):
 
     def srepr(self, v, prec = 2):
         unit = v.unit.name()
-        return '{:.{}f} {}'.format(float(v.value), prec, unit)
+        return '{:.{}g} {}'.format(float(v.value), prec, unit)
 
     def process(self, num, state):
         """
@@ -60,7 +60,8 @@ class ProgressExporter(BaseExporter):
         # curr = PhysicalField(time, tdict['unit']).inUnitsOf(simtime_total.unit)
         curr = PhysicalField(time, tdict['unit']).inUnitsOf(self._clock_unit)
         dt = curr - self._prev_t
-        dt_unitless = round(float((curr - self._prev_t).value), 2)
+        dt_unitless = round(float((curr - self._prev_t).value), 4)
+        # print(curr, self._prev_t, dt, dt_unitless)
 
         # clock_info = '{0:.2f}/{1:.2f} {2}'.format(
         #     float(curr.value),
@@ -74,12 +75,8 @@ class ProgressExporter(BaseExporter):
         self._pbar.set_postfix(
             # clock=clock_info,
             dt=self.srepr(dt.inUnitsOf('s'), prec=4),
-            res='{:.2g} / {:.2g}'.format(residual, self.sim.residual_target),
-            sweeps='{:02d}/{:3.2f}'.format(
-                sweeps,
-                self.sim.recent_sweeps,
-                # self.sim.max_sweeps
-                )
+            res='{:.2g} / {:.2g}'.format(residual, self.sim.max_residual),
+            sweeps='{:02d}/{}'.format(sweeps, self.sim.max_sweeps,)
             )
         self._pbar.update(dt_unitless)
         self._prev_t = curr

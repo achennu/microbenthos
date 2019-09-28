@@ -465,7 +465,7 @@ class SimulationRunner(object):
 
         click.secho(
             'Simulation setup: solver={0.fipy_solver} '
-            'max_sweeps={0.max_sweeps} max_residual={0.residual_target} '
+            'max_sweeps={0.max_sweeps} max_residual={0.max_residual} '
             'timestep_lims=({1})'.format(
                 self.simulation, [str(s) for s in self.simulation.simtime_lims]),
             fg='yellow')

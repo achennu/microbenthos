@@ -528,6 +528,14 @@ class MicroBenthosModel(CreateMixin):
         for name, obj in self.microbes.items():
             obj.on_time_updated(clock)
 
+    def revert_vars(self):
+        """
+        Revert vars to the old settings. This is used when sweeping equations has to be rolled back
+        """
+        for var in self.full_eqn._vars:
+            self.logger.info('Setting {!r} to old value'.format(var))
+            var.value = var.old.copy()
+
     def update_vars(self):
         """
         Update all stored variables which have an `hasOld` setting. This is
