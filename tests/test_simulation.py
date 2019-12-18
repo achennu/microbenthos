@@ -94,28 +94,10 @@ class TestSimulation:
         assert sMin == PhysicalField(2, 's')
         assert sMax == PhysicalField(3, 's')
 
-    def test_residual_target(self):
-        sim = Simulation()
-        with pytest.raises(AttributeError):
-            sim.residual_target = 1e-3
-            # read only property
-
     def test_max_sweeps(self):
         sim = Simulation()
         with pytest.raises(ValueError):
             sim.max_sweeps = 0
-
-    def test_recent_sweeps(self):
-        sim = Simulation()
-        with pytest.raises(AttributeError):
-            sim.recent_sweeps = 5
-            # read only property
-
-    def test_recent_residuals(self):
-        sim = Simulation()
-        with pytest.raises(AttributeError):
-            sim.recent_residuals = 1e-5
-            # read only property
 
     def test_model(self):
         sim = Simulation()
@@ -149,7 +131,7 @@ class TestSimulation:
         clock = mock.MagicMock(ModelClock)
         model.clock = clock
         model.full_eqn = feqn = mock.Mock()
-        feqn.sweep.return_value = RES = sim.residual_target
+        feqn.sweep.return_value = RES = sim.max_residual
 
         sim.model = model
 
@@ -191,7 +173,7 @@ class TestSimulation:
         clock.return_value = PhysicalField(0, 'h')
         model.clock = clock
         model.full_eqn = feqn = mock.Mock()
-        feqn.sweep.return_value = RES = sim.residual_target
+        feqn.sweep.return_value = RES = sim.max_residual
 
         sim.model = model
 

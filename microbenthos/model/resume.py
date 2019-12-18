@@ -4,7 +4,7 @@ Module to implement the resumption of a simulation run.
 The assumption is that a model object is created, and a HDF data store is available.
 """
 import logging
-from collections import Mapping
+from collections.abc import Mapping
 
 import h5py as hdf
 import numpy as np

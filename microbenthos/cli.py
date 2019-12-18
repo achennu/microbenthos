@@ -5,6 +5,7 @@ The command line interface for :mod:`microbenthos`
 import os
 
 import click
+from pathlib import Path
 
 try:
     import click_completion
@@ -223,14 +224,16 @@ def setup_completion(shell, show_code):
 @click.option('-o', '--output-dir', type=click.Path(file_okay=False),
               default=os.getcwd(),
               help='Output directory for simulation')
+@click.option('--output-same', is_flag=True,
+              help='Output to same location as definition file')
 @click.option('-x', '--exporter', multiple=True,
               callback=_exporter_callback,
               help='Add an exporter to run. Form: -x <name> <export_type> ["<option1>=val,'
                    '<option2>=val2"]')
-@click.option('-sTime', '--simtime_total', callback=_simtime_total_callback,
+@click.option('-sTime', '--simtime-total', callback=_simtime_total_callback,
               help='Total simulation time. Example: "10h"')
 @click.option('-sLims', '--simtime-lims', callback=_simtime_lims_callback,
-              help='Simulation time step limits. Example: "1s 500s"')
+              help='Simulation time step limits. Example: "0.1 500"')
 @click.option('-sSweeps', '--max-sweeps', type=click.IntRange(3),
               help='Max number of sweeps of equation in each timestep')
 @click.option('-sRes', '--max-residual', type=float,
@@ -241,12 +244,16 @@ def setup_completion(shell, show_code):
               help='Interval in seconds between simulation snapshots')
 @click.option('-O', '--overwrite', help='Overwrite file, if exists',
               is_flag=True)
-@click.option('-c', '--compression', type=click.IntRange(0, 9), default=6,
-              help='Compression level for data (default: 6)')
+@click.option('-c', '--compression', type=click.IntRange(0, 9), default=9,
+              help='Compression level for data (default: 9)')
 @click.option('--confirm/--no-confirm', ' /-Y', default=True,
               help='Confirm before running simulation')
-@click.option('--progress/--no-progress', help='Show progress bar',
-              default=True)
+@click.option('--progress', type=click.IntRange(0, None),
+              default=1,
+              help='Show progress bar (0 to disable)',
+              )
+@click.option('--progress-tag', default='evolution',
+              help='Tag for progress bar')
 @click.option('--plot/--no-plot', help='Show graphical plot of model data',
               default=False)
 @click.option('--video/--no-video',
@@ -265,9 +272,9 @@ def setup_completion(shell, show_code):
               )
 @click.option('-eqns', '--show-eqns', is_flag=True,
               help='Show equations that will be solved')
-@click.argument('model_file', type=click.File())
+@click.argument('model_file', type=click.Path(dir_okay=False, exists=True))
 def cli_simulate(model_file, output_dir, exporter, overwrite, compression,
-                 confirm, progress,
+                 confirm, progress: int, progress_tag, output_same,
                  simtime_total, simtime_lims, max_sweeps, max_residual, fipy_solver,
                  snapshot_interval,
                  plot, video, frames, budget, resume, show_eqns):
@@ -278,8 +285,9 @@ def cli_simulate(model_file, output_dir, exporter, overwrite, compression,
     click.secho('Starting MicroBenthos simulation', fg='green')
     from microbenthos.utils import yaml
 
-    click.echo('Loading model from {}'.format(model_file.name))
-    defs = yaml.load(model_file)
+    click.echo('Loading model from {}'.format(model_file))
+    with open(model_file, 'r') as fp:
+        defs = yaml.unsafe_load(fp)
     if 'simulation' not in defs:
         defs['simulation'] = {}
 
@@ -301,6 +309,10 @@ def cli_simulate(model_file, output_dir, exporter, overwrite, compression,
         else:
             defs['simulation'][k] = v
 
+    if output_same:
+        output_dir = str(Path(model_file).parent)
+        click.secho(f'Output directory set to: {output_dir}')
+
     from microbenthos.runners import SimulationRunner
     runner = SimulationRunner(output_dir=output_dir,
                               model=defs['model'],
@@ -309,6 +321,7 @@ def cli_simulate(model_file, output_dir, exporter, overwrite, compression,
                               overwrite=overwrite,
                               confirm=confirm,
                               progress=progress,
+                              progress_tag=progress_tag,
                               plot=plot,
                               video=video,
                               frames=frames,
@@ -338,6 +351,10 @@ def export():
               help='Name of the output file')
 @click.option('-O', '--overwrite', help='Overwrite file, if exists',
               is_flag=True)
+@click.option('--from-time', type=str,
+              help='Clock time to start video ("5 h" or "0.25 d" or "0.45 day")')
+@click.option('--till-time', type=str,
+              help='Clock time to end video ("5 h" or "0.25 d" or "0.45 day")')
 @click.option('--style', callback=_matplotlib_style_callback,
               help='Plot style name from matplotlib')
 @click.option('--writer', callback=_matplotlib_writer_callback,
@@ -356,16 +373,25 @@ def export():
 @click.option('--bitrate', help='Bitrate for video encoding (default: 1400)',
               type=click.IntRange(800, 4000), default=1400)
 @click.option('--artist-tag', help='Artist tag in metadata')
+@click.option('--progress', type=click.IntRange(0, None),
+              default=0,
+              help='Position of progress bar',
+              )
 def export_video(datafile, outfile, overwrite,
                  style, dpi, figsize, writer,
-                 show, budget,
-                 fps, bitrate, artist_tag,
+                 show, budget, till_time, from_time,
+                 fps, bitrate, artist_tag, progress,
                  ):
     """
     Export video from model data
     """
 
     from matplotlib import animation
+    from microbenthos.dataview import HDFModelData, ModelPlotter
+    from tqdm import tqdm
+    import h5py as hdf
+    from pint import UnitRegistry
+
     dirname = os.path.dirname(datafile)
     outfile = outfile or os.path.join(dirname, 'simulation.mp4')
 
@@ -390,12 +416,39 @@ def export_video(datafile, outfile, overwrite,
     writer = Writer(fps=fps, bitrate=bitrate,
                     metadata=dict(artist=artist_tag, copyright=str(year)))
 
-    from microbenthos.dataview import HDFModelData, ModelPlotter
-    from tqdm import tqdm
-    import h5py as hdf
+    ureg = UnitRegistry()
+    ureg.define('hour = 60 * minute = h = hr')
 
     with hdf.File(datafile, 'r') as hf:
         dm = HDFModelData(store=hf)
+
+        dp_ = dm.diel_period
+        # this is a fipy PhysicalField
+        diel_period_definition = f'diel_period = {float(dp_.value)} * {dp_.unit.name()} = ' \
+            f'day = d = dp'
+        ureg.define(diel_period_definition)
+        click.echo(f'Defined: {diel_period_definition}')
+
+        clock_times = ureg.Quantity(dm.times.value, dm.times.unit.name())
+
+        if from_time:
+            from_time_ = ureg(from_time)
+            tidx1 = abs(clock_times - from_time_).argmin()
+        else:
+            tidx1 = 0
+            from_time_ = None
+
+        if till_time:
+            till_time_ = ureg(till_time)
+            tidx2 = abs(clock_times - till_time_).argmin() + 1
+        else:
+            tidx2 = len(clock_times)
+            till_time_ = None
+
+        click.secho(f'Export times: FROM "{from_time}" = "{from_time_}" = index {tidx1} '
+                    f'TILL "{till_time}" = "{till_time_}" = index {tidx2} || '
+                    f'DIEL_PERIOD = {ureg("1 d").to("h")}', fg='yellow')
+        sim_times = dm.times[tidx1:tidx2]
 
         plot = ModelPlotter(model=dm, style=style, figsize=figsize, dpi=dpi,
                             track_budget=budget)
@@ -408,7 +461,11 @@ def export_video(datafile, outfile, overwrite,
 
         with writer.saving(plot.fig, outfile, dpi=dpi):
 
-            for i in tqdm(range(len(dm.times)), leave=False, desc=os.path.basename(dirname)):
+            for i in tqdm(range(tidx1, tidx2),
+                          position=progress,
+                          leave=False,
+                          desc=os.path.basename(dirname)
+                          ):
                 plot.update_artists(tidx=i)
                 plot.draw()
                 writer.grab_frame()
@@ -430,7 +487,7 @@ def export_model(model_file, key, verbose):
 
     from microbenthos.utils import yaml, validate_dict
 
-    defs = yaml.load(model_file)
+    defs = yaml.unsafe_load(model_file)
     if key:
         try:
             defs = defs[key]

@@ -1,5 +1,5 @@
 import logging
-from collections import Mapping
+from collections.abc import Mapping
 
 import cerberus
 import pkg_resources
@@ -176,7 +176,9 @@ def validate_yaml(stream, key = None, schema = None, schema_stream = None):
 
     logger.info('Loading definition with yaml')
 
-    inp_dict = yaml.load(stream)
+    inp_dict = yaml.unsafe_load(stream)
+    if key:
+        inp_dict = inp_dict[key]
 
     return validate_dict(inp_dict, key=key, schema=schema, schema_stream=schema_stream)
 
@@ -247,10 +249,10 @@ def get_schema(schema_stream = None):
     # INBUILT = pkg_resources.resource_stream(__name__, 'schema.yml')
 
     if schema_stream:
-        schema = yaml.load(schema_stream)
+        schema = yaml.unsafe_load(schema_stream)
     else:
         with pkg_resources.resource_stream(__name__, 'schema.yml') as INBUILT:
-            schema = yaml.load(INBUILT)
+            schema = yaml.unsafe_load(INBUILT)
 
     return schema
 

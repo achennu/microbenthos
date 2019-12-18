@@ -5,13 +5,11 @@ from fipy import PhysicalField
 from fipy.tools import numerix as np
 
 
-class ModelData(object):
+class ModelData(object, metaclass=abc.ABCMeta):
     """
     Abstract Base Class that encapsulates the model data from a simulation, and provides a uniform
     interface to access elements in the nested hierarchy.
     """
-
-    __metaclass__ = abc.ABCMeta
 
     PATH_DEPTHS = '/domain/depths'
     PATH_TIMES = '/time'
@@ -366,6 +364,11 @@ class ModelData(object):
             self.logger.debug('No irradiance info found')
 
         else:
+
+            # load irradiance cycle info
+            linfo = dict(irradiance.attrs)
+            self.diel_period = PhysicalField(linfo['hours_total'])
+            self.diel_zenith = PhysicalField(linfo['zenith_time'])
 
             for chname in irradiance['channels']:
                 data_path = self.PATH_IRRADIANCE_CHANNELS + '/'.join([

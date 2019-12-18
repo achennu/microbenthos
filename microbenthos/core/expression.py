@@ -1,5 +1,5 @@
 import logging
-from collections import Mapping
+from collections.abc import Mapping
 
 import sympy as sp
 

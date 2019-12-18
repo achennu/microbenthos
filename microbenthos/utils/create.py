@@ -1,7 +1,7 @@
 import copy
 import io
 import logging
-from collections import Mapping
+from collections.abc import Mapping
 
 from .loader import validate_yaml, validate_dict
 

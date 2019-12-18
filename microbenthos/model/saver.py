@@ -3,7 +3,7 @@ Implements a data saver for model snapshots
 """
 
 import logging
-from collections import Mapping
+from collections.abc import Mapping
 
 import h5py as hdf
 from fipy.tools import numerix as np

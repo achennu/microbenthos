@@ -45,6 +45,7 @@ class SimulationRunner(object):
                  model = None,
                  simulation = None,
                  progress = False,
+                 progress_tag = 'evolution',
                  plot = False,
                  video = False,
                  frames = False,
@@ -97,7 +98,8 @@ class SimulationRunner(object):
             self.simulation = simulation
 
         if progress:
-            exporters.append(dict(exptype='progress'))
+            exporters.append(dict(exptype='progress', position=int(progress),
+                                  desc=str(progress_tag)))
 
         if plot or video or frames:
             exporters.append(dict(exptype='graphic',
@@ -279,7 +281,7 @@ class SimulationRunner(object):
         latest_time = PhysicalField(latest_time, time_unit)
 
         click.secho(
-            '\n\nModel resume set: rewind from latest {} ({}) to {} ({})?'.format(
+            'Model resume set: rewind from latest {} ({}) to {} ({})?'.format(
                 latest_time, nt,
                 target_time, self.resume
                 ), fg='red')
@@ -291,8 +293,9 @@ class SimulationRunner(object):
         try:
             with hdf.File(data_outpath, 'a') as store:
                 self.model.restore_from(store, time_idx=self.resume)
-            click.secho('Model restore successful. Clock = {}\n\n'.format(self.model.clock),
-                        fg='green')
+            click.secho(
+                'Model restore successful. Clock = {}'.format(self.model.clock),
+                fg='green')
             self.simulation.simtime_step = 1
             # set a small simtime to start
         except:
@@ -395,7 +398,8 @@ class SimulationRunner(object):
             try:
                 exporter.setup(self, state)
             except:
-                self.logger.error('Error in setting up exporter: {}'.format(expname))
+                self.logger.exception('Error in setting up exporter: {}'.format(
+                    expname))
                 raise
 
         yield
@@ -411,7 +415,8 @@ class SimulationRunner(object):
                     raise
 
     def get_data_exporters(self):
-        return filter(lambda e: e._exports_ == 'model_data', self.exporters.values())
+        return list(filter(
+            lambda e: e._exports_ == 'model_data', self.exporters.values()))
 
     def run(self):
         """
@@ -460,7 +465,7 @@ class SimulationRunner(object):
 
         click.secho(
             'Simulation setup: solver={0.fipy_solver} '
-            'max_sweeps={0.max_sweeps} max_residual={0.residual_target} '
+            'max_sweeps={0.max_sweeps} max_residual={0.max_residual} '
             'timestep_lims=({1})'.format(
                 self.simulation, [str(s) for s in self.simulation.simtime_lims]),
             fg='yellow')
@@ -526,7 +531,7 @@ class SimulationRunner(object):
 
                 except KeyboardInterrupt:
                     self.logger.error("Keyboard interrupt on simulation run!")
-                    break
+                    raise SystemExit
 
         self.teardown_logfile()
         warnings.resetwarnings()

@@ -6,12 +6,11 @@ import abc
 import logging
 
 
-class BaseExporter(object):
+class BaseExporter(object, metaclass=abc.ABCMeta):
     """
     An abstract base class to define the interface for model state exporters to be used by the
     classes defined in :mod:`~microbenthos.runners`.
     """
-    __metaclass__ = abc.ABCMeta
     _exports_ = ''
     __version__ = ''
     is_eager = False

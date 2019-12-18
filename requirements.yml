@@ -1,0 +1,20 @@
+channels:
+    - conda-forge
+    - defaults
+
+dependencies:
+    - python=3
+    - numpy
+    - scipy
+    - pyamg
+    - h5py
+    - sympy
+    - pyyaml
+    - fipy
+    - pip
+    - click
+    - cerberus
+    - tqdm
+    - pip:
+          - logutils
+          - matplotlib

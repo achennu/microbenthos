@@ -420,7 +420,8 @@ class ModelVariable(DomainEntity):
                     raise ValueError('Seed linear has no "start" or "top" constraint')
                 else:
                     start = PhysicalField(start, self.var.unit)
-                    self.logger.warning('Linear seed using start as top value: {}'.format(start))
+                    self.logger.info('Linear seed using start as top value: {'
+                                  '}'.format(start))
 
             if stop is None:
                 stop = self.constraints.get('bottom')
@@ -428,7 +429,8 @@ class ModelVariable(DomainEntity):
                     raise ValueError('Seed linear has no "stop" or "bottom" constraint')
                 else:
                     stop = PhysicalField(stop, self.var.unit)
-                    self.logger.warning('Linear seed using stop as bottom value: {}'.format(stop))
+                    self.logger.info('Linear seed using stop as bottom value: {'
+                                  '}'.format(stop))
 
             N = self.var.shape[0]
 

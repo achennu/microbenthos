@@ -121,7 +121,7 @@ class ModelPlotter(object):
 
         self.logger.debug('Creating figure: {}'.format(self._fig_kwds))
 
-        self.fig = plt.figure('MicroBenthos Simulation', **kwargs)
+        # self.fig = plt.figure('MicroBenthos Simulation', **kwargs)
 
         axes_depth = self.axes_depth
         axes_time = self.axes_time
@@ -148,23 +148,28 @@ class ModelPlotter(object):
             depth_rect = [0.05, 0.1, 0.93, 0.8]
             time_rect = []
 
-        axgrid_depths = Grid(fig=self.fig, rect=depth_rect, nrows_ncols=(1, 4), share_y=True,
-                             axes_pad=0.08)
+        self._depth_rect = depth_rect
 
-        if time_rect:
-            axgrid_time = Grid(fig=self.fig, rect=time_rect,
-                               nrows_ncols=time_nrows_ncols,
-                               share_x=True,
-                               )
-            self.axError = axgrid_time.axes_all[0]
+        # axgrid_depths = Grid(fig=self.fig, rect=depth_rect,
+        #                      nrows_ncols=(1, 4), share_y=True,
+        #                      axes_pad=0.08)
+
+        # if time_rect:
+        #     axgrid_time = Grid(fig=self.fig, rect=time_rect,
+        #                        nrows_ncols=time_nrows_ncols,
+        #                        share_x=True,
+        #                        )
+        #     self.axError = axgrid_time.axes_all[0]
 
         # self.axMicrobes, self.axEnv, self.axSources, self.axProcesses = axgrid_depths.axes_all
-        self.axMicrobes, self.axProcesses, self.axSources, self.axEnv, = axgrid_depths.axes_all
+        # self.axMicrobes, self.axProcesses, self.axSources, self.axEnv, = axgrid_depths.axes_all
 
-        # self.axMicrobes = ax = plt.subplot2grid(grid_shape, (0, 0),
-        #                                         rowspan=depth_rowspan,
-        #                                         colspan=depth_colspan,
-        #                                         )
+        self.fig, axes = plt.subplots(nrows=1, ncols=4, sharey=True,
+                                      #gridspec_kw=dict(wspace=0.02),
+                                      **kwargs)
+        assert isinstance(self.fig, plt.Figure)
+        self.axMicrobes, self.axProcesses, self.axSources, self.axEnv = axes
+
         ax = self.axMicrobes
         ax.name = 'Microbes'
         ax.invert_yaxis()
@@ -233,26 +238,27 @@ class ModelPlotter(object):
             except:
                 self.logger.debug('Could not set {} axes to scientific notation'.format(ax.name))
 
-        for ax in self.axes_time:
+        # for ax in self.axes_time:
+        #
+        #     if ax is self.axes_time[-1]:
+        #         ax.set_xlabel('Time (h)')
+        #         # ax.set_ylabel(r'$\frac{actual-expected}{expected}$')
+        #         ax.set_ylabel('Budget Error')
+        #
+        #     ax.skip_legend_ = False
+        #     ax.annotate(ax.name, xycoords='axes fraction', size='medium',
+        #                 xy=(1.05, 0.5), ha='center', va='center', rotation=90)
+        #     # defer ylabel setting till first data access
+        #
+        #     ax.autoscale(True)
+        #
+        #     try:
+        #         ax.ticklabel_format(axis='y', style='sci', scilimits=(-2, 2),
+        #                             useMathText=True)
+        #     except:
+        #         self.logger.debug('Could not set {} axes to scientific notation'.format(ax.name))
 
-            if ax is self.axes_time[-1]:
-                ax.set_xlabel('Time (h)')
-                # ax.set_ylabel(r'$\frac{actual-expected}{expected}$')
-                ax.set_ylabel('Budget Error')
-
-            ax.skip_legend_ = False
-            ax.annotate(ax.name, xycoords='axes fraction', size='medium',
-                        xy=(1.05, 0.5), ha='center', va='center', rotation=90)
-            # defer ylabel setting till first data access
-
-            ax.autoscale(True)
-
-            try:
-                ax.ticklabel_format(axis='y', style='sci', scilimits=(-2, 2),
-                                    useMathText=True)
-            except:
-                self.logger.debug('Could not set {} axes to scientific notation'.format(ax.name))
-
+        # self.fig.tight_layout(rect=self._depth_rect, pad=1.02)
         self.logger.debug('Created figure')
 
     @property
@@ -279,6 +285,7 @@ class ModelPlotter(object):
 
         depth_unit = 'mm'
         self.depths = D = np.array(self.model.depths.inUnitsOf(depth_unit).value)
+        self.axMicrobes.set_ylabel(f'Depth ({depth_unit})')
 
         for ax in self.axes_depth:
             ax.axhspan(min(D), 0, color='aquamarine', alpha=0.4, zorder=0)
@@ -295,6 +302,8 @@ class ModelPlotter(object):
         self._clock = PhysicalField(0, 's')
 
         self.update_artists(tidx=0)
+
+        self.fig.tight_layout()#rect=self._depth_rect, pad=1.02)
 
     def _get_label(self, path):
         """
@@ -387,11 +396,14 @@ class ModelPlotter(object):
     def create_clock_artist(self):
 
         self.clockstr = '{0:02d}h {1:02d}m {2:02d}s (+{3:02d} s)'
-        self.clock_artist = plt.annotate(self.clockstr.format(0, 0, 0, 0),
-                                         xy=(0.01, 0.01),
-                                         xycoords='figure fraction',
-                                         size='medium',
-                                         color='r')
+        self.clock_artist = self.axEnv.annotate(
+            self.clockstr.format(0, 0, 0, 0),
+            # xy=(0.01, 0.01),
+            xy=(0.5, 1.01),
+            xycoords='axes fraction',
+            size='medium',
+            ha='center',
+            color='r')
 
     def create_line_artists(self, data_paths, ax):
         self.logger.debug('Creating artists for {}: {}'.format(ax.name, data_paths))
