@@ -13,6 +13,10 @@
     :target: http://joss.theoj.org/papers/5daae2e14258034d77cb694370cbae23
     :alt: Journal of Open Source Software
 
+.. image:: https://zenodo.org/badge/DOI/10.5281/zenodo.3583388.svg
+   :target: https://doi.org/10.5281/zenodo.1240939
+   :alt: Zenodo software archive
+
 MicroBenthos is a modeling framework (in python) useful for studies of benthic
 microbial systems, such as microbial mats, marine sediments, etc. It enables in
 silico experiments in microbial ecophysiology and biogeochemistry through
