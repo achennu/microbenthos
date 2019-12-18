@@ -1,17 +1,21 @@
+#requirements_file: requirements_docs.txt
+version: 2
+
+sphinx:
+    configuration: docs/conf.py
+
 formats:
     - htmlzip
     - pdf
 
-#requirements_file: requirements_docs.txt
-
 build:
     image: latest
 
-conda:
-    file: environment.base.yml
-
 python:
-    version: 2.7
-    pip_install: true
-    extra_requirements:
-        - docs
+    version: 3.7
+    install:
+        - method: pip
+          path: .
+          extra_requirements:
+              - docs
+

@@ -83,8 +83,13 @@ class TestProcess:
         proc = Process(expr=dict(formula='x*y*z**3'),
                        params=pdict)
 
-        dom = mock.MagicMock()
-        proc.domain = dom
+        from microbenthos.core import SedimentDBLDomain
+        domain = SedimentDBLDomain()
+        domain.create_var('y', value=3)
+        domain.create_var('x', value=2)
+        domain.create_var('z', value=1)
+
+        proc.set_domain(domain)
 
         state = proc.snapshot()
 
