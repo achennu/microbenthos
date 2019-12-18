@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
+
 
 def get_description():
     import os
@@ -12,8 +13,10 @@ def get_description():
 
     return readme
 
+
 requirements = [
-    'click>=6.0',
+    'click',
+    'future',
     'logutils',
     'sympy',
     'cerberus',
@@ -21,16 +24,16 @@ requirements = [
     'h5py',
     'tqdm',
     'matplotlib>=2.1',
-    'scipy>=1.0.0',
+    'scipy',
     'numpy',
     'fipy',
-]
+    ]
 
 test_requirements = [
     # TODO: put package test requirements here
     'pytest',
     'mock',
-]
+    ]
 
 docs_requirements = [
     'sphinx',
@@ -41,9 +44,10 @@ docs_requirements = [
 
 setup(
     name='microbenthos',
-    version='0.12',
-    description="Modeling framework for microbenthic habitats useful for studies in "
-                "biogeochemistry and marine microbial ecology.",
+    version='0.13',
+    description= \
+        "Modeling framework for microbenthic habitats useful for studies in "
+        "biogeochemistry and marine microbial ecology.",
     long_description=get_description(),
     author="Arjun Chennu",
     author_email='arjun.chennu@gmail.com',
@@ -51,15 +55,15 @@ setup(
     packages=find_packages(exclude=['tests']),
     include_package_data=True,
     package_data={
-        'microbenthos.utils': ['schema.yml',]
+        'microbenthos.utils': ['schema.yml', ]
         },
     package_dir={'microbenthos':
-                 'microbenthos'},
+                     'microbenthos'},
     entry_points={
         'console_scripts': [
             'microbenthos=microbenthos.cli:cli'
-        ]
-    },
+            ]
+        },
     install_requires=requirements,
     extras_require=dict(
         test=test_requirements,
@@ -67,15 +71,19 @@ setup(
         ),
     license="MIT license",
     zip_safe=False,
-    keywords=['microbenthos', 'biogeochemistry', 'marine biology', 'microbial ecology',
+    keywords=['microbenthos', 'biogeochemistry', 'marine biology',
+              'microbial ecology',
               'simulation', 'modeling', 'microbial mats', 'sediments'],
     classifiers=[
-        'Development Status :: 2 - Pre-Alpha',
+        'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',
         'Natural Language :: English',
-        'Programming Language :: Python :: 2.7',
-    ],
+        'Programming Language :: Python ',
+        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
+        ],
     test_suite='pytest',
     # tests_require=test_requirements
-)
+    )

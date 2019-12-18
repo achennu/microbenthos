@@ -5,50 +5,41 @@ from __future__ import division
 
 import importlib
 import logging
-import math
 import time
 from collections import deque
 
 from fipy import PhysicalField, Variable
 
-from ..utils import CreateMixin, snapshot_var
 from .model import MicroBenthosModel
+from ..utils import CreateMixin, snapshot_var
 
 
 class Simulation(CreateMixin):
     """
     This class enables the process of repeatedly solving the model's
-    equations for a (small) time
-    step to a certain numerical accuracy, and then incrementing the model
-    clock. During the
-    evolution of the simulation, the state of the model as well as the
-    simulation is yielded
+    equations for a (small) time step to a certain numerical accuracy,
+    and then incrementing the model clock. During the evolution of the
+    simulation, the state of the model as well as the simulation is yielded
     repeatedly.
 
     Numerically approximating the solution to a set of partial differential
-    equations requires
-    that the solver system has a reasonable target accuracy ("residual") and
-    enough attempts
-    ("sweeps") to reach both a stable and accurate approximation for a time
-    step. This class
-    attempts to abstract out these optimizations for the user, by performing
-    adaptive
-    time-stepping. The user needs to specify a worst-case residual (
-    :attr:`.max_residual`),
-    maximum number of sweeps per time-step (:attr:`.max_sweeps`) and the
-    range of time-step
-    values to explore during evolution (:attr:`.simtime_lims`). During the
-    evolution of the
-    simulation, the time-step is penalized if the max residual is overshot or
-    max sweeps reached.
-    If not, the reward is a bump up in the time-step duration, allowing for
-    faster evolution of
-    the simulation.
+    equations requires that the solver system has a reasonable target accuracy
+    ("residual") and enough attempts ("sweeps") to reach both a stable and
+    accurate approximation for a time step. This class attempts to abstract out
+    these optimizations for the user, by performing adaptive time-stepping. The
+    user needs to specify a worst-case residual ( :attr:`.max_residual`),
+    maximum number of sweeps per time-step ( :attr:`.max_sweeps`) and the range
+    of time-step values to explore during evolution (:attr:`.simtime_lims`).
+    During the evolution of the simulation, the time-step is penalized if the
+    max residual is overshot or max sweeps reached. If not, the reward is a bump
+    up in the time-step duration, allowing for faster evolution of the
+    simulation.
 
     See Also:
          The scheme of simulation :meth:`.evolution`.
 
          The adaptive scheme to :meth:`.update_time_step`.
+
     """
     schema_key = 'simulation'
 
@@ -177,9 +168,8 @@ class Simulation(CreateMixin):
         The number of hours of the model clock the simulation should be
         evolved for.
 
-        The supplied value must be larger than the time-steps allowed. Also,
-        it may be
-        over-ridden by supplying :attr:`.simtime_days`.
+        The supplied value must be larger than the time-steps allowed. Also, it
+        may be over-ridden by supplying :attr:`.simtime_days`.
 
         Returns:
             PhysicalField: duration in hours
@@ -210,9 +200,8 @@ class Simulation(CreateMixin):
     @property
     def simtime_step(self):
         """
-        The current time-step duration. While setting, the supplied value
-        will be clipped to
-        within :attr:`simtime_lims`.
+        The current time-step duration. While setting, the supplied value will
+        be clipped to within :attr:`simtime_lims`.
 
         Returns:
             PhysicalField: in seconds
@@ -246,30 +235,24 @@ class Simulation(CreateMixin):
         """
         The limits for the time-step duration allowed during evolution.
 
-        This parameter determines the degree to which the simulation
-        evolution can be speeded up.
-        In phases of the model evolution where the numerical solution is
-        reached within a few
-        sweeps, the clock would run at the max limit, whereas when a large
-        number of sweeps are
-        required, it would be penalized towards the min limit.
+        This parameter determines the degree to which the simulation evolution
+        can be speeded up. In phases of the model evolution where the numerical
+        solution is reached within a few sweeps, the clock would run at the max
+        limit, whereas when a large number of sweeps are required, it would be
+        penalized towards the min limit.
 
         A high max value enables faster evolution, but can also lead to
-        numerical inaccuracy (
-        higher residual) or solution breakdown (numerical error) during
-        :meth:`.run_timestep`. A
-        small enough min value allows recovery, but turning back the clock to
-        the previous time
-        step and restarting with the min timestep and allowing subsequent
-        relaxation.
+        numerical inaccuracy ( higher residual) or solution breakdown (numerical
+        error) during :meth:`.run_timestep`. A small enough min value allows
+        recovery, but turning back the clock to the previous time step and
+        restarting with the min timestep and allowing subsequent relaxation.
 
         Args:
             vals (float, PhysicalField): the (min, max) durations in seconds
 
         Returns:
             lims (tuple): The (min, max) limits of :attr:`simtime_step` each
-            as a
-                :class:`.PhysicalField`
+            as a :class:`.PhysicalField`
 
         """
 
@@ -278,9 +261,9 @@ class Simulation(CreateMixin):
     @simtime_lims.setter
     def simtime_lims(self, vals):
         if vals is None:
-            lmin = PhysicalField(0.01, 's')
+            lmin = PhysicalField(0.1, 's')
             # lmax = (self.simtime_total / 25.0).inUnitsOf('s').floor()
-            lmax = PhysicalField(60, 's')
+            lmax = PhysicalField(120, 's')
         else:
             lmin, lmax = [PhysicalField(float(_), 's') for _ in vals]
         if not (0 < lmin < lmax):
@@ -334,10 +317,8 @@ class Simulation(CreateMixin):
             after each timestep
 
         Additionally, if :attr:`.simtime_days` is set, then setting the model
-        will try to find
-        the ``"env.irradiance:`` object and use its :attr:`.hours_total`
-        attribute to set the
-        :attr:`.simtime_total`.
+        will try to find the ``"env.irradiance:`` object and use its
+        :attr:`.hours_total` attribute to set the :attr:`.simtime_total`.
 
         Args:
             model (:class:`~microbenthos.MicroBenthosModel`): model instance
@@ -349,8 +330,8 @@ class Simulation(CreateMixin):
             RuntimeError: if model has already been set
             ValueError: if modes interface does not match
             ValueError: if model :attr:`.model.full_eqn` does not get created
-            even after
-                :meth:`.model.create_full_equation` is called.
+                even after :meth:`.model.create_full_equation` is called.
+
         """
         return self._model
 
@@ -478,17 +459,13 @@ class Simulation(CreateMixin):
 
     def evolution(self):
         """
-        Evolves the model clock through the time steps for the simulation,
-        i.e. by calling
-        :meth:`.run_timestep` and :meth:`.model.clock.increment_time`
-        repeatedly while
-        ``model.clock() <= self.simtime_total``.
+        Evolves the model clock through the time steps for the simulation, i.e.
+        by calling :meth:`.run_timestep` and :meth:`.model.clock.increment_time`
+        repeatedly while ``model.clock() <= self.simtime_total``.
 
         This is a generator that yields the step number, and the state of the
-        evolution after
-        each time step. If :meth:`snapshot_due` is true, then also the model
-        snapshot is included
-        in the state.
+        evolution after each time step. If :meth:`snapshot_due` is true, then
+        also the model snapshot is included in the state.
 
         Yields:
             `(step, state)` tuple of step number and simulation state
@@ -596,17 +573,19 @@ class Simulation(CreateMixin):
         Get the state of the simulation evolution
 
         Args:
-            state (None, dict): If state is given (from ``model.snapshot(
-            )``), then that is used.
+            state (None, dict):
+                If state is given (from ``model.snapshot()``), then that is used.
                 If None, then just the time info is created by using
                 :attr:`.model.clock`.
 
-            metrics (None, dict): a dict to get the simulation metrics from,
-            else from `kwargs`
+            metrics (None, dict):
+                a dict to get the simulation metrics from,
+                else from `kwargs`
 
-            **kwargs: parameters to build metrics dict. Currently the keys
-            `"calc_time"`,
-                `"residual"` and `"num_sweeps"` are used, if available.
+            **kwargs:
+                parameters to build metrics dict. Currently the keys
+                `"calc_time"`, `"residual"` and `"num_sweeps"` are used,
+                if available.
 
         Returns:
             dict: the simulation state
@@ -636,8 +615,7 @@ class Simulation(CreateMixin):
         """
         Returns:
             bool: If the current model clock time has exceeded
-            :attr:`.snapshot_interval` since
-                the last snapshot time
+            :attr:`.snapshot_interval` since the last snapshot time
         """
         return self.model.clock() - self._prev_snapshot() >= \
                self.snapshot_interval
@@ -648,14 +626,11 @@ class Simulation(CreateMixin):
         residual and sweeps.
 
         A multiplicative factor for the time-step is determined based on the
-        number of sweeps and
-        residual. If the `residual` is more than :attr:`.max_residual`,
-        then the time-step is
-        quartered. If not, it is boosted by up to double, depending on the
-        `num_sweeps` and
-        :attr:`.max_sweeps`. Once a new timestep is determined, it is limited
-        to the time left in
-        the model simulation.
+        number of sweeps and residual. If the `residual` is more than
+        :attr:`.max_residual`, then the time-step is quartered. If not, it is
+        boosted by up to double, depending on the `num_sweeps` and
+        :attr:`.max_sweeps`. Once a new timestep is determined, it is limited to
+        the time left in the model simulation.
 
         Args:
             residual (float): the residual from the last equation step

@@ -12,8 +12,10 @@ class MicrobialGroup(DomainEntity):
     This class defines the interface to
 
         * define :attr:`.features` such as :attr:`.biomass`, distributed
-        through the domain
+            through the domain
         * setup :attr:`.processes` which the microbes perform on domain entities
+
+
     """
 
     def __init__(self, features = None, processes = None, **kwargs):

@@ -3,10 +3,13 @@
 
 language: python
 python:
-    - 2.7
+    - 3.6
+    - 3.7
+    - 3.8
 
-# command to install dependencies, e.g. pip install -r requirements.txt --use-mirrors
-install: pip install --extra-index-url https://testpypi.python.org/pypi microbenthos[test]
+install:
+    - pip install future
+    - pip install -e git+https://github.com/achennu/microbenthos#egg=microbenthos[test]
 
 # command to run tests, e.g. python setup.py test
 script: pytest tests/

@@ -84,10 +84,10 @@ dist: clean ## builds source and wheel package
 	python setup.py bdist_wheel
 	ls -l dist
 
-pypi-test: dist
-	twine upload --repository testpypi dist/*
+pypi-test: dist ## test twine upload to pypi
+	twine upload --verbose --repository testpypi dist/*
 
-pypi-release: dist
+pypi-release: dist ## upload to pypi
 	twine upload dist/*
 
 install: clean ## install the package to the active Python's site-packages
