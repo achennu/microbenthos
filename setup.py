@@ -44,7 +44,7 @@ docs_requirements = [
 
 setup(
     name='microbenthos',
-    version='0.13',
+    version='0.14',
     description= \
         "Modeling framework for microbenthic habitats useful for studies in "
         "biogeochemistry and marine microbial ecology.",
