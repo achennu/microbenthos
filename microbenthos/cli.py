@@ -6,6 +6,7 @@ import os
 
 import click
 from pathlib import Path
+from . import __version__
 
 try:
     import click_completion
@@ -173,6 +174,7 @@ def _simtime_total_callback(ctx, param, value):
 @click.option('--logger',
               help='Set specified logger to loglevel (example: microbenthos.model 20)',
               multiple=True, type=(str, click.IntRange(10, 40)))
+@click.version_option(version=__version__)
 def cli(verbosity, logger):
     """Console entry point for microbenthos"""
     loglevel = 0
@@ -288,6 +290,11 @@ def cli_simulate(model_file, output_dir, exporter, overwrite, compression,
     click.echo('Loading model from {}'.format(model_file))
     with open(model_file, 'r') as fp:
         defs = yaml.unsafe_load(fp)
+
+    if 'model' not in defs and 'domain' in defs:
+        # model is not under a separate key, so insert it under "model"
+        defs = dict(model=defs)
+
     if 'simulation' not in defs:
         defs['simulation'] = {}
 
@@ -475,7 +482,8 @@ def export_video(datafile, outfile, overwrite,
 
 @export.command('model')
 @click.argument('model_file', type=click.File())
-@click.option('--key', help='Load this key from the input file')
+@click.option('--key', help='Load this key from the input file',
+              default="model")
 @click.option('-v', '--verbose', is_flag=True, default=False,
               help='Set this to see verbose output')
 def export_model(model_file, key, verbose):
@@ -502,9 +510,12 @@ def export_model(model_file, key, verbose):
         from pprint import pformat
         if verbose:
             click.secho('Validated dictionary!', fg='green')
-
+        model_definition = dict(model=valid)
         click.secho(
-            yaml.dump(valid, indent=4, explicit_start=True, explicit_end=True),
+            yaml.dump(model_definition,
+                      indent=4,
+                      explicit_start=True,
+                      explicit_end=True),
             fg='yellow')
 
     except ValueError:

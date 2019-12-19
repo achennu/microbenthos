@@ -364,9 +364,10 @@ class ModelData(object, metaclass=abc.ABCMeta):
             self.logger.debug('No irradiance info found')
 
         else:
-
             # load irradiance cycle info
-            linfo = dict(irradiance.attrs)
+            # irradiance might be hdf.Dataset or a dict
+            linfo = dict(getattr(irradiance, 'attrs',
+                                 irradiance['metadata']))
             self.diel_period = PhysicalField(linfo['hours_total'])
             self.diel_zenith = PhysicalField(linfo['zenith_time'])
 
