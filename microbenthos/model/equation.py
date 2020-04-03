@@ -261,7 +261,8 @@ class ModelEquation(object):
         var, S0, S1 = obj.as_source_for(self.varname)
         assert var is self.var, 'Got var: {!r} and self.var: {!r}'.format(
             var, self.var)
-        if S1 != 0:
+
+        if S1 is not 0:  # do not use != 0 as it fails for array type vars
             S1 = ImplicitSourceTerm(coeff=S1, var=self.var)
             term = S0 + S1
         else:
