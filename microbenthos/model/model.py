@@ -90,7 +90,7 @@ class MicroBenthosModel(CreateMixin):
         """
         self.logger.info('Adding formula {!r}: {}'.format(name, expr))
         try:
-            func = Lambda(symbols(vars), expr)
+            func = Lambda(tuple(symbols(vars)), expr)
             self.logger.debug('Formula {!r}: {}'.format(name, func))
             Expression._sympy_ns[name] = func
         except:

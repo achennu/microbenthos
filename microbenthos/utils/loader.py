@@ -4,12 +4,12 @@ from collections.abc import Mapping
 import cerberus
 import pkg_resources
 from fipy import PhysicalField
-from sympy import sympify, Symbol
+from sympy import Symbol, SympifyError, sympify
 
 from .yaml_setup import yaml
 
-
 # TODO: Allow equation with no diffusion term
+physical_unit_type = cerberus.TypeDefinition('physical_unit', (PhysicalField,), ())
 
 class MicroBenthosSchemaValidator(cerberus.Validator):
     """
@@ -19,11 +19,14 @@ class MicroBenthosSchemaValidator(cerberus.Validator):
     logger.addHandler(logging.NullHandler())
     logger.propagate = False
 
+    types_mapping = cerberus.Validator.types_mapping.copy()
+    types_mapping['physical_unit'] = physical_unit_type
+
     # def __init__(self, *args, **kwargs):
     #     # self.logger.propagate = False
     #     super(MicroBenthosSchemaValidator, self).__init__(*args, **kwargs)
 
-    def _validate_type_importpath(self, value):
+    def _check_with_importpath(self, field, value):
         """
         Validates if the value is a usable import path for an entity class
 
@@ -41,36 +44,29 @@ class MicroBenthosSchemaValidator(cerberus.Validator):
             True if valid
         """
         self.logger.debug('Validating importpath: {}'.format(value))
-        try:
-            _, __ = value.rsplit('.', 1)
-            return True
-        except ValueError:
-            return not value.startswith('.')
+        parts = [s.isidentifier() for s in value.split('.')]
+        if not all(parts):
+            self._error(field, "Must be a python import path")
 
-    def _validate_type_physical_unit(self, value):
-        """ Enables validation for `unit` schema attribute.
-        :param value: field value.
-        """
-        self.logger.debug('Validating physical_unit: {}'.format(value))
-        if isinstance(value, PhysicalField):
-            if value.unit.name() != '1':
-                return True
+    # def _validate_type_physical_unit(self, value):
+    #     """ Enables validation for `unit` schema attribute.
+    #     :param value: field value.
+    #     """
+    #     self.logger.debug('Validating physical_unit: {}'.format(value))
+    #     if isinstance(value, PhysicalField):
+    #         if value.unit.name() != '1':
+    #             return True
 
-    def _validate_type_unit_name(self, value):
+    def _check_with_unit_name(self, field, value):
         """
         Checks that the string can be used as units
-        Args:
-            value:
-
-        Returns:
-
         """
         self.logger.debug('Validating unit_name: {}'.format(value))
+
         try:
             PhysicalField(1, value)
-            return True
         except TypeError:
-            return False
+            self._error(field, 'Must be str of physical units')
 
     def _validate_like_unit(self, unit, field, value):
         """
@@ -96,32 +92,77 @@ class MicroBenthosSchemaValidator(cerberus.Validator):
         except:
             self._error(field, 'Must be compatible with units {}'.format(unit))
 
-    def _validate_type_sympifyable(self, value):
+    def _validate_like_unit(self, unit, field, value):
         """
-        A string that can be run through sympify
+        Test that the given value has compatible units
+
+        Args:
+            unit: A string useful with :class:`PhysicalField`
+            field:
+            value: An instance of a physical unit
+
+        Returns:
+            boolean if validated
+
+        The rule's arguments are validated against this schema:
+        {'type': 'string'}
         """
-        self.logger.debug('Validating sympifyable: {}'.format(value))
-        if not isinstance(value, (str, int, float)):
-            return False
+        self.logger.debug('Validating like_unit: {} {} {}'.format(unit, field, value))
+        if not isinstance(value, PhysicalField):
+            self._error(field, 'Must be a PhysicalField, not {}'.format(type(value)))
+
+        try:
+            value.inUnitsOf(unit)
+        except:
+            self._error(field, 'Must be compatible with units {}'.format(unit))
+
+    def _check_with_sympify(self, field, value):
+        self.logger.debug(f'Checking if {value} usable with sympify')
         try:
             e = sympify(value)
-            self.logger.debug('Sympified: {}'.format(e))
-            return True
-        except:
-            return False
+        except SympifyError:
+            self._error(field, "Must be str compatible with sympify")
 
-    def _validate_type_symbolable(self, value):
+    # def _validate_type_sympifyable(self, value):
+    #     """
+    #     A string that can be run through sympify
+    #     """
+    #     self.logger.debug('Validating sympifyable: {}'.format(value))
+    #     if not isinstance(value, (str, int, float)):
+    #         return False
+    #     try:
+    #         e = sympify(value)
+    #         self.logger.debug('Sympified: {}'.format(e))
+    #         return True
+    #     except:
+    #         return False
+
+    def _check_with_sympy_symbol(self, field, value):
         """
-        String that can be run through sympify and only has one variable symbol in it.
+        String that can be run through sympify and only has one
+        variable symbol in it.
         """
-        self.logger.debug('Validating symbolable: {}'.format(value))
+        self.logger.debug(f'Check if {value} is a sympy symbol')
         try:
             e = sympify(value)
-            return isinstance(e, Symbol)
-        except:
-            return False
+            valid = isinstance(e, Symbol)
+        except SympifyError:
+            valid = False
+        if not valid:
+            self._error(field, "Must be a single symbol in sympy")
 
-    def _validate_model_store(self, jnk, field, value):
+    # def _validate_type_symbolable(self, value):
+    #     """
+    #     String that can be run through sympify and only has one variable symbol in it.
+    #     """
+    #     self.logger.debug('Validating symbolable: {}'.format(value))
+    #     try:
+    #         e = sympify(value)
+    #         return isinstance(e, Symbol)
+    #     except:
+    #         return False
+
+    def _check_with_model_path(self, field, value):
         """
         Validate that the value of the field is a model store path
 
@@ -130,42 +171,73 @@ class MicroBenthosSchemaValidator(cerberus.Validator):
             * env.oxy.var
             * microbes.cyano.processes.oxyPS
 
-        Args:
-            unit:
-            field:
-            value:
-
-        Returns:
-
         The rule's arguments are validated against this schema:
         {'type': 'string'}
         """
-        self.logger.debug('Validating model_store={} for field {!r}: {!r}'.format(
-            jnk, field, value
-            ))
-
         if '.' not in value:
-            self._error(field, 'Model store should be a dotted path, not {}'.format(value))
+            self._error(field, 'Model path should be a dotted string')
 
         parts = value.split('.')
 
         if not all([len(p) for p in parts]):
-            self._error(field, 'Model store has empty path element: {}'.format(value))
+            self._error(field, 'Model path must not have empty parts')
 
-        if parts[0] not in ('env', 'domain', 'microbes'):
-            self._error(field, 'Model store root should be in (env, domain, microbes)')
+        ALLOWED_ROOTS = ('env', 'domain', 'microbes')
+        if parts[0] not in ALLOWED_ROOTS:
+            self._error(field, f'Model path root should be in {ALLOWED_ROOTS}')
 
-        if parts[0] in ('domain', 'env'):
-            pass
-
-        elif parts[0] == 'microbes':
-            mtargets = ('features', 'processes')
+        if parts[0] == 'microbes':
+            MICROBE_SUBPARTS = ('features', 'processes')
 
             if len(parts) < 4:
-                self._error(field, 'Microbes model store needs atleast 4 path elements')
+                self._error(field,
+                            'Microbes model path needs atleast 4 path '
+                            'parts')
 
-            if parts[2] not in mtargets:
-                self._error(field, 'Microbes model store should be of type {}'.format(mtargets))
+            if parts[2] not in MICROBE_SUBPARTS:
+                self._error(field,
+                            'Microbes model path should be of type {}'.format(
+                                MICROBE_SUBPARTS))
+
+
+    # def _validate_model_store(self, jnk, field, value):
+    #     """
+    #     Validate that the value of the field is a model store path
+    #
+    #     Value should be of type:
+    #         * domain.oxy
+    #         * env.oxy.var
+    #         * microbes.cyano.processes.oxyPS
+    #
+    #     The rule's arguments are validated against this schema:
+    #     {'type': 'string'}
+    #     """
+    #     self.logger.debug('Validating model_store={} for field {!r}: {!r}'.format(
+    #         jnk, field, value
+    #         ))
+    #
+    #     if '.' not in value:
+    #         self._error(field, 'Model store should be a dotted path, not {}'.format(value))
+    #
+    #     parts = value.split('.')
+    #
+    #     if not all([len(p) for p in parts]):
+    #         self._error(field, 'Model store has empty path element: {}'.format(value))
+    #
+    #     if parts[0] not in ('env', 'domain', 'microbes'):
+    #         self._error(field, 'Model store root should be in (env, domain, microbes)')
+    #
+    #     if parts[0] in ('domain', 'env'):
+    #         pass
+    #
+    #     elif parts[0] == 'microbes':
+    #         mtargets = ('features', 'processes')
+    #
+    #         if len(parts) < 4:
+    #             self._error(field, 'Microbes model store needs atleast 4 path elements')
+    #
+    #         if parts[2] not in mtargets:
+    #             self._error(field, 'Microbes model store should be of type {}'.format(mtargets))
 
     def _normalize_coerce_float(self, value):
         return float(value)
