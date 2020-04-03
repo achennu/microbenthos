@@ -151,7 +151,8 @@ variables: &var_schema
                 type: dict
                 keyschema:
                     type: string
-                    allowed: [top, bottom, dbl, sediment]
+                    allowed: [top, bottom, dbl, sediment,
+                              top.faceGrad, bottom.faceGrad]
                 valueschema:
                     type: [float, integer, physical_unit]
 

@@ -58,6 +58,7 @@ def add_console_logging(verbose, start_level = logging.ERROR):
         sh = StreamHandler()
         sh.setLevel(level=level)
         logger.addHandler(sh)
-        logger.debug(f'Set console logging to level {level}')
+        logger.debug('Set console logging to level {level}'.format(
+            level=level))
 
     return level
