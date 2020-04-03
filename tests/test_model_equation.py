@@ -1,7 +1,9 @@
 import mock
 import pytest
-from fipy import CellVariable, PhysicalField, Variable, TransientTerm, DiffusionTerm, \
-    ImplicitSourceTerm
+from fipy import CellVariable, DiffusionTerm, ImplicitSourceTerm, \
+    PhysicalField, \
+    TransientTerm, Variable
+from fipy.terms.sourceTerm import SourceTerm
 from fipy.tools import numerix as np
 
 from microbenthos import MicroBenthosModel
@@ -11,7 +13,7 @@ from microbenthos.model.equation import ModelEquation
 @pytest.fixture()
 def model():
     m = mock.Mock(MicroBenthosModel)
-    m.get_object.return_value = rv = mock.Mock(CellVariable)
+    m.get_object.return_value = rv = mock.MagicMock(CellVariable)
     # rv.as_term = rvt = mock.Mock()
     # rvt.return_value = Variable()
     return m
@@ -84,11 +86,18 @@ class TestModelEquation:
     def test_add_source_term_from(self, model):
 
         eqn = ModelEquation(model, 'domain.abc', coeff=5)
-        model.get_object.return_value = rv = mock.Mock(CellVariable)
-        rv.as_term = fullexpr = mock.Mock(CellVariable)
+        # model.get_object.return_value = rv = mock.MagicMock(CellVariable)
+        rv = model.get_object.return_value
+        rv.as_term = fullexpr = mock.Mock(SourceTerm)
         fullexpr.return_value = mock.MagicMock(Variable)
         rv.expr = expr = mock.MagicMock(CellVariable)
-        rv.as_source_for = source = mock.Mock()
+        rv.as_source_for = source = mock.Mock(SourceTerm)
+        source.return_value = (mock.Mock(CellVariable),
+                               mock.Mock(SourceTerm),
+                               mock.Mock(SourceTerm)
+                               )
+        # rv.__mul__ = lambda x: x  # for eqn_term * coeff
+
         S0 = eqn.var
         S1 = 3
         S1term = ImplicitSourceTerm(var=eqn.var, coeff=S1)

@@ -2,10 +2,12 @@ import logging
 from collections import namedtuple
 
 import sympy as sp
-from fipy import CellVariable, TransientTerm, PhysicalField, Variable, DiffusionTerm, \
-    ImplicitSourceTerm
+from fipy import CellVariable, DiffusionTerm, ImplicitSourceTerm, \
+    PhysicalField, \
+    TransientTerm, Variable
 from fipy.tools import numerix as np
-from microbenthos import ModelVariable, Process, snapshot_var, restore_var
+
+from microbenthos import ModelVariable, Process, restore_var, snapshot_var
 
 
 class ModelEquation(object):
@@ -63,7 +65,7 @@ class ModelEquation(object):
 
         self.diffusion_def = ()
         """:type : (str, float)
-        
+
         The model path to the diffussion coeff and a numeric coefficient to multiply in the equation
         """
 
@@ -237,7 +239,8 @@ class ModelEquation(object):
         if self.finalized:
             raise RuntimeError('Equation already finalized, cannot add terms')
 
-        self.logger.info('{} Adding source term from {!r}'.format(self, path))
+        self.logger.info('{} Adding source term from {!r} (coeff={}'.format(
+            self, path, coeff))
 
         if not isinstance(coeff, (int, float)):
             raise ValueError('Source coeff should be int or float, not {}'.format(type(coeff)))
@@ -256,14 +259,14 @@ class ModelEquation(object):
         self.source_exprs[path] = coeff * full_expr
         self.source_formulae[path] = coeff * obj.expr()
         var, S0, S1 = obj.as_source_for(self.varname)
-        assert var is self.var, 'Got var: {!r} and self.var: {!r}'.format(var, self.var)
-        if S1 is not 0:
+        assert var is self.var, 'Got var: {!r} and self.var: {!r}'.format(
+            var, self.var)
+        if S1 != 0:
             S1 = ImplicitSourceTerm(coeff=S1, var=self.var)
             term = S0 + S1
         else:
             term = S0
-
-        self.source_terms[path] = term
+        self.source_terms[path] = term * coeff
 
         self.logger.debug('Created source {!r}: {!r}'.format(path, term))
 
