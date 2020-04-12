@@ -335,7 +335,8 @@ class ModelVariable(DomainEntity):
             * "lognormal"
                 * lognormal distributuion from :data:`scipy.stats.lognorm`
                 * `loc` and `scale` should be in units compatible with domain mesh
-                * `shape` for lognorm is hard-coded to 1.25
+                * `shape` should be a float > 0
+                * the distribution is normalized to have max value = 1
 
         Args:
             profile (str): The type of profile to use
@@ -379,16 +380,20 @@ class ModelVariable(DomainEntity):
                     c = coeff.inUnitsOf(self.var.unit)
                 except TypeError:
                     self.logger.error(
-                        'Coeff {!r} not compatible with variable unit {!r}'.format(coeff,
-                                                                                   self.var.unit.name()))
+                        'Coeff {!r} not compatible with variable unit {!r}'.format(
+                            coeff,
+                            self.var.unit.name()))
                     raise ValueError('Incompatible unit of coefficient')
 
             self.logger.info(
-                'Seeding with profile normal loc: {} scale: {} coeff: {}'.format(loc_, scale_,
-                                                                                 coeff))
+                'Seeding with profile normal loc: {} scale: {} coeff: {}'.format(
+                    loc_, scale_,
+                    coeff))
 
-            normrv = norm(loc=loc_, scale=C ** 2 * scale_)
-            val = coeff * normrv.pdf(self.domain.depths) * C * scale_
+            normrv = norm(loc=loc_, scale=scale_)
+            rvpdf = normrv.pdf(self.domain.depths)
+            rvpdf /= rvpdf.max()
+            val = coeff * rvpdf
 
             self.var.value = val
 
@@ -398,10 +403,7 @@ class ModelVariable(DomainEntity):
             loc = kwargs['loc']
             scale = kwargs['scale']
             coeff = kwargs['coeff']
-            lognorm_shape = 1.25
-            lognorm_mult = 1.74673269133
-            # this depends on the shape, so we hardcode it here
-            C = numerix.sqrt(2 * numerix.pi)
+            lognorm_shape = kwargs.get('shape', 1.25)
 
             # loc and scale should be in units of the domain mesh
             if hasattr(loc, 'unit'):
@@ -425,11 +427,13 @@ class ModelVariable(DomainEntity):
                     raise ValueError('Incompatible unit of coefficient')
 
             self.logger.info(
-                'Seeding with profile lognormal loc: {} scale: {} coeff: {}'.format(
-                    loc_, scale_, coeff))
+                'Seeding with profile lognormal loc: {} scale: {} shape: {} '
+                'coeff: {}'.format(loc_, scale_, lognorm_shape, coeff))
 
-            rv = lognorm(lognorm_shape, loc=loc_, scale=C ** 2 * scale_ / lognorm_shape)
-            val = coeff * rv.pdf(self.domain.depths) * C * scale_
+            rv = lognorm(lognorm_shape, loc=loc_, scale=scale_)
+            rvpdf = rv.pdf(self.domain.depths)
+            rvpdf = rvpdf / rvpdf.max()
+            val = coeff * rvpdf
 
             self.var.value = val
 

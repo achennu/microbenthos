@@ -36,12 +36,17 @@ seed_lognorm: &seed_lognormal
         loc:
             type: physical_unit
             like_unit: mm
-    #        required: true
+        #        required: true
 
         scale:
             type: physical_unit
             like_unit: mm
-    #        min: 0
+        #        min: 0
+
+        shape:
+            type: float
+            default: 1.25
+            min: 0
 
         coeff:
             type: [integer, float, physical_unit]
