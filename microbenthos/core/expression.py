@@ -215,11 +215,12 @@ class Expression(object):
             :class:`~sympy.core.expr.Expr`: full expression including piece-wise definitions
 
         """
-        pieces = sum(e * c for e, c in self._pieces)
-        if pieces:
-            return self.base * pieces
+        if self._pieces:
+            pieces = sum(e * c for e, c in self._pieces)
+            out = self.base * pieces
         else:
-            return self.base
+            out = self.base
+        return out
 
     def diff(self, *args):
         """

@@ -1,10 +1,10 @@
 import logging
 
-from fipy import PhysicalField
+from fipy import CellVariable, PhysicalField
 from fipy.tools import numerix
 
 from .entity import DomainEntity
-from ..utils.snapshotters import snapshot_var, restore_var
+from ..utils.snapshotters import restore_var, snapshot_var
 
 
 class ModelVariable(DomainEntity):
@@ -52,7 +52,7 @@ class ModelVariable(DomainEntity):
         self.logger.debug('Init in {} {!r}'.format(self.__class__.__name__, self.name))
 
         self.var = None
-        """:type : :class:`fipy.CellVariable` 
+        """:type : :class:`fipy.CellVariable`
 
         Object created on domain.mesh"""
 
@@ -153,9 +153,10 @@ class ModelVariable(DomainEntity):
             raise ValueError('Constraints should be mapping of (location, value) pairs!')
 
         for loc, val in dict(constraints).items():
-            if loc not in locs:
+            loc_, grad_type = ModelVariable._parse_constraint_loc(loc)
+            if loc_ not in locs:
                 raise ValueError('Constraint loc={!r} unknown. Should be in {}'.format(
-                    loc, locs
+                    loc_, locs
                     ))
             try:
                 if isinstance(val, PhysicalField):
@@ -209,6 +210,21 @@ class ModelVariable(DomainEntity):
 
         for loc, value in dict(self.constraints).items():
             self.constrain(loc, value)
+
+    @staticmethod
+    def _parse_constraint_loc(loc):
+        locparts = loc.split('.')
+        loc_ = locparts[0]
+        grad_type = None
+        if len(locparts) == 2:
+            grad_type = locparts[1]
+        elif len(locparts) > 2:
+            raise ValueError(f'Constraint loc should be either loc or '
+                             f'loc.grad_type, but got: {loc}')
+        if grad_type and not hasattr(CellVariable, grad_type):
+            raise ValueError(f'Constraint {loc} has grad_type={grad_type} '
+                             f'which is not found on CellVariable')
+        return (loc_, grad_type)
 
     def create(self, value, unit = None, hasOld = False, **kwargs):
         """
@@ -268,6 +284,8 @@ class ModelVariable(DomainEntity):
 
         self.logger.debug("Setting constraint for {!r}: {} = {}".format(self.var, loc, value))
 
+        loc, grad_type = self._parse_constraint_loc(loc)
+
         if loc in ('top', 'bottom'):
             mask = self._LOCs[loc]
 
@@ -286,9 +304,14 @@ class ModelVariable(DomainEntity):
         else:
             value = PhysicalField(value, self.var.unit)
 
-        self.logger.info('Constraining {!r} at {} = {}'.format(self.var, loc, value))
+        self.logger.info('Constraining {} (grad={}) at {} = {}'.format(
+            self.var, grad_type, loc, value))
+        if grad_type:
+            var_entity = getattr(self.var, grad_type)
+        else:
+            var_entity = self.var
 
-        self.var.constrain(value, mask)
+        var_entity.constrain(value, mask)
 
     def seed(self, profile, **kwargs):
         """
@@ -312,7 +335,8 @@ class ModelVariable(DomainEntity):
             * "lognormal"
                 * lognormal distributuion from :data:`scipy.stats.lognorm`
                 * `loc` and `scale` should be in units compatible with domain mesh
-                * `shape` for lognorm is hard-coded to 1.25
+                * `shape` should be a float > 0
+                * the distribution is normalized to have max value = 1
 
         Args:
             profile (str): The type of profile to use
@@ -356,16 +380,20 @@ class ModelVariable(DomainEntity):
                     c = coeff.inUnitsOf(self.var.unit)
                 except TypeError:
                     self.logger.error(
-                        'Coeff {!r} not compatible with variable unit {!r}'.format(coeff,
-                                                                                   self.var.unit.name()))
+                        'Coeff {!r} not compatible with variable unit {!r}'.format(
+                            coeff,
+                            self.var.unit.name()))
                     raise ValueError('Incompatible unit of coefficient')
 
             self.logger.info(
-                'Seeding with profile normal loc: {} scale: {} coeff: {}'.format(loc_, scale_,
-                                                                                 coeff))
+                'Seeding with profile normal loc: {} scale: {} coeff: {}'.format(
+                    loc_, scale_,
+                    coeff))
 
-            normrv = norm(loc=loc_, scale=C ** 2 * scale_)
-            val = coeff * normrv.pdf(self.domain.depths) * C * scale_
+            normrv = norm(loc=loc_, scale=scale_)
+            rvpdf = normrv.pdf(self.domain.depths)
+            rvpdf /= rvpdf.max()
+            val = coeff * rvpdf
 
             self.var.value = val
 
@@ -375,10 +403,7 @@ class ModelVariable(DomainEntity):
             loc = kwargs['loc']
             scale = kwargs['scale']
             coeff = kwargs['coeff']
-            lognorm_shape = 1.25
-            lognorm_mult = 1.74673269133
-            # this depends on the shape, so we hardcode it here
-            C = numerix.sqrt(2 * numerix.pi)
+            lognorm_shape = kwargs.get('shape', 1.25)
 
             # loc and scale should be in units of the domain mesh
             if hasattr(loc, 'unit'):
@@ -402,11 +427,13 @@ class ModelVariable(DomainEntity):
                     raise ValueError('Incompatible unit of coefficient')
 
             self.logger.info(
-                'Seeding with profile lognormal loc: {} scale: {} coeff: {}'.format(
-                    loc_, scale_, coeff))
+                'Seeding with profile lognormal loc: {} scale: {} shape: {} '
+                'coeff: {}'.format(loc_, scale_, lognorm_shape, coeff))
 
-            rv = lognorm(lognorm_shape, loc=loc_, scale=C ** 2 * scale_ / lognorm_shape)
-            val = coeff * rv.pdf(self.domain.depths) * C * scale_
+            rv = lognorm(lognorm_shape, loc=loc_, scale=scale_)
+            rvpdf = rv.pdf(self.domain.depths)
+            rvpdf = rvpdf / rvpdf.max()
+            val = coeff * rvpdf
 
             self.var.value = val
 
@@ -420,8 +447,8 @@ class ModelVariable(DomainEntity):
                     raise ValueError('Seed linear has no "start" or "top" constraint')
                 else:
                     start = PhysicalField(start, self.var.unit)
-                    self.logger.info('Linear seed using start as top value: {'
-                                  '}'.format(start))
+                    self.logger.info('Linear seed using start as top value: '
+                                     '{}'.format(start))
 
             if stop is None:
                 stop = self.constraints.get('bottom')
@@ -429,8 +456,8 @@ class ModelVariable(DomainEntity):
                     raise ValueError('Seed linear has no "stop" or "bottom" constraint')
                 else:
                     stop = PhysicalField(stop, self.var.unit)
-                    self.logger.info('Linear seed using stop as bottom value: {'
-                                  '}'.format(stop))
+                    self.logger.info('Linear seed using stop as bottom value: '
+                                  '{}'.format(stop))
 
             N = self.var.shape[0]
 

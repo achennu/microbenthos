@@ -67,7 +67,7 @@ def save_snapshot(fpath, snapshot, compression = 6, shuffle = True):
     fpath = str(fpath)
 
     logger.debug('Saving snapshot ({}) to {}'.format(snapshot.keys(), fpath))
-    with hdf.File(fpath, libver='latest') as hf:
+    with hdf.File(fpath, mode='a', libver='latest') as hf:
         _save_nested_dict(snapshot, hf, compression=compression, shuffle=shuffle)
     logger.debug('Snapshot saved in {}'.format(fpath))
 

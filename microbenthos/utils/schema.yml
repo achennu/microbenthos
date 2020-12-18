@@ -3,7 +3,8 @@ cls: &cls_schema
 
 entity_schema: &entity_schema
     cls:
-        type: importpath
+        type: string
+        check_with: importpath
         <<: *cls_schema
 
     init_params:
@@ -27,7 +28,7 @@ seed_norm: &seed_normal
         coeff:
             type: [integer, float, physical_unit]
 
-seed_norm: &seed_lognormal
+seed_lognorm: &seed_lognormal
     dependencies:
         profile: lognormal
 
@@ -35,12 +36,17 @@ seed_norm: &seed_lognormal
         loc:
             type: physical_unit
             like_unit: mm
-    #        required: true
+        #        required: true
 
         scale:
             type: physical_unit
             like_unit: mm
-    #        min: 0
+        #        min: 0
+
+        shape:
+            type: float
+            default: 1.25
+            min: 0
 
         coeff:
             type: [integer, float, physical_unit]
@@ -70,7 +76,8 @@ variables: &var_schema
         schema:
 
             name:
-                type: symbolable
+                type: string
+                check_with: sympy_symbol
                 minlength: 2
                 required: true
 
@@ -79,7 +86,7 @@ variables: &var_schema
                 nullable: true
                 default: null
 
-            clip_min:
+            clip_max:
                 type: [float, integer, physical_unit]
                 nullable: true
                 default: null
@@ -97,7 +104,8 @@ variables: &var_schema
                         default: 0.0
 
                     unit:
-                        type: unit_name
+                        type: string
+                        check_with: unit_name
 
                     hasOld:
                         type: boolean
@@ -149,10 +157,11 @@ variables: &var_schema
 
             constraints:
                 type: dict
-                keyschema:
+                keysrules:
                     type: string
-                    allowed: [top, bottom, dbl, sediment]
-                valueschema:
+                    allowed: [top, bottom, dbl, sediment,
+                              top.faceGrad, bottom.faceGrad]
+                valuesrules:
                     type: [float, integer, physical_unit]
 
 
@@ -180,7 +189,8 @@ irradiance: &irradiance_schema
                     type: dict
                     schema:
                         name:
-                            type: symbolable
+                            type: string
+                            check_with: sympy_symbol
                             minlength: 2
                             required: true
 
@@ -209,41 +219,51 @@ expression_schema: &Expr_schema
             formula:
                 required: true
                 oneof:
-                    - type: sympifyable
+                    - type: string
+                      check_with: sympify
+
                     - type: dict
                       schema:
                         base:
-                            type: sympifyable
+                            type: string
+                            check_with: sympify
                         pieces:
                             type: list
                             schema:
                                 type: dict
                                 schema:
                                     expr:
-                                        type: sympifyable
+                                        type: [string, integer, float]
+                                        check_with: sympify
                                     where:
-                                        type: sympifyable
+                                        type: string
+                                        check_with: sympify
 
             derived:
                 type: dict
-                keyschema:
-                    type: symbolable
-                valueschema:
-                    type: sympifyable
+                keysrules:
+                    type: string
+                    check_with: sympy_symbol
+                valuesrules:
+                    type: string
+                    check_with: sympify
 
             namespace:
                 type: dict
-                keyschema:
-                    type: sympifyable
-                valueschema:
+                keysrules:
+                    type: string
+                    check_with: sympify
+                valuesrules:
                     type: dict
                     schema:
                         vars:
                             type: list
                             schema:
-                                type: symbolable
+                                type: string
+                                check_with: sympy_symbol
                         expr:
-                            type: sympifyable
+                            type: string
+                            check_with: sympify
 
 
 procSchema:
@@ -264,9 +284,10 @@ procSchema:
 
                 params:
                     type: dict
-                    keyschema:
-                        type: symbolable
-                    valueschema:
+                    keysrules:
+                        type: string
+                        check_with: sympy_symbol
+                    valuesrules:
                         type: [integer, float, physical_unit]
 
                 implicit:
@@ -275,10 +296,11 @@ procSchema:
                 events:
                     type: dict
 
-                    keyschema:
-                        type: symbolable
+                    keysrules:
+                        type: string
+                        check_with: sympy_symbol
 
-                    valueschema:
+                    valuesrules:
                         schema:
                             expr:
                                 schema: *Expr_initschema
@@ -295,7 +317,8 @@ microbes: &microbes_schema
             type: dict
             schema:
                 name:
-                    type: symbolable
+                    type: string
+                    check_with: sympy_symbol
                     minlength: 2
                     required: true
 
@@ -303,18 +326,19 @@ microbes: &microbes_schema
                     type: dict
                     required: true
                     dependencies: [features.biomass]
-                    keyschema:
-                        type: symbolable
+                    keysrules:
+                        type: string
+                        check_with: sympy_symbol
                         minlength: 2
 
 
-                    valueschema:
+                    valuesrules:
                          schema: *var_schema
 
                 processes:
                     anyof:
                         - type: dict
-                          valueschema:
+                          valuesrules:
                             type: dict
                             schema: *Proc_schema
 
@@ -323,7 +347,7 @@ eqn_term: &eqn_term_schema
     schema:
         store:
             type: string
-            model_store: store
+            check_with: model_path
             required: true
         coeff:
             type: [integer, float]
@@ -379,29 +403,33 @@ model:
 
     formulae:
         type: dict
-        keyschema:
-            type: sympifyable
-        valueschema:
+        keysrules:
+            type: string
+            check_with: sympify
+        valuesrules:
             schema:
                 vars:
                     type: list
                     required: true
                     schema:
-                        type: symbolable
+                        type: string
+                        check_with: sympy_symbol
 
                 expr:
                     required: true
-                    type: sympifyable
+                    type: string
+                    check_with: sympify
 
 
     environment:
         type: dict
         dependencies: [^domain]
-        keyschema:
-            type: symbolable
+        keysrules:
+            type: string
+            check_with: sympy_symbol
             minlength: 2
 
-        valueschema:
+        valuesrules:
             anyof:
                 - schema: *var_schema
                 - schema: *irradiance_schema
@@ -411,20 +439,21 @@ model:
     microbes:
         type: dict
         dependencies: [^domain]
-        keyschema:
-            type: symbolable
+        keysrules:
+            type: string
+            check_with: sympy_symbol
             minlength: 2
 
-        valueschema: *microbes_schema
+        valuesrules: *microbes_schema
 
     equations:
         type: dict
 
-        keyschema:
+        keysrules:
             type: string
             minlength: 3
 
-        valueschema:
+        valuesrules:
             type: dict
             schema:
                 track_budget:
@@ -436,7 +465,7 @@ model:
                     type: list
                     items:
                         - type: string
-                          model_store: store
+                          check_with: model_path
                         - type: [integer, float]
                           default: 1
                           forbidden: [0, 0.0]
@@ -445,7 +474,7 @@ model:
                     type: list
                     items:
                         - type: string
-                          model_store: store
+                          check_with: model_path
                         - type: [integer, float]
                           default: 1
                           forbidden: [0, 0.0]
@@ -456,7 +485,7 @@ model:
                         type: list
                         items:
                             - type: string
-                              model_store: store
+                              check_with: model_path
                             - type: [integer, float]
                               default: 1
                               forbidden: [0, 0.0]

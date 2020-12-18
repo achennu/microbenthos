@@ -504,17 +504,19 @@ class Simulation(CreateMixin):
             tic = time.time()
             residual, num_sweeps = self.run_timestep()
             toc = time.time()
-            self.logger.debug(f'For dt={dt} residual={residual:.4g} with sweeps={num_sweeps}')
+            self.logger.debug(
+                f'For dt={dt} residual={residual:.4g} with sweeps={num_sweeps}')
 
-            if residual == 0:
-                raise RuntimeError(f'Residual perfect 0 for dt={dt}. Problem in domain!')
+            # if residual == 0:
+            #     raise RuntimeError(f'Residual perfect 0 for dt={dt}. Problem in domain!')
 
             self._sweepsQ.appendleft(num_sweeps)
             self._residualQ.appendleft(residual)
 
             if residual >= self.max_residual:
 
-                self.logger.info(f'Ignoring dt={dt}: res={residual:.4g} > {self.max_residual:.4g}')
+                self.logger.info(
+                    f'Ignoring dt={dt}: res={residual:.4g} > {self.max_residual:.4g}')
                 self.update_simtime_step(residual, num_sweeps)
                 self.model.revert_vars()
 
